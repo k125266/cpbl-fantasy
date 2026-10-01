@@ -1,5 +1,5 @@
 # 多階段建置：前端 → 後端 jar
-FROM node:22 AS web
+FROM node:24 AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci

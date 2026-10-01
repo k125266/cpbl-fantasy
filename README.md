@@ -37,7 +37,7 @@ server/src/main/java/tw/cpblf/
 
 ## 本機執行（demo 模式）
 
-需要 Java 21、Node 22、Docker（用來跑 PostgreSQL）。Maven 不用另外安裝，使用 repo 內的 `./mvnw`。
+需要 Java 21、Node 24、Docker（用來跑 PostgreSQL）。Maven 不用另外安裝，使用 repo 內的 `./mvnw`。
 
 ```bash
 # 1. 資料庫（同時建立 cpblf 與測試用的 cpblf_test）
