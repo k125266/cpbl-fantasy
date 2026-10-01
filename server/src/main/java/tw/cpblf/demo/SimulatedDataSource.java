@@ -103,6 +103,7 @@ public class SimulatedDataSource implements CpblDataSource {
         final Role role;
         final boolean foreign;
         final double contact, power, eye, speed;
+        int no;
         final double skill, kRate, stamina;
         LocalDate registeredOn;
 
@@ -146,6 +147,7 @@ public class SimulatedDataSource implements CpblDataSource {
                 boolean foreign = i == 0 || i == 1 || i == 6 || i == 7 || (t % 3 == 0 && i == 26);
                 String id = String.format("9%d%04d", t + 1, i + 1);
                 SimPlayer p = new SimPlayer(id, uniqueName(r, foreign, usedNames), t, layout[i], foreign, r);
+                p.no = jerseyFor(t);
                 p.registeredOn = seasonStart.minusDays(30);
                 players.add(p);
                 byId.put(id, p);
@@ -159,10 +161,28 @@ public class SimulatedDataSource implements CpblDataSource {
         Set<String> used = new HashSet<>();
         players.forEach(p -> used.add(p.name));
         SimPlayer p = new SimPlayer(id, uniqueName(r, foreign, used), team, role, foreign, r);
+        p.no = jerseyFor(team);
         p.registeredOn = registeredOn;
         players.add(p);
         byId.put(id, p);
         return p;
+    }
+
+    private final Map<Integer, Set<Integer>> usedNumbers = new HashMap<>();
+    private Random numberRandom;
+
+    /** 背號：各隊不重複，使用獨立的亂數序列，不影響其他模擬結果。 */
+    private int jerseyFor(int team) {
+        if (numberRandom == null) {
+            numberRandom = new Random(seed * 31 + 7);
+        }
+        Set<Integer> used = usedNumbers.computeIfAbsent(team, k -> new HashSet<>());
+        while (true) {
+            int n = 1 + numberRandom.nextInt(99);
+            if (used.add(n)) {
+                return n;
+            }
+        }
     }
 
     private static String uniqueName(Random r, boolean foreign, Set<String> used) {
@@ -801,7 +821,7 @@ public class SimulatedDataSource implements CpblDataSource {
         for (SimPlayer p : players) {
             Status s = st.get(p.id);
             if (s == Status.ACTIVE || s == Status.MINORS) {
-                registered.add(new SourcePlayer(p.id, nameOn(p, today), TEAM_NAMES[p.team], listed(p), p.foreign));
+                registered.add(new SourcePlayer(p.id, nameOn(p, today), TEAM_NAMES[p.team], listed(p), p.foreign, String.valueOf(p.no)));
                 if (s == Status.ACTIVE) {
                     firstTeam.add(p.id);
                 }
@@ -813,7 +833,7 @@ public class SimulatedDataSource implements CpblDataSource {
     @Override
     public SourcePlayer fetchPlayerProfile(String cpblPlayerId) {
         SimPlayer p = byId.get(cpblPlayerId);
-        return p == null ? null : new SourcePlayer(p.id, nameOn(p, clock.today()), TEAM_NAMES[p.team], listed(p), p.foreign);
+        return p == null ? null : new SourcePlayer(p.id, nameOn(p, clock.today()), TEAM_NAMES[p.team], listed(p), p.foreign, String.valueOf(p.no));
     }
 
     private static String listed(SimPlayer p) {

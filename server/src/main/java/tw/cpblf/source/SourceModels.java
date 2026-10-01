@@ -59,7 +59,8 @@ public final class SourceModels {
             String name,
             String teamName,
             String listedPosition,
-            Boolean foreign) {
+            Boolean foreign,
+            String jerseyNumber) {
     }
 
     /** 某一時點的名單快照：60 人註冊名單 + 一軍登錄名單。 */

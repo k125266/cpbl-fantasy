@@ -73,6 +73,31 @@ public class EligibilityService {
         return out;
     }
 
+    public record Progress(String listedPosition, int halfNo, LocalDate graceUntil, boolean inGrace, int minGames, int minStarts,
+                           int ifGames, int ofGames, int batGames, int starts, int reliefs) {
+    }
+
+    /** 位置資格進度（球員資料頁用）：本半季各守位出賽數與門檻。 */
+    public Progress progress(League league, long playerId, LocalDate date) {
+        SeasonService.Half half = season.currentHalf(league.id(), date).orElse(null);
+        LocalDate from = half == null ? LocalDate.of(league.seasonYear(), 1, 1) : half.startDate();
+        LocalDate to = half == null ? date : (date.isAfter(half.endDate()) ? half.endDate() : date);
+        LocalDate graceUntil = from.plusDays(league.eligibilityGraceDays());
+        String listed = jdbc.sql("select listed_position from player where id = ?").param(playerId).query(String.class).single();
+        Usage u = jdbc.sql("""
+                select count(*) filter (where gs.positions ~ '(1B|2B|3B|SS)'),
+                       count(*) filter (where gs.positions ~ '(LF|CF|RF)'),
+                       count(*) filter (where gs.batted),
+                       count(*) filter (where gs.pitched and gs.started),
+                       count(*) filter (where gs.pitched and not gs.started)
+                from game_stat gs join game g on g.id = gs.game_id
+                where gs.player_id = ? and g.status = 'FINAL' and g.play_date between ? and ?
+                """).params(playerId, from, to)
+                .query((rs, n) -> new Usage(rs.getInt(1), rs.getInt(2), rs.getInt(3), rs.getInt(4), rs.getInt(5))).single();
+        return new Progress(listed, half == null ? 1 : half.halfNo(), graceUntil, date.isBefore(graceUntil),
+                league.positionMinGames(), league.spMinStarts(), u.ifGames(), u.ofGames(), u.batGames(), u.starts(), u.reliefs());
+    }
+
     public Set<Slot> eligibility(League league, long playerId, LocalDate date) {
         return eligibility(league, java.util.List.of(playerId), date).get(playerId);
     }

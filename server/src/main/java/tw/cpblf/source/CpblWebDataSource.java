@@ -96,7 +96,7 @@ public class CpblWebDataSource implements CpblDataSource {
                 Matcher pm = NAME_PREFIX.matcher(raw);
                 String markers = pm.find() ? pm.group(1) : "";
                 String name = raw.substring(markers.length()).trim();
-                players.add(new SourcePlayer(m.group(1), name, team, null, null));
+                players.add(new SourcePlayer(m.group(1), name, team, null, null, null));
                 if (FIRST_TEAM_MARKERS.stream().anyMatch(markers::contains)) {
                     firstTeam.add(m.group(1));
                 }
@@ -120,6 +120,7 @@ public class CpblWebDataSource implements CpblDataSource {
             return null;
         }
         Element number = nameDiv.selectFirst("span.number");
+        String jersey = number == null ? null : number.text().replaceAll("[^0-9]", "");
         if (number != null) {
             number.remove();
         }
@@ -127,7 +128,8 @@ public class CpblWebDataSource implements CpblDataSource {
         String pos = ddDesc(doc, "pos");
         String nationality = ddDesc(doc, "nationality");
         return new SourcePlayer(cpblPlayerId, nameDiv.text().trim(), team == null ? null : team.text().trim(),
-                normalizePosition(pos), nationality == null || nationality.isBlank() ? null : !nationality.contains("中華民國"));
+                normalizePosition(pos), nationality == null || nationality.isBlank() ? null : !nationality.contains("中華民國"),
+                jersey == null || jersey.isEmpty() ? null : jersey);
     }
 
     static String normalizePosition(String raw) {
