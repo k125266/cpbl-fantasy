@@ -1,0 +1,22 @@
+# 本機開發用資料庫：docker compose up -d
+# 會建立 cpblf（開發）與 cpblf_test（測試）兩個資料庫，帳密皆為 cpblf
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: cpblf
+      POSTGRES_PASSWORD: cpblf
+      POSTGRES_DB: cpblf
+    ports:
+      - "5432:5432"
+    volumes:
+      - cpblf-data:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cpblf"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  cpblf-data:
