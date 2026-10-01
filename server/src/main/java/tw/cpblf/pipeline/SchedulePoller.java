@@ -1,0 +1,113 @@
+package tw.cpblf.pipeline;
+
+import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.util.List;
+
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import tw.cpblf.config.AppClock;
+import tw.cpblf.config.AppProperties;
+import tw.cpblf.source.CpblDataSource;
+import tw.cpblf.source.SourceModels.GameStatus;
+import tw.cpblf.source.SourceModels.SourceGame;
+
+/**
+ * CPBLF-11：抓取當季賽程並 upsert 至 game。
+ * 補賽時保留原定日期（scheduled_date），實際開打日寫入 actual_play_date。
+ */
+@Service
+public class SchedulePoller {
+
+    public static final String JOB = "schedule-poller";
+
+    private final CpblDataSource source;
+    private final JdbcClient jdbc;
+    private final AppClock clock;
+    private final AppProperties props;
+    private final TeamResolver teams;
+    private final AlertService alerts;
+
+    public SchedulePoller(CpblDataSource source, JdbcClient jdbc, AppClock clock, AppProperties props, TeamResolver teams,
+                          AlertService alerts) {
+        this.source = source;
+        this.jdbc = jdbc;
+        this.clock = clock;
+        this.props = props;
+        this.teams = teams;
+        this.alerts = alerts;
+    }
+
+    @Transactional
+    public void poll(JobRunner.JobContext ctx) {
+        List<SourceGame> games = source.fetchSchedule(props.seasonYear(), props.kindCode());
+        if (games.isEmpty()) {
+            alerts.raise(AlertService.Level.WARN, JOB, "賽程回應為空");
+            return;
+        }
+        for (SourceGame g : games) {
+            String home = teams.resolve(g.homeTeamName());
+            String away = teams.resolve(g.awayTeamName());
+            if (home == null || away == null) {
+                ctx.anomaly();
+                alerts.raise(AlertService.Level.WARN, JOB, "無法辨識球隊：" + g.homeTeamName() + " / " + g.awayTeamName());
+                continue;
+            }
+            upsert(g, home, away);
+            ctx.item();
+        }
+    }
+
+    record Existing(long id, LocalDate scheduledDate, LocalDate actualPlayDate, String status, boolean finalSeen) {
+    }
+
+    void upsert(SourceGame g, String home, String away) {
+        GameStatus status = effectiveStatus(g);
+        String result = null;
+        if (status == GameStatus.FINAL && g.homeScore() != null && g.awayScore() != null) {
+            int c = Integer.compare(g.homeScore(), g.awayScore());
+            result = c > 0 ? "HOME_WIN" : c < 0 ? "AWAY_WIN" : "TIE";
+        }
+        Timestamp start = g.startTime() == null ? null : Timestamp.from(g.startTime());
+        Existing ex = jdbc.sql("""
+                select id, scheduled_date, actual_play_date, status, final_seen_at is not null
+                from game where season_year = ? and kind_code = ? and game_sno = ?
+                """).params(g.year(), g.kindCode(), g.gameSno())
+                .query((rs, n) -> new Existing(rs.getLong(1), rs.getObject(2, LocalDate.class),
+                        rs.getObject(3, LocalDate.class), rs.getString(4), rs.getBoolean(5)))
+                .optional().orElse(null);
+        if (ex == null) {
+            jdbc.sql("""
+                    insert into game (season_year, kind_code, game_sno, scheduled_date, start_time, home_team_code, away_team_code,
+                                      status, result, home_score, away_score, final_seen_at)
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """).params(g.year(), g.kindCode(), g.gameSno(), g.date(), start, home, away, status.name(), result,
+                    g.homeScore(), g.awayScore(), status == GameStatus.FINAL ? Timestamp.from(clock.now()) : null).update();
+            return;
+        }
+        // 日期改變 = 延賽後補賽。原定日期不覆寫。
+        LocalDate actual = g.date().equals(ex.scheduledDate()) ? null : g.date();
+        jdbc.sql("""
+                update game set actual_play_date = ?, start_time = ?, home_team_code = ?, away_team_code = ?, status = ?,
+                       result = ?, home_score = ?, away_score = ?,
+                       final_seen_at = case when ? and final_seen_at is null then ? else final_seen_at end,
+                       updated_at = now()
+                where id = ?
+                  and (actual_play_date is distinct from ? or start_time is distinct from ? or status <> ?
+                       or result is distinct from ? or home_score is distinct from ? or away_score is distinct from ?
+                       or home_team_code <> ? or away_team_code <> ?)
+                """).params(actual, start, home, away, status.name(), result, g.homeScore(), g.awayScore(),
+                status == GameStatus.FINAL, Timestamp.from(clock.now()), ex.id(),
+                actual, start, status.name(), result, g.homeScore(), g.awayScore(), home, away).update();
+    }
+
+    /** 官網賽程沒有「進行中」狀態；已過表定開賽時間且尚未結束者視為進行中。 */
+    private GameStatus effectiveStatus(SourceGame g) {
+        if (g.status() == GameStatus.SCHEDULED && g.startTime() != null && !clock.now().isBefore(g.startTime())) {
+            return GameStatus.IN_PROGRESS;
+        }
+        return g.status();
+    }
+}

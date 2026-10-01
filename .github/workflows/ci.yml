@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cpblf
+          POSTGRES_PASSWORD: cpblf
+          POSTGRES_DB: cpblf_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cpblf"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build web
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - name: Test server
+        working-directory: server
+        env:
+          CPBLF_TEST_DB_URL: jdbc:postgresql://localhost:5432/cpblf_test
+        run: mvn -B verify

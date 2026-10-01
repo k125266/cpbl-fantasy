@@ -1,0 +1,9 @@
+server/target/
+web/node_modules/
+web/dist/
+# 前端建置產物（npm run build 輸出至此）
+server/src/main/resources/static/
+*.log
+.idea/
+.vscode/
+.DS_Store
