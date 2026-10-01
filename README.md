@@ -37,19 +37,17 @@ server/src/main/java/tw/cpblf/
 
 ## 本機執行（demo 模式）
 
-需要 Java 21、Node 22、PostgreSQL。
+需要 Java 21、Node 22、Docker（用來跑 PostgreSQL）。Maven 不用另外安裝，使用 repo 內的 `./mvnw`。
 
 ```bash
-# 1. 資料庫
-createuser cpblf -P            # 密碼 cpblf
-createdb -O cpblf cpblf
-createdb -O cpblf cpblf_test   # 測試用
+# 1. 資料庫（同時建立 cpblf 與測試用的 cpblf_test）
+docker compose up -d
 
 # 2. 前端（輸出至 server/src/main/resources/static）
 cd web && npm ci && npm run build && cd ..
 
 # 3. 後端
-cd server && mvn spring-boot:run
+cd server && ./mvnw spring-boot:run
 ```
 
 開啟 http://localhost:8080，以 `demo1` / `demo1234` 登入。
@@ -69,7 +67,7 @@ Demo 流程：
 ## 測試
 
 ```bash
-cd server && mvn test   # 需要 PostgreSQL：CPBLF_TEST_DB_URL（預設 jdbc:postgresql://localhost:5432/cpblf_test）
+cd server && ./mvnw test   # 需要 PostgreSQL：CPBLF_TEST_DB_URL（預設 jdbc:postgresql://localhost:5432/cpblf_test）
 cd web && npm run typecheck
 ```
 

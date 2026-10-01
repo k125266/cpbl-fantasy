@@ -35,7 +35,8 @@ public class PlayerViews {
         this.statuses = statuses;
     }
 
-    public record Basic(long id, String cpblId, String name, String team, boolean foreign, String listedPosition) {
+    public record Basic(long id, String cpblId, String name, String team, boolean foreign, String listedPosition,
+                        String jerseyNumber) {
     }
 
     public record TodayGame(long gameId, String opponent, boolean home, OffsetDateTime startTime, String status) {
@@ -46,10 +47,10 @@ public class PlayerViews {
         if (ids.isEmpty()) {
             return out;
         }
-        jdbc.sql("select id, cpbl_player_id, name, cpbl_team_code, is_foreign, listed_position from player where id in (:ids)")
+        jdbc.sql("select id, cpbl_player_id, name, cpbl_team_code, is_foreign, listed_position, jersey_number from player where id in (:ids)")
                 .param("ids", ids)
                 .query((rs, n) -> out.put(rs.getLong(1), new Basic(rs.getLong(1), rs.getString(2), rs.getString(3),
-                        rs.getString(4), rs.getBoolean(5), rs.getString(6)))).list();
+                        rs.getString(4), rs.getBoolean(5), rs.getString(6), rs.getString(7)))).list();
         return out;
     }
 
@@ -85,6 +86,46 @@ public class PlayerViews {
         m.put("H", String.valueOf(t.h()));
         m.put("IP", t.inningsPitched());
         return m;
+    }
+
+    /** 今日數據一行字。比賽進行中取 live 表（非最終），已結算取 game_stat。 */
+    public record TodayLine(String text, boolean live) {
+    }
+
+    public Map<Long, TodayLine> todayLines(Collection<Long> ids, LocalDate date) {
+        Map<Long, TodayLine> out = new HashMap<>();
+        if (ids.isEmpty()) {
+            return out;
+        }
+        String cols = "player_id, batted, pa, ab, h, hr, rbi, r, sb, bb, pitched, outs, p_er, p_k, sv, hld";
+        for (String table : new String[]{"game_stat", "live_game_stat"}) {
+            boolean live = table.startsWith("live");
+            jdbc.sql("select s." + cols.replace(", ", ", s.") + " from " + table + " s join game g on g.id = s.game_id"
+                            + " where s.player_id in (:ids) and g.play_date = :d" + (live ? " and g.status <> 'FINAL'" : ""))
+                    .param("ids", ids).param("d", date)
+                    .query((rs, n) -> {
+                        StringBuilder sb = new StringBuilder();
+                        if (rs.getBoolean("pitched")) {
+                            int outs = rs.getInt("outs");
+                            sb.append(outs / 3).append('.').append(outs % 3).append(" 局 ").append(rs.getInt("p_er")).append(" 責 ")
+                                    .append(rs.getInt("p_k")).append(" K");
+                            if (rs.getInt("sv") > 0) sb.append("・SV");
+                            if (rs.getInt("hld") > 0) sb.append("・HLD");
+                        } else if (rs.getBoolean("batted") && rs.getInt("pa") > 0) {
+                            sb.append(rs.getInt("h")).append("/").append(rs.getInt("ab")).append(" H/AB");
+                            if (rs.getInt("hr") > 0) sb.append(", ").append(rs.getInt("hr") > 1 ? rs.getInt("hr") + " " : "").append("HR");
+                            if (rs.getInt("rbi") > 0) sb.append(", ").append(rs.getInt("rbi")).append(" RBI");
+                            if (rs.getInt("r") > 0) sb.append(", ").append(rs.getInt("r")).append(" R");
+                            if (rs.getInt("sb") > 0) sb.append(", ").append(rs.getInt("sb")).append(" SB");
+                            if (rs.getInt("bb") > 0) sb.append(", BB");
+                        }
+                        if (!sb.isEmpty()) {
+                            out.putIfAbsent(rs.getLong("player_id"), new TodayLine(sb.toString(), live));
+                        }
+                        return null;
+                    }).list();
+        }
+        return out;
     }
 
     public List<String> sortedSlots(Set<Slot> s) {

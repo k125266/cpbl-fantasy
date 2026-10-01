@@ -47,10 +47,11 @@ public class RosterController {
         this.clock = clock;
     }
 
-    public record RosterPlayer(long playerId, String name, String cpblTeam, boolean foreign, String listedPosition, String slot,
+    public record RosterPlayer(long playerId, String name, String cpblTeam, String jerseyNumber, boolean foreign,
+                               String listedPosition, String slot,
                                List<String> eligible, PlayerStatusService.PlayerStatus status, boolean locked,
                                LocalDate pendingFrom, LocalDate leavingOn, PlayerViews.TodayGame game,
-                               Map<String, String> period) {
+                               Map<String, String> period, PlayerViews.TodayLine today, Map<String, String> season) {
     }
 
     @GetMapping("/teams/{teamId}/roster")
@@ -70,6 +71,8 @@ public class RosterController {
         var stats = views.statuses(league, ids);
         var games = views.todayGames(today);
         SeasonService.Period period = season.periodOn(leagueId, today).orElse(null);
+        var lines = views.todayLines(ids, today);
+        LocalDate seasonStart = LocalDate.of(league.seasonYear(), 1, 1);
 
         List<RosterPlayer> players = new ArrayList<>();
         for (Long pid : ids) {
@@ -80,11 +83,12 @@ public class RosterController {
             RosterService.Entry shown = current != null ? current : pending;
             var b = basics.get(pid);
             var totals = period == null ? null : scoring.playerTotals(pid, period.startDate(), today);
-            players.add(new RosterPlayer(pid, b.name(), b.team(), b.foreign(), b.listedPosition(), shown.slot().name(),
+            players.add(new RosterPlayer(pid, b.name(), b.team(), b.jerseyNumber(), b.foreign(), b.listedPosition(), shown.slot().name(),
                     views.sortedSlots(elig.get(pid)), stats.get(pid), roster.isLocked(pid),
                     current == null ? pending.validFrom() : null,
                     current != null && current.validTo() != null ? current.validTo() : null,
-                    games.get(b.team()), totals == null ? null : PlayerViews.statLine(totals)));
+                    games.get(b.team()), totals == null ? null : PlayerViews.statLine(totals), lines.get(pid),
+                    PlayerViews.statLine(scoring.playerTotals(pid, seasonStart, today))));
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("teamId", teamId);

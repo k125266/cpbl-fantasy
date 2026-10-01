@@ -85,9 +85,10 @@ public class RegistrationSync {
                 boolean foreign = profile != null && Boolean.TRUE.equals(profile.foreign());
                 long id = jdbc.sql("""
                         insert into player (cpbl_player_id, name, cpbl_team_code, is_foreign, listed_position,
-                                            registration_status, first_team_status, first_team_changed_on)
-                        values (?, ?, ?, ?, ?, 'REGISTERED', ?, ?) returning id
-                        """).params(sp.cpblPlayerId(), sp.name(), teamCode, foreign, pos, firstTeam, today)
+                                            registration_status, first_team_status, first_team_changed_on, jersey_number)
+                        values (?, ?, ?, ?, ?, 'REGISTERED', ?, ?, ?) returning id
+                        """).params(sp.cpblPlayerId(), sp.name(), teamCode, foreign, pos, firstTeam, today,
+                                profile == null ? null : profile.jerseyNumber())
                         .query(Long.class).single();
                 log(id, "registration_status", null, "REGISTERED", today);
                 log(id, "first_team_status", null, firstTeam, today);
@@ -99,6 +100,10 @@ public class RegistrationSync {
                         .params(k.id(), k.name(), sp.name()).update();
                 jdbc.sql("update player set name = ?, updated_at = now() where id = ?").params(sp.name(), k.id()).update();
                 renamed++;
+            }
+            if (sp.jerseyNumber() != null) {
+                jdbc.sql("update player set jersey_number = ? where id = ? and jersey_number is distinct from ?")
+                        .params(sp.jerseyNumber(), k.id(), sp.jerseyNumber()).update();
             }
             if (teamCode != null && !teamCode.equals(k.team())) {
                 jdbc.sql("update player set cpbl_team_code = ?, updated_at = now() where id = ?").params(teamCode, k.id()).update();

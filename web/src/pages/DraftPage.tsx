@@ -1,22 +1,25 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type DraftView, type PlayerRow, type RosterResponse } from '../api'
-import { ErrorBox, Loading, PlayerLink, StatusBadge, TeamChip, useLoad } from '../components'
+import { Avatar, celebrate, ErrorBox, Loading, PlayerCard, StatusBadge, TeamChip, tierOf, useLoad } from '../components'
+import { cpblTeam } from '../teams'
+import { cardBack, cardLine } from './PlayersPage'
 
 const DRAFT_STATUS: Record<string, string> = {
   SETUP: '準備中', KEEPERS: 'Keeper 選擇期', IN_PROGRESS: '進行中', COMPLETED: '已完成',
 }
+const C = 2 * Math.PI * 44
 
 export default function DraftPage() {
   const { leagueId, league, reloadLeague } = useApp()
   const drafts = useLoad(() => api.get<DraftView[]>(`/api/leagues/${leagueId}/drafts`), [leagueId])
   const [err, setErr] = useState<unknown>(null)
   const [halfNo, setHalfNo] = useState(1)
-
   const active = (drafts.data || []).find((d) => d.status !== 'COMPLETED') ?? (drafts.data || []).slice(-1)[0]
   const live = active?.status === 'IN_PROGRESS'
 
-  // 選秀進行中每 2 秒同步一次（v1 以輪詢實作）
+  // v1 以 2 秒輪詢同步（SSE / WebSocket 列在工程待辦 E8）
   useEffect(() => {
     if (!live) return
     const t = setInterval(() => drafts.reload(), 2000)
@@ -24,7 +27,6 @@ export default function DraftPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live])
 
-  const commissioner = league?.commissioner
   const call = async (fn: () => Promise<unknown>) => {
     setErr(null)
     try {
@@ -38,37 +40,34 @@ export default function DraftPage() {
 
   if (drafts.loading && !drafts.data) return <Loading />
   return (
-    <>
-      <h1>選秀</h1>
+    <div className="stack">
       <ErrorBox error={err || drafts.error} />
-      {commissioner && (
+      {!active && <p className="muted">尚未建立選秀。</p>}
+      {active && <DraftRoom draft={active} onChange={() => { drafts.reload(); reloadLeague() }} />}
+      {league?.commissioner && (
         <div className="card">
           <h2>聯盟管理員</h2>
           <div className="row">
-            <select value={halfNo} onChange={(e) => setHalfNo(Number(e.target.value))}>
+            <select value={halfNo} onChange={(e) => setHalfNo(Number(e.target.value))} aria-label="半季">
               <option value={1}>上半季</option>
               <option value={2}>下半季（含 keeper）</option>
             </select>
-            <button onClick={() => call(() => api.post(`/api/leagues/${leagueId}/drafts`, { halfNo }))}>建立 / 重建選秀（隨機順序）</button>
+            <button type="button" onClick={() => call(() => api.post(`/api/leagues/${leagueId}/drafts`, { halfNo }))}>建立選秀（隨機順序）</button>
             {active && (active.status === 'SETUP' || active.status === 'KEEPERS') && (
-              <button className="primary" onClick={() => call(() => api.post(`/api/leagues/${leagueId}/drafts/${active.id}/start`))}>開始選秀</button>
+              <button type="button" className="primary" onClick={() => call(() => api.post(`/api/leagues/${leagueId}/drafts/${active.id}/start`))}>開始選秀</button>
             )}
             {active && live && (
-              <button onClick={() => confirm('剩餘選擇將全部自動選取，確定？') && call(() => api.post(`/api/leagues/${leagueId}/drafts/${active.id}/auto-complete`))}>
-                剩餘全部自動選取
-              </button>
+              <button type="button" onClick={() => call(() => api.post(`/api/leagues/${leagueId}/drafts/${active.id}/auto-complete`))}>剩餘全部自動選取</button>
             )}
           </div>
         </div>
       )}
-      {!active && <p className="muted">尚未建立選秀。</p>}
-      {active && <DraftRoom draft={active} onChange={() => { drafts.reload(); reloadLeague() }} />}
-    </>
+    </div>
   )
 }
 
 function DraftRoom({ draft, onChange }: { draft: DraftView; onChange: () => void }) {
-  const { leagueId, league } = useApp()
+  const { league } = useApp()
   const teamName = (id: number | null) => league?.teams.find((t) => t.id === id)?.name ?? ''
   const myTurn = draft.status === 'IN_PROGRESS' && draft.currentTeamId === league?.myTeamId
   const [left, setLeft] = useState(draft.secondsLeft)
@@ -78,94 +77,111 @@ function DraftRoom({ draft, onChange }: { draft: DraftView; onChange: () => void
     return () => clearInterval(t)
   }, [draft.secondsLeft, draft.currentPickNo])
 
-  const rounds = Array.from({ length: draft.rounds }, (_, i) => i + 1)
+  const current = draft.picks.find((p) => p.pickNo === draft.currentPickNo)
+  const next = draft.picks.find((p) => p.pickNo > draft.currentPickNo && !p.playerId)
+  const myPicks = draft.picks.filter((p) => p.teamId === league?.myTeamId && p.playerId)
+
   return (
     <>
-      <div className="card">
-        <div className="spread">
-          <h2>{draft.halfNo === 1 ? '上' : '下'}半季選秀</h2>
-          <span className="badge">{DRAFT_STATUS[draft.status]}</span>
-        </div>
-        <p className="small muted">Snake draft・{draft.rounds} 輪・每次 {draft.pickSeconds} 秒，逾時自動選取排名最高且符合洋將上限與位置需求的球員。</p>
-        <p className="small">順序：{draft.order.map((id, i) => `${i + 1}. ${teamName(id)}`).join('　')}</p>
-        {draft.status === 'IN_PROGRESS' && (
-          <div className={`alert ${myTurn ? 'live' : 'info'}`}>
-            第 {draft.currentPickNo} 順位：{teamName(draft.currentTeamId)} {myTurn && '（輪到你了！）'}・剩餘 {left} 秒
+      {draft.status === 'IN_PROGRESS' ? (
+        <div className={`clock ${myTurn ? '' : 'idle'}`}>
+          <div className={`ring ${left <= 10 ? 'urgent' : ''}`}>
+            <svg viewBox="0 0 100 100"><circle className="track" cx="50" cy="50" r="44" /><circle className="prog" cx="50" cy="50" r="44" style={{ strokeDasharray: C, strokeDashoffset: C * (1 - left / draft.pickSeconds) }} /></svg>
+            <span>{left}</span>
           </div>
-        )}
-      </div>
+          <div>
+            <h2 className={myTurn ? 'gold-text' : ''}>{myTurn ? '輪到你了' : `${teamName(draft.currentTeamId)} 選擇中`}</h2>
+            <p>第 {current?.round} 輪・第 {draft.currentPickNo} 順位{next && <><br />下一位：{teamName(next.teamId)}</>}</p>
+          </div>
+        </div>
+      ) : (
+        <div className="card">
+          <div className="spread"><h2 style={{ margin: 0 }}>{draft.halfNo === 1 ? '上' : '下'}半季選秀</h2><span className="badge gold">{DRAFT_STATUS[draft.status]}</span></div>
+          <p className="ps" style={{ marginBottom: 0 }}>Snake draft・{draft.rounds} 輪・每次 {draft.pickSeconds} 秒，逾時自動選取排名最高且符合洋將上限與位置需求的球員。</p>
+        </div>
+      )}
       {draft.status === 'KEEPERS' && <KeeperPicker draft={draft} onChange={onChange} />}
       {draft.status === 'IN_PROGRESS' && <Available draft={draft} myTurn={myTurn} onPicked={onChange} />}
-      <div className="card">
-        <h2>選秀板</h2>
-        {rounds.map((r) => (
-          <div key={r} style={{ marginBottom: 8 }}>
-            <div className="small muted">第 {r} 輪</div>
-            <div className="draft-board">
-              {draft.picks.filter((p) => p.round === r).map((p) => (
-                <div key={p.pickNo} className={`pick ${p.pickNo === draft.currentPickNo && draft.status === 'IN_PROGRESS' ? 'current' : ''} ${p.keeper ? 'keeper' : ''}`}>
-                  <div className="small muted">#{p.pickNo} {p.teamName}</div>
-                  {p.playerId ? (
-                    <div><TeamChip code={p.playerTeam} /> <PlayerLink id={p.playerId} name={p.playerName ?? ''} leagueId={leagueId} />
-                      {p.keeper && <span className="badge" style={{ marginLeft: 4 }}>K</span>}
-                      {p.auto && <span className="badge" style={{ marginLeft: 4 }}>自動</span>}
-                    </div>
-                  ) : <div className="muted">—</div>}
-                </div>
-              ))}
-            </div>
+      {myPicks.length > 0 && (
+        <div className="card flush">
+          <div className="listhead">我的選秀 <small>{myPicks.length} / {draft.rounds}</small></div>
+          <div style={{ padding: '10px 14px' }} className="row">
+            {myPicks.map((p) => <span key={p.pickNo} className="badge">{p.round}. {p.playerName}{p.keeper ? '（K）' : ''}</span>)}
           </div>
-        ))}
-        {draft.picks.length === 0 && <p className="muted small">選秀開始後顯示。</p>}
-      </div>
+        </div>
+      )}
+      {draft.picks.length > 0 && (
+        <div className="card">
+          <div className="h2" style={{ margin: '0 0 10px' }}>選秀板 <small>順序：{draft.order.map((id) => teamName(id).slice(0, 2)).join(' → ')}</small></div>
+          <div className="board">
+            {draft.picks.filter((p) => p.playerId || p.pickNo === draft.currentPickNo).slice(-30).reverse().map((p) => (
+              <div key={p.pickNo} className={`pick ${p.pickNo === draft.currentPickNo && draft.status === 'IN_PROGRESS' ? 'current' : ''} ${p.teamId === league?.myTeamId ? 'mine' : ''}`}>
+                <div className="ps">#{p.pickNo}・R{p.round}・{p.teamName}</div>
+                {p.playerId ? <div><TeamChip code={p.playerTeam} /> {p.playerName}{p.keeper && <span className="badge" style={{ marginLeft: 4 }}>K</span>}{p.auto && <span className="badge" style={{ marginLeft: 4 }}>自動</span>}</div> : <div className="amber">選擇中…</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </>
   )
 }
 
 function Available({ draft, myTurn, onPicked }: { draft: DraftView; myTurn: boolean; onPicked: () => void }) {
   const { leagueId } = useApp()
+  const navigate = useNavigate()
   const [pos, setPos] = useState('')
-  const [q, setQ] = useState('')
   const [err, setErr] = useState<unknown>(null)
+  const [revealed, setRevealed] = useState<PlayerRow | null>(null)
   const list = useLoad(
-    () => api.get<PlayerRow[]>(`/api/leagues/${leagueId}/players?avail=draft&draftId=${draft.id}&pos=${pos}&q=${encodeURIComponent(q)}&limit=60`),
-    [leagueId, draft.id, draft.currentPickNo, pos, q],
+    () => api.get<PlayerRow[]>(`/api/leagues/${leagueId}/players?avail=draft&draftId=${draft.id}&pos=${pos}&limit=40`),
+    [leagueId, draft.id, draft.currentPickNo, pos],
   )
-  const pick = async (id: number) => {
+  const wasMyTurn = useRef(myTurn)
+  useEffect(() => {
+    // 輪到自己時震動提示（支援的手機才有作用）
+    if (myTurn && !wasMyTurn.current && 'vibrate' in navigator) navigator.vibrate?.(200)
+    wasMyTurn.current = myTurn
+  }, [myTurn])
+
+  const pick = async (p: PlayerRow) => {
     setErr(null)
     try {
-      await api.post(`/api/leagues/${leagueId}/drafts/${draft.id}/pick`, { playerId: id })
+      await api.post(`/api/leagues/${leagueId}/drafts/${draft.id}/pick`, { playerId: p.playerId })
+      setRevealed(p)
+      celebrate()
       onPicked()
     } catch (e) {
       setErr(e)
     }
   }
   return (
-    <div className="card">
-      <h2>可選球員</h2>
-      <div className="row" style={{ marginBottom: 8 }}>
-        <input placeholder="搜尋" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 110 }} />
-        <select value={pos} onChange={(e) => setPos(e.target.value)}>
-          <option value="">全部</option>
-          {['IF', 'OF', 'UTIL', 'SP', 'RP'].map((p) => <option key={p} value={p}>{p}</option>)}
-        </select>
+    <div className="card flush">
+      <div className="listhead plain">可選球員 <small>依本季表現排名</small></div>
+      <div className="chips">
+        {['', 'IF', 'OF', 'UTIL', 'SP', 'RP'].map((p) => <button key={p} type="button" aria-pressed={pos === p} onClick={() => setPos(p)}>{p || '全部'}</button>)}
       </div>
-      <ErrorBox error={err} />
-      <div className="table-wrap">
-        <table>
-          <thead><tr><th className="num">#</th><th>球員</th><th>位置</th><th></th></tr></thead>
-          <tbody>
-            {(list.data || []).map((p) => (
-              <tr key={p.playerId}>
-                <td className="num muted">{p.rank}</td>
-                <td><TeamChip code={p.cpblTeam} /> <PlayerLink id={p.playerId} name={p.name} leagueId={leagueId} />{p.foreign && <span className="badge" style={{ marginLeft: 4 }}>洋</span>} <StatusBadge status={p.status} /></td>
-                <td className="small">{p.eligible.join('/')}</td>
-                <td><button className="small primary" disabled={!myTurn} onClick={() => pick(p.playerId)}>選</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <div style={{ padding: '0 14px' }}><ErrorBox error={err} /></div>
+      {(list.data || []).map((p, i) => (
+        <div className="arow" key={p.playerId}>
+          <div className="rank">{i + 1}</div>
+          <Avatar team={p.cpblTeam} number={p.jerseyNumber} />
+          <button type="button" className="name" style={{ background: 'none', border: 0, padding: 0, textAlign: 'left', fontWeight: 400 }} onClick={() => navigate(`/players/${p.playerId}`)}>
+            <div className="pn">{p.name}{p.foreign && <span className="badge">洋</span>}<StatusBadge status={p.status} /></div>
+            <div className="ps">{cpblTeam(p.cpblTeam).short}・{p.eligible.join(',')}・{cardLine(p)}</div>
+          </button>
+          <button type="button" className="primary" disabled={!myTurn} onClick={() => pick(p)}>選</button>
+        </div>
+      ))}
+      {revealed && (
+        <div className="reveal" onClick={(e) => e.target === e.currentTarget && setRevealed(null)}>
+          <div>
+            <PlayerCard name={revealed.name} team={revealed.cpblTeam} number={revealed.jerseyNumber} positions={revealed.eligible.join('・')}
+              line={cardLine(revealed)} tier={tierOf(revealed.rank)} back={cardBack(revealed)} />
+            <p>選中 {revealed.name}！點空白處關閉</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -188,23 +204,17 @@ function KeeperPicker({ draft, onChange }: { draft: DraftView; onChange: () => v
   return (
     <div className="card">
       <h2>選擇 keeper（至多 {limit} 人）</h2>
-      <p className="small muted">Keeper 佔用的輪次 = 該球員上次被選中的輪次 − 2（非選秀取得者視為最後一輪）。</p>
+      <p className="ps">Keeper 佔用的輪次 = 上次被選中的輪次 − 2（非選秀取得者視為最後一輪）。</p>
       <ErrorBox error={err} />
       {(roster.data?.players || []).map((p) => (
-        <label key={p.playerId} className="small" style={{ marginBottom: 2 }}>
-          <input
-            type="checkbox"
-            checked={chosen.includes(p.playerId)}
-            disabled={!chosen.includes(p.playerId) && chosen.length >= limit}
-            onChange={() => setChosen(chosen.includes(p.playerId) ? chosen.filter((x) => x !== p.playerId) : [...chosen, p.playerId])}
-          />{' '}
+        <label key={p.playerId} className="row" style={{ marginBottom: 6 }}>
+          <input type="checkbox" checked={chosen.includes(p.playerId)} disabled={!chosen.includes(p.playerId) && chosen.length >= limit}
+            onChange={() => setChosen(chosen.includes(p.playerId) ? chosen.filter((x) => x !== p.playerId) : [...chosen, p.playerId])} />
           <TeamChip code={p.cpblTeam} /> {p.name} <StatusBadge status={p.status} />
         </label>
       ))}
-      <button className="primary" onClick={save}>儲存 keeper</button>
-      {draft.myKeepers.length > 0 && (
-        <p className="small">目前 keeper：{draft.myKeepers.map((k) => `${k.name}（第 ${k.round} 輪）`).join('、')}</p>
-      )}
+      <button type="button" className="primary" onClick={save}>儲存 keeper</button>
+      {draft.myKeepers.length > 0 && <p className="ps">目前 keeper：{draft.myKeepers.map((k) => `${k.name}（第 ${k.round} 輪）`).join('、')}</p>}
     </div>
   )
 }

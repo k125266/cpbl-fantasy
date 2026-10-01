@@ -194,10 +194,16 @@ export interface TodayGame {
   status: string
 }
 
+export interface TodayLine {
+  text: string
+  live: boolean
+}
+
 export interface RosterPlayer {
   playerId: number
   name: string
   cpblTeam: string
+  jerseyNumber: string | null
   foreign: boolean
   listedPosition: string
   slot: SlotName
@@ -208,6 +214,8 @@ export interface RosterPlayer {
   leavingOn: string | null
   game: TodayGame | null
   period: Record<string, string> | null
+  today: TodayLine | null
+  season: Record<string, string>
 }
 
 export interface RosterResponse {
@@ -227,6 +235,7 @@ export interface PlayerRow {
   playerId: number
   name: string
   cpblTeam: string
+  jerseyNumber: string | null
   foreign: boolean
   eligible: SlotName[]
   status: PlayerStatus
@@ -318,4 +327,57 @@ export interface Notification {
   message: string
   createdAt: string
   read: boolean
+}
+
+export interface FeedItem {
+  kind: 'HOT' | 'MOVE' | 'GAME' | 'LEAGUE'
+  playerId: number | null
+  playerName: string | null
+  cpblTeam: string | null
+  jerseyNumber: string | null
+  text: string
+  at: string | null
+  live: boolean
+}
+
+export interface EligibilityProgress {
+  listedPosition: string
+  halfNo: number
+  graceUntil: string
+  inGrace: boolean
+  minGames: number
+  minStarts: number
+  ifGames: number
+  ofGames: number
+  batGames: number
+  starts: number
+  reliefs: number
+}
+
+export interface PlayerDetail {
+  player: { id: number; name: string; team: string; foreign: boolean; listedPosition: string; jerseyNumber: string | null }
+  today: string
+  ranges: Record<'season' | '14d' | '7d', Record<string, string>>
+  rank: number | null
+  categoryRanks: Record<string, number | null>
+  schedule: { play_date: string; scheduled_date: string; actual_play_date: string | null; status: string; start_time: string | null; opponent: string; home: boolean }[]
+  status?: PlayerStatus
+  eligible?: SlotName[]
+  eligibilityProgress?: EligibilityProgress
+  feed?: FeedItem[]
+  league?: {
+    ownerTeamId: number | null
+    ownerTeamName: string | null
+    availability: 'ROSTERED' | 'WAIVERS' | 'FREE_AGENT'
+    acquiredVia: string | null
+    draftRound: number | null
+    teams: number
+    adds7d: number
+    drops7d: number
+  }
+  newsEnabled: boolean
+  news: { title: string; source: string; publishedAt: string; url: string }[]
+  nameHistory: { old_name: string; new_name: string; changed_at: string }[]
+  statusLog: { field: string; old_value: string | null; new_value: string; effective_date: string }[]
+  gameLog: Record<string, string | number | boolean>[]
 }
