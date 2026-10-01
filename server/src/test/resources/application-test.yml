@@ -1,0 +1,11 @@
+spring:
+  datasource:
+    url: ${CPBLF_TEST_DB_URL:jdbc:postgresql://localhost:5432/cpblf_test}
+    username: ${CPBLF_TEST_DB_USER:cpblf}
+    password: ${CPBLF_TEST_DB_PASSWORD:cpblf}
+  flyway:
+    clean-disabled: false
+cpblf:
+  scheduler-enabled: false
+  demo:
+    seed-league: false
