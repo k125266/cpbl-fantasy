@@ -10,18 +10,18 @@ import tw.cpblf.source.SourceModels.PitcherLine;
 public record StatRow(
         String teamCode,
         boolean batted, String positions, int pa, int ab, int r, int h, int hr, int rbi, int sb, int bb,
-        boolean pitched, boolean started, int outs, int pH, int pBb, int pEr, int pK, int sv, int hld) {
+        boolean pitched, boolean started, int outs, int pH, int pBb, int pEr, int pK, int sv, int hld, int w) {
 
-    public static final StatRow EMPTY = new StatRow(null, false, "", 0, 0, 0, 0, 0, 0, 0, 0, false, false, 0, 0, 0, 0, 0, 0, 0);
+    public static final StatRow EMPTY = new StatRow(null, false, "", 0, 0, 0, 0, 0, 0, 0, 0, false, false, 0, 0, 0, 0, 0, 0, 0, 0);
 
     public StatRow withBatting(String team, BatterLine b) {
         return new StatRow(team, true, b.positions() == null ? "" : b.positions(), b.pa(), b.ab(), b.r(), b.h(), b.hr(), b.rbi(),
-                b.sb(), b.bb(), pitched, started, outs, pH, pBb, pEr, pK, sv, hld);
+                b.sb(), b.bb(), pitched, started, outs, pH, pBb, pEr, pK, sv, hld, w);
     }
 
     public StatRow withPitching(String team, PitcherLine p) {
         return new StatRow(teamCode == null ? team : teamCode, batted, positions, pa, ab, r, h, hr, rbi, sb, bb,
-                true, p.started(), p.outs(), p.h(), p.bb(), p.er(), p.k(), p.sv(), p.hld());
+                true, p.started(), p.outs(), p.h(), p.bb(), p.er(), p.k(), p.sv(), p.hld(), p.w());
     }
 
     /** 比較用：不含 team_code 的計分欄位。 */
@@ -46,6 +46,7 @@ public record StatRow(
         m.put("p_k", pK);
         m.put("sv", sv);
         m.put("hld", hld);
+        m.put("w", w);
         return m;
     }
 
@@ -54,6 +55,6 @@ public record StatRow(
                 rs.getString("positions") == null ? "" : rs.getString("positions"),
                 rs.getInt("pa"), rs.getInt("ab"), rs.getInt("r"), rs.getInt("h"), rs.getInt("hr"), rs.getInt("rbi"),
                 rs.getInt("sb"), rs.getInt("bb"), rs.getBoolean("pitched"), rs.getBoolean("started"), rs.getInt("outs"),
-                rs.getInt("p_h"), rs.getInt("p_bb"), rs.getInt("p_er"), rs.getInt("p_k"), rs.getInt("sv"), rs.getInt("hld"));
+                rs.getInt("p_h"), rs.getInt("p_bb"), rs.getInt("p_er"), rs.getInt("p_k"), rs.getInt("sv"), rs.getInt("hld"), rs.getInt("w"));
     }
 }

@@ -41,7 +41,7 @@ public final class SourceModels {
             String name,
             boolean home,
             boolean started,
-            int outs, int h, int bb, int er, int k, int sv, int hld) {
+            int outs, int h, int bb, int er, int k, int sv, int hld, int w) {
     }
 
     public record BoxScore(

@@ -368,7 +368,7 @@ public class SimulatedDataSource implements CpblDataSource {
                 budget -= outs;
                 double pf = p.outs() == 0 ? 1 : outs / (double) p.outs();
                 ps.add(new PitcherLine(p.cpblPlayerId(), p.name(), p.home(), p.started(), outs,
-                        f(p.h(), pf), f(p.bb(), pf), f(p.er(), pf), f(p.k(), pf), 0, 0));
+                        f(p.h(), pf), f(p.bb(), pf), f(p.er(), pf), f(p.k(), pf), 0, 0, 0));
             }
         }
         int hs = bs.stream().filter(BatterLine::home).mapToInt(BatterLine::r).sum();
@@ -640,6 +640,8 @@ public class SimulatedDataSource implements CpblDataSource {
         List<PitcherLine> out = new ArrayList<>();
         int hLeft = hits, bbLeft = walks;
         boolean winning = lead > 0;
+        // 勝投：勝隊先發投滿 5 局者，否則第一位後援（簡化）
+        int winner = !winning ? -1 : outs[0] >= 15 || staff.size() == 1 ? 0 : 1;
         for (int i = 0; i < staff.size(); i++) {
             SimPlayer p = staff.get(i);
             boolean last = i == staff.size() - 1;
@@ -664,7 +666,7 @@ public class SimulatedDataSource implements CpblDataSource {
             } else if (i > 0 && !last && lead > -3 && r.nextDouble() < 0.12) {
                 hld = 1;
             }
-            out.add(new PitcherLine(p.id, nameOn(p, date), home, i == 0, outs[i], h, bb, er, k, sv, hld));
+            out.add(new PitcherLine(p.id, nameOn(p, date), home, i == 0, outs[i], h, bb, er, k, sv, hld, i == winner ? 1 : 0));
         }
         return out;
     }

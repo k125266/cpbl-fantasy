@@ -105,10 +105,10 @@ public class LivePoller {
         jdbc.sql("delete from live_game_stat where game_id = ?").param(g.id()).update();
         rows.forEach((pid, s) -> jdbc.sql("""
                 insert into live_game_stat (game_id, player_id, team_code, batted, pa, ab, r, h, hr, rbi, sb, bb,
-                                            pitched, started, outs, p_h, p_bb, p_er, p_k, sv, hld, fetched_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                            pitched, started, outs, p_h, p_bb, p_er, p_k, sv, hld, w, fetched_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """).params(g.id(), pid, s.teamCode(), s.batted(), s.pa(), s.ab(), s.r(), s.h(), s.hr(), s.rbi(), s.sb(), s.bb(),
-                s.pitched(), s.started(), s.outs(), s.pH(), s.pBb(), s.pEr(), s.pK(), s.sv(), s.hld(), ts).update());
+                s.pitched(), s.started(), s.outs(), s.pH(), s.pBb(), s.pEr(), s.pK(), s.sv(), s.hld(), s.w(), ts).update());
     }
 
     public int intervalSeconds() {
