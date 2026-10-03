@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type Matchup, type RosterPlayer, type RosterResponse, type SlotName, type StandingRow } from '../api'
-import { BottomSheet, ErrorBox, fmtDate, fmtTime, Loading, MatchTicket, MiniCard, TeamChip, TIER_LABEL, TierAvatar, tierOf, toast, useLoad, weekday } from '../components'
+import { BottomSheet, ErrorBox, fmtDate, fmtTime, Loading, MatchTicket, MiniCard, TeamChip, TIER_LABEL, TierAvatar, tierOf, toast, useLoad } from '../components'
 import { fmtPts, myMatchups, periodDay, type MySide } from '../matchups'
 import { cpblTeam, fantasyTeamColor } from '../teams'
 
@@ -137,12 +137,11 @@ export default function TeamPage() {
 
       {mine && alerts.length > 0 && <AlertBar alerts={alerts} onOpen={setSheet} />}
 
-      <div className="pills">
-        <span className="pill">{fmtDate(data.today)} 週{weekday(data.today)}</span>
-        <span className="pill">FAAB {data.faabBudget}</span>
-        <span className="pill">{data.players.filter((p) => p.slot !== 'NA').length}/{data.rosterSize} 人・洋將 {data.players.filter((p) => p.foreign).length}/{data.foreignLimit}</span>
-        {!mine && <button type="button" className="pill gold" onClick={() => navigate('/')}>回我的隊伍</button>}
-      </div>
+      {!mine && (
+        <div className="pills">
+          <button type="button" className="pill gold" onClick={() => navigate('/')}>回我的隊伍</button>
+        </div>
+      )}
 
       {data.lineupLockReason && <div className="alert error">名單鎖定中：{data.lineupLockReason}</div>}
 
@@ -319,7 +318,10 @@ function Lineup({ data, onOpen, onEmpty }: { data: RosterResponse; onOpen: (p: R
   return (
     <>
       <div className="lineup-head">
-        <span>LINEUP · {data.players.length} CARDS</span>
+        <span>
+          LINEUP · {data.players.filter((p) => p.slot !== 'NA').length}/{data.rosterSize}
+          {' '}· 洋將 {data.players.filter((p) => p.foreign).length}/{data.foreignLimit} · FAAB {data.faabBudget}
+        </span>
         <div className="vtoggle" role="group" aria-label="名單呈現方式">
           <button type="button" aria-pressed={view === 'list'} onClick={() => choose('list')}>列表</button>
           <button type="button" aria-pressed={view === 'cards'} onClick={() => choose('cards')}>卡冊</button>
