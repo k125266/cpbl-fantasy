@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import confetti from 'canvas-confetti'
-import type { FeedItem, PlayerStatus } from './api'
+import type { CategoryResult, FeedItem, PlayerStatus } from './api'
+import { diffText, fmtPts, resultLabel, type MySide, type Res } from './matchups'
 import { cpblTeam } from './teams'
 
 export function TeamChip({ code }: { code: string | null | undefined }) {
@@ -54,7 +55,7 @@ export function PlayerCard({ name, team, number, positions, line, tier, back }: 
   const [flipped, setFlipped] = useState(false)
   return (
     <button type="button" className={`pcard tier-${tier} ${flipped ? 'flipped' : ''}`} onClick={() => setFlipped(!flipped)}
-      aria-label={`${name} 球員卡，點擊翻面`}>
+      style={{ ['--tc' as string]: cpblTeam(team).bg }} aria-label={`${name} 球員卡，點擊翻面`}>
       <div className="pcard-inner">
         <div className="face front">
           <div className="face-in">
@@ -74,6 +75,131 @@ export function PlayerCard({ name, team, number, positions, line, tier, back }: 
         </div>
       </div>
     </button>
+  )
+}
+
+/**
+ * 小球員卡（設計稿樣式）：金屬框、格紋背號、等級字；點擊翻面看背面數據。
+ * 用於本期關鍵卡、王牌對決；純外觀，不可交易或購買。
+ */
+export function MiniCard({ name, team, number, slot, tier, line, back, backLabel, foot }: {
+  name: string
+  team: string
+  number: string | null
+  slot: string
+  tier: Tier
+  line: string
+  back: [string, string][]
+  backLabel: string
+  foot?: string
+}) {
+  const [flipped, setFlipped] = useState(false)
+  return (
+    <button type="button" className={`mcard ${tier} ${flipped ? 'flipped' : ''}`} onClick={() => setFlipped(!flipped)}
+      style={{ ['--tc' as string]: cpblTeam(team).bg }} aria-label={`${name} 球員卡，點擊翻面`}>
+      <div className="mcard-in">
+        <div className="mcard-face">
+          <div className="mcard-body">
+            <div className="mcard-top"><span>{slot}</span><TeamChip code={team} /></div>
+            <div className="mcard-art"><b>{number ?? ''}</b><small>{TIER_LABEL[tier]}</small></div>
+            <div className="mcard-name">{name}</div>
+            <div className="mcard-line">{line}</div>
+          </div>
+        </div>
+        <div className="mcard-face back">
+          <div className="mcard-body">
+            <div className="mcard-bname">{name}</div>
+            <div className="mcard-blabel">{backLabel}</div>
+            <div className="mcard-rows">{back.map(([k, v]) => <div key={k}><span>{k}</span><b>{v}</b></div>)}</div>
+            {foot && <div className="mcard-foot">{foot}</div>}
+          </div>
+        </div>
+      </div>
+    </button>
+  )
+}
+
+// ---------- 票根（對戰頁 8a、隊伍首頁 v6 共用） ----------
+
+const RES_CLASS: Record<Res, string> = { W: 'w', L: 'l', T: 't' }
+/** 計分類別固定順序（同後端 Category） */
+export const CATEGORY_ORDER = ['R', 'HR', 'RBI', 'SB', 'AVG', 'QS', 'K', 'SV+HLD', 'ERA', 'WHIP']
+const CATEGORY_SHORT: Record<string, string> = { 'SV+HLD': 'SVH' }
+
+/** 結果章：結束後為勝／敗／和，進行中為領先／落後／平手。 */
+export function Stamp({ result, final, size, text }: { result: Res; final: boolean; size: 'lg' | 'sm'; text?: string }) {
+  const word = text ?? (final ? { W: '勝', L: '敗', T: '和' } : { W: '領先', L: '落後', T: '平手' })[result]
+  return <span className={`stamp ${size} ${text ? '' : RES_CLASS[result]} ${final ? 'final' : ''}`}>{word}</span>
+}
+
+/** 10 格類別條：我方領先金色、對手領先銀灰、平手或無數據暗色。 */
+export function CatSegs({ cats, side, labels, tight }: { cats: CategoryResult[]; side: 'A' | 'B'; labels?: boolean; tight?: boolean }) {
+  const byCat = new Map(cats.map((c) => [c.category, c]))
+  return (
+    <div className={`catsegs ${tight ? 'tight' : ''}`} aria-hidden="true">
+      {CATEGORY_ORDER.map((k) => {
+        const w = byCat.get(k)?.winner
+        const cls = w === side ? 'me' : w === 'A' || w === 'B' ? 'op' : ''
+        return <div key={k} className={cls}><i />{labels && <span>{CATEGORY_SHORT[k] ?? k}</span>}</div>
+      })}
+    </div>
+  )
+}
+
+/**
+ * 對戰票根。lg：對戰頁可左右滑的大票根（點擊切換下方類別）；sm：隊伍首頁並排的小票根（點擊進對戰頁）。
+ * no 為本期第幾場（1 起算），rec 為對手戰績說明，color 為對手的 fantasy 隊伍色。
+ */
+export function MatchTicket({ v, no, size, rec, color, active, onClick }: {
+  v: MySide
+  no: number
+  size: 'lg' | 'sm'
+  rec?: string
+  color?: string
+  active?: boolean
+  onClick?: () => void
+}) {
+  const no2 = String(no).padStart(2, '0')
+  const pending = v.m.status === 'PENDING'
+  const res = RES_CLASS[v.result]
+  const stamp = <Stamp result={v.result} final={v.final} size={size} text={pending ? '未開始' : undefined} />
+  const score = (
+    <div className="tk-score"><span>{fmtPts(v.me)}</span><span className="colon">:</span><span className="op">{fmtPts(v.op)}</span></div>
+  )
+  if (size === 'lg') {
+    return (
+      <button type="button" className={`tk lg ${active ? 'active' : ''}`} onClick={onClick} aria-pressed={active}>
+        <div className="tk-main">
+          <div className="tk-wm">{no2}</div>
+          <div className="tk-kick"><b>TICKET</b> · MATCH {no2}{v.neighbour && ` · ${v.neighbour}`}</div>
+          <div className="tk-name">vs {v.oppName ?? '待定'}</div>
+          {rec && <div className="tk-rec">{rec}</div>}
+          {score}
+          <CatSegs cats={v.m.categories} side={v.side} labels />
+        </div>
+        <div className="tk-cut" />
+        <div className="tk-stub">
+          <small>RESULT</small>
+          {stamp}
+          <span className={`diff c-${pending ? 't' : res}`}>{pending ? '—' : diffText(v)}</span>
+        </div>
+        <span className="tk-notch t" />
+        <span className="tk-notch b" />
+      </button>
+    )
+  }
+  return (
+    <Link to={`/matchups/${v.m.id}`} className={`tk sm ${v.result === 'W' && !pending ? 'w' : ''}`}
+      style={{ ['--tc' as string]: color }}>
+      <div className="tk-sm-top">
+        <div className="tk-sm-kick"><span>M{no2}{v.neighbour && ` · ${v.neighbour}`}</span><i /></div>
+        <div className="tk-name">vs {v.oppName ?? '待定'}</div>
+        {score}
+        <div className={`tk-label c-${pending ? 't' : res}`}>{pending ? '尚未開始' : resultLabel(v)}</div>
+      </div>
+      <div className="tk-sm-cut" />
+      <div className="tk-sm-bot"><CatSegs cats={v.m.categories} side={v.side} tight />{stamp}</div>
+    </Link>
   )
 }
 

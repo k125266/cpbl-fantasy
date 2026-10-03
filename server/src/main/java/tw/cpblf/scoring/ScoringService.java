@@ -52,17 +52,18 @@ public class ScoringService {
                 .query((rs, n) -> totals(rs)).single();
     }
 
-    public record PlayerContribution(long playerId, String name, String cpblTeam, String slots, StatTotals totals) {
+    public record PlayerContribution(long playerId, String name, String cpblTeam, String jerseyNumber, String slots,
+                                     StatTotals totals) {
     }
 
     /** 對戰頁逐人貢獻。 */
     public List<PlayerContribution> contributions(long teamId, LocalDate from, LocalDate to) {
-        return jdbc.sql("select p.id as pid, p.name, p.cpbl_team_code, string_agg(distinct re.slot, ',') as slots, " + SUMS + FROM
-                        .replace("from game_stat gs", "from game_stat gs join player p on p.id = gs.player_id")
-                        + " group by p.id, p.name, p.cpbl_team_code order by p.name")
+        return jdbc.sql("select p.id as pid, p.name, p.cpbl_team_code, p.jersey_number, string_agg(distinct re.slot, ',') as slots, "
+                        + SUMS + FROM.replace("from game_stat gs", "from game_stat gs join player p on p.id = gs.player_id")
+                        + " group by p.id, p.name, p.cpbl_team_code, p.jersey_number order by p.name")
                 .param("team", teamId).param("from", from).param("to", to)
                 .query((rs, n) -> new PlayerContribution(rs.getLong("pid"), rs.getString("name"), rs.getString("cpbl_team_code"),
-                        rs.getString("slots"), totals(rs)))
+                        rs.getString("jersey_number"), rs.getString("slots"), totals(rs)))
                 .list();
     }
 
