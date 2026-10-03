@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type Matchup, type RosterPlayer, type RosterResponse, type SlotName, type StandingRow } from '../api'
-import { Avatar, BottomSheet, ErrorBox, fmtDate, fmtTime, Loading, MatchTicket, TeamChip, toast, useLoad, weekday } from '../components'
+import { BottomSheet, ErrorBox, fmtDate, fmtTime, Loading, MatchTicket, MiniCard, TeamChip, TierAvatar, tierOf, toast, useLoad, weekday } from '../components'
 import { fmtPts, myMatchups, periodDay, type MySide } from '../matchups'
 import { cpblTeam, fantasyTeamColor } from '../teams'
 
@@ -11,29 +11,95 @@ interface Seat {
   player: RosterPlayer | null
 }
 
-const GROUPS: [string, SlotName[]][] = [
-  ['打者', ['IF', 'OF', 'UTIL']],
-  ['投手', ['SP', 'RP']],
-  ['板凳・NA', ['BN', 'NA']],
-]
+type View = 'list' | 'cards'
+const VIEW_KEY = 'team-lineup-view'
+
+function loadView(): View {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'cards' ? 'cards' : 'list'
+  } catch {
+    return 'list'
+  }
+}
 
 function isPitcherRow(p: RosterPlayer) {
   return p.slot === 'SP' || p.slot === 'RP' || p.listedPosition === 'P'
 }
 
-function gameText(p: RosterPlayer): { text: string; cls?: string } {
+interface PodCell {
+  label: string
+  val: string | number
+  /** 數字顏色：hi 亮、dim 暗、gold 金；未給為灰（本季數據） */
+  cls?: 'hi' | 'dim' | 'gold'
+  warn?: boolean
+}
+
+/** 一位球員在名單上的呈現：今日數據格、卡冊摘要、比賽資訊、狀態旗。只寫客觀出賽狀態（規則書 6.1.3）。 */
+function lineInfo(p: RosterPlayer) {
+  const pit = isPitcherRow(p)
   const g = p.game
-  if (p.status.code === 'MINORS') return { text: p.status.text, cls: 'amber' }
-  if (p.status.code === 'DELISTED') return { text: p.status.text, cls: 'red' }
-  if (!g) return { text: '今日無比賽' }
-  const opp = `${g.home ? 'vs' : '@'} ${cpblTeam(g.opponent).short}`
-  switch (g.status) {
-    case 'POSTPONED': return { text: '延賽・待補賽', cls: 'amber' }
-    case 'FINAL': return { text: `已結束 ${opp}` }
-    case 'IN_PROGRESS': return { text: `進行中 ${opp}`, cls: 'green' }
-    case 'SUSPENDED': return { text: `保留比賽 ${opp}`, cls: 'amber' }
-    default: return { text: `${fmtTime(g.startTime)} ${opp}` }
+  const ts = p.today?.stats
+  const minors = p.status.code === 'MINORS'
+  const delisted = p.status.code === 'DELISTED'
+  const idle = p.status.code === 'IDLE'
+  const ppd = g?.status === 'POSTPONED'
+  const live = g?.status === 'IN_PROGRESS' && !minors && !delisted
+  const season: PodCell = pit ? { label: 'ERA', val: p.season.ERA ?? '—' } : { label: 'AVG', val: p.season.AVG ?? '—' }
+  const n = (v: number, hi: PodCell['cls'] = 'hi'): PodCell['cls'] => (v ? hi : 'dim')
+
+  let pod: PodCell[]
+  let short = '—'
+  if (minors || delisted) {
+    pod = [{ label: minors ? '二軍' : '註銷', val: '—', cls: 'dim', warn: true }, season]
+    short = minors ? '二軍' : '已註銷'
+  } else if (ppd) {
+    pod = [{ label: '延賽', val: '—', cls: 'dim', warn: true }, season]
+    short = '延賽'
+  } else if (pit) {
+    if (ts?.pitched) {
+      const ip = `${Math.floor(ts.outs / 3)}.${ts.outs % 3}`
+      pod = [{ label: 'IP', val: ip, cls: 'hi' }, { label: 'ER', val: ts.er, cls: n(ts.er) }, { label: 'K', val: ts.k, cls: n(ts.k) }]
+      short = `${ip}IP ${ts.k}K`
+    } else {
+      pod = [{ label: '今日', val: '—', cls: 'dim' }, season]
+      short = g && g.status !== 'SCHEDULED' ? '未登板' : '—'
+    }
+  } else if (ts && !ts.pitched) {
+    pod = [
+      { label: 'H/AB', val: `${ts.h}-${ts.ab}`, cls: ts.h ? 'hi' : undefined },
+      { label: 'HR', val: ts.hr, cls: n(ts.hr, 'gold') },
+      ts.sb && !ts.rbi ? { label: 'SB', val: ts.sb, cls: 'hi' } : { label: 'RBI', val: ts.rbi, cls: n(ts.rbi) },
+    ]
+    short = `${ts.h}-${ts.ab}` + (ts.hr ? ' HR' : ts.rbi ? ` ${ts.rbi}RBI` : '')
+  } else {
+    pod = [season]
   }
+
+  let meta: string
+  if (minors) meta = `${p.listedPosition}・未在一軍名單`
+  else if (delisted) meta = p.status.text
+  else if (!g) meta = '今日無比賽'
+  else {
+    const opp = `${g.home ? 'vs' : '@'} ${cpblTeam(g.opponent).short}`
+    const score = g.teamScore != null && g.oppScore != null ? ` ${g.teamScore}:${g.oppScore}` : ''
+    switch (g.status) {
+      case 'POSTPONED': meta = `${opp}・延賽`; break
+      case 'IN_PROGRESS': meta = `${opp}${score}${g.inning ? `・${g.inning}` : ''}${pit && !ts?.pitched ? '・未登板' : ''}`; break
+      case 'FINAL': meta = `${opp}${score}・終場`; break
+      case 'SUSPENDED': meta = `${opp}${score}・保留比賽`; break
+      default: meta = `${opp} ${fmtTime(g.startTime)}`
+    }
+  }
+
+  const flag = minors ? { text: '二軍', bad: false } : idle ? { text: '未出賽', bad: true } : delisted ? { text: '已註銷', bad: true } : null
+  const tone: 'warn' | 'muted' | undefined = minors || ppd || delisted ? 'warn' : short === '未登板' || short === '—' ? 'muted' : undefined
+  return { pod, short, meta, live, flag, tone, tier: tierOf(p.rank) }
+}
+
+function pendText(p: RosterPlayer) {
+  if (p.pendingFrom) return `${fmtDate(p.pendingFrom)} 起生效`
+  if (p.leavingOn) return `${fmtDate(p.leavingOn)} 離隊`
+  return null
 }
 
 export default function TeamPage() {
@@ -56,16 +122,6 @@ export default function TeamPage() {
   const halfRows = (halfNo === 2 ? standings.data?.half2 : standings.data?.half1) ?? []
   // 每期雙對手：本期有兩場
   const tickets = myMatchups(matchups.data ?? [], data.period?.id, id)
-
-  const seats = (slots: SlotName[]): Seat[] => {
-    const out: Seat[] = []
-    for (const s of slots) {
-      const ps = data.players.filter((p) => p.slot === s)
-      ps.forEach((p) => out.push({ slot: s, player: p }))
-      for (let i = ps.length; i < (data.slotCounts[s] ?? 0); i++) out.push({ slot: s, player: null })
-    }
-    return out
-  }
 
   const starters = data.players.filter((p) => !['BN', 'NA'].includes(p.slot))
   const problems = starters.filter((p) => p.status.code !== 'ACTIVE' || p.game?.status === 'POSTPONED')
@@ -90,12 +146,9 @@ export default function TeamPage() {
 
       {mine && problems.length > 0 && <TodayNotice problems={problems} onOpen={setSheet} />}
 
-      {GROUPS.map(([label, slots]) => (
-        <div className="card flush" key={label}>
-          <div className="listhead">{label}{label === '打者' && data.period && <small>本期 {fmtDate(data.period.startDate)}–{fmtDate(data.period.endDate)}</small>}</div>
-          {seats(slots).map((seat, i) => <Row key={seat.player?.playerId ?? `${seat.slot}${i}`} seat={seat} onOpen={setSheet} />)}
-        </div>
-      ))}
+      <div>
+        <Lineup data={data} onOpen={setSheet} onEmpty={mine ? () => navigate('/players') : undefined} />
+      </div>
 
       {sheet && (
         <MoveSheet player={sheet} data={data} mine={mine} onClose={() => setSheet(null)} onDone={() => { setSheet(null); reload() }} />
@@ -200,43 +253,123 @@ function TodayNotice({ problems, onOpen }: { problems: RosterPlayer[]; onOpen: (
   )
 }
 
-function Row({ seat, onOpen }: { seat: Seat; onOpen: (p: RosterPlayer) => void }) {
+/** 名單：LINEUP 標題與列表／卡冊切換、01 打者、02 投手、03 後備。 */
+function Lineup({ data, onOpen, onEmpty }: { data: RosterResponse; onOpen: (p: RosterPlayer) => void; onEmpty?: () => void }) {
+  const [view, setView] = useState<View>(loadView)
+  const choose = (v: View) => {
+    setView(v)
+    try {
+      localStorage.setItem(VIEW_KEY, v)
+    } catch {
+      // 無法儲存時只影響這次瀏覽
+    }
+  }
+  const seats = (slots: SlotName[]): Seat[] => {
+    const out: Seat[] = []
+    for (const s of slots) {
+      const ps = data.players.filter((p) => p.slot === s)
+      ps.forEach((p) => out.push({ slot: s, player: p }))
+      for (let i = ps.length; i < (data.slotCounts[s] ?? 0); i++) out.push({ slot: s, player: null })
+    }
+    return out
+  }
+  const count = (ss: Seat[]) => `${ss.filter((s) => s.player).length}/${ss.length}`
+  const sections: [string, string, string, Seat[]][] = [
+    ['01', '打者', 'BATTERS', seats(['IF', 'OF', 'UTIL'])],
+    ['02', '投手', 'PITCHERS', seats(['SP', 'RP'])],
+  ]
+  const bench = seats(['BN', 'NA'])
+
+  return (
+    <>
+      <div className="lineup-head">
+        <span>LINEUP · {data.players.length} CARDS</span>
+        <div className="vtoggle" role="group" aria-label="名單呈現方式">
+          <button type="button" aria-pressed={view === 'list'} onClick={() => choose('list')}>列表</button>
+          <button type="button" aria-pressed={view === 'cards'} onClick={() => choose('cards')}>卡冊</button>
+        </div>
+      </div>
+      {sections.map(([no, title, en, ss]) => (
+        <div key={no}>
+          <div className="sec lineup"><span className="no">{no}</span><span className="t">{title}</span><span className="en">{en}</span><span className="r">{count(ss)}</span></div>
+          {view === 'list' ? (
+            <div className="lrows">{ss.map((s, i) => <LineRow key={s.player?.playerId ?? `${s.slot}${i}`} seat={s} onOpen={onOpen} onEmpty={onEmpty} />)}</div>
+          ) : (
+            <div className="cards3">{ss.map((s, i) => <LineCard key={s.player?.playerId ?? `${s.slot}${i}`} seat={s} onOpen={onOpen} onEmpty={onEmpty} />)}</div>
+          )}
+        </div>
+      ))}
+      <div className="sec dim lineup" style={{ marginTop: 34 }}>
+        <span className="no">03</span><span className="t">後備</span><span className="en">BENCH · NA</span><span className="r">{count(bench)}</span>
+      </div>
+      <div className="bgrid">{bench.map((s, i) => <BenchCell key={s.player?.playerId ?? `${s.slot}${i}`} seat={s} onOpen={onOpen} />)}</div>
+    </>
+  )
+}
+
+function LineRow({ seat, onOpen, onEmpty }: { seat: Seat; onOpen: (p: RosterPlayer) => void; onEmpty?: () => void }) {
   const p = seat.player
-  const starting = !['BN', 'NA'].includes(seat.slot)
   if (!p) {
     return (
-      <div className="prow empty">
-        <div className="slot on">{seat.slot}</div>
-        <div className="av" style={{ ['--tc' as string]: 'var(--line)' }} />
-        <div className="ps">（空位）</div>
+      <button type="button" className="lrow empty" onClick={onEmpty} disabled={!onEmpty}>
+        <div className="slotc">{seat.slot}</div>
+        <div className="ring0" />
+        <div className="hint">空位・簽入自由球員</div>
         <div />
+      </button>
+    )
+  }
+  const x = lineInfo(p)
+  const pend = pendText(p)
+  return (
+    <button type="button" className={`lrow ${x.tier === 'gold' ? 'gold' : ''}`} onClick={() => onOpen(p)}>
+      <div className="slotc">{seat.slot}</div>
+      <TierAvatar team={p.cpblTeam} number={p.jerseyNumber} tier={x.tier} />
+      <div style={{ minWidth: 0 }}>
+        <div className="nm">
+          <b>{p.name}</b><TeamChip code={p.cpblTeam} />
+          {x.flag && <span className={`flag ${x.flag.bad ? 'bad' : ''}`}>{x.flag.text}</span>}
+        </div>
+        <div className="meta">{x.live && <span className="ldot" />}<span>{x.meta}</span></div>
+        {pend && <div className="pend">{pend}</div>}
+      </div>
+      <div className="pod">
+        {x.pod.map((c) => (
+          <div key={c.label}><small className={c.warn ? 'warn' : ''}>{c.label}</small><b className={c.cls ?? ''}>{c.val}</b></div>
+        ))}
+      </div>
+    </button>
+  )
+}
+
+function LineCard({ seat, onOpen, onEmpty }: { seat: Seat; onOpen: (p: RosterPlayer) => void; onEmpty?: () => void }) {
+  const p = seat.player
+  if (!p) {
+    return <button type="button" className="cempty" onClick={onEmpty} disabled={!onEmpty}><b>{seat.slot}</b><small>空位</small></button>
+  }
+  const x = lineInfo(p)
+  return (
+    <MiniCard name={p.name} team={p.cpblTeam} number={p.jerseyNumber} slot={seat.slot} tier={x.tier} line={x.short}
+      live={x.live} tone={x.tone} dot={x.flag ? (x.flag.bad ? 'var(--bad)' : 'var(--warn)') : undefined} onOpen={() => onOpen(p)} />
+  )
+}
+
+function BenchCell({ seat, onOpen }: { seat: Seat; onOpen: (p: RosterPlayer) => void }) {
+  const p = seat.player
+  if (!p) {
+    return (
+      <div className="bcell" style={{ cursor: 'default' }}>
+        <div className="ring0 sm" /><div className="bs" style={{ fontSize: 12 }}>{seat.slot} 空位</div>
       </div>
     )
   }
-  const g = gameText(p)
-  const problem = starting && (p.status.code !== 'ACTIVE' || p.game?.status === 'POSTPONED')
-  const pit = isPitcherRow(p)
+  const x = lineInfo(p)
   return (
-    <button type="button" className={`prow ${p.status.code === 'DELISTED' ? 'delisted' : problem ? 'problem' : ''}`} onClick={() => onOpen(p)}>
-      <div className={`slot ${starting ? 'on' : ''}`}>{seat.slot}</div>
-      <Avatar team={p.cpblTeam} number={p.jerseyNumber} />
-      <div style={{ minWidth: 0 }}>
-        <div className="pn">
-          {p.name}
-          {p.status.code === 'IDLE' && <span className="badge danger">{p.status.text}</span>}
-          {p.status.code === 'MINORS' && <span className="badge warn">二軍</span>}
-          {p.status.code === 'DELISTED' && <span className="badge danger">已註銷</span>}
-          {p.locked && <span className="badge lock">鎖定</span>}
-        </div>
-        <div className="ps">{cpblTeam(p.cpblTeam).short}・{p.eligible.join(',') || '—'}{p.foreign && '・洋'}</div>
-        <div className={`ps ${g.cls ?? ''}`}>{g.text}</div>
-        {p.today && <div className="pl">{p.today.text}{p.today.live && <span className="badge live">非最終</span>}</div>}
-        {p.pendingFrom && <div className="pl amber">{fmtDate(p.pendingFrom)} 起生效</div>}
-        {p.leavingOn && <div className="pl amber">{fmtDate(p.leavingOn)} 離隊</div>}
-      </div>
-      <div className="pv">
-        <span className="num">{pit ? p.season.ERA : p.season.AVG}</span>
-        <small>{pit ? 'ERA' : 'AVG'}</small>
+    <button type="button" className="bcell" onClick={() => onOpen(p)}>
+      <TierAvatar team={p.cpblTeam} number={p.jerseyNumber} tier={x.tier} size="sm" />
+      <div>
+        <div className="bn">{p.name}{x.flag && <span className="fd" style={{ background: x.flag.bad ? 'var(--bad)' : 'var(--warn)' }} />}</div>
+        <div className="bs">{seat.slot} · {pendText(p) ?? x.short}</div>
       </div>
     </button>
   )

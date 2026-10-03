@@ -527,6 +527,69 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 .th-tix.one { grid-template-columns: minmax(0, 1fr); }
 .th-tix .tk-sm-kick b { color: var(--gold); font-weight: 600; }
 
+/* 等級頭像：外圈金銀銅、內圈球隊色 */
+.tav { flex: none; width: 48px; height: 48px; box-sizing: border-box; border-radius: 50%; padding: 1px; background: var(--metal); }
+.tav.gold { --metal: var(--metal-gold); }
+.tav.silver { --metal: var(--metal-silver); }
+.tav.bronze { --metal: var(--metal-bronze); }
+.tav > div { width: 100%; height: 100%; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--bg); box-shadow: inset 0 0 0 2.5px var(--tc); background: var(--bg); display: flex; align-items: center; justify-content: center; font: 700 19px var(--font-num); color: var(--text); }
+.tav.sm { width: 34px; height: 34px; opacity: .6; }
+.tav.sm > div { border-width: 1.5px; box-shadow: inset 0 0 0 2px var(--tc); font: 600 13px var(--font-num); }
+.tav.lg { width: 62px; height: 62px; }
+.tav.lg > div { border-width: 3px; box-shadow: inset 0 0 0 3px var(--tc); font: 700 24px var(--font-num); }
+
+/* 名單：LINEUP 標題與列表／卡冊切換 */
+.lineup-head { display: flex; align-items: center; justify-content: space-between; margin: 26px 2px -12px; font: 500 11px var(--font-num); letter-spacing: .18em; color: var(--muted); }
+.vtoggle { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: rgb(24 27 33 / .6); }
+.vtoggle button { border: 0; border-radius: 4px; background: transparent; padding: 3px 10px; font: 400 11.5px var(--font-text); letter-spacing: 0; color: var(--muted); }
+.vtoggle button[aria-pressed="true"] { background: var(--surface-3); color: var(--text); }
+.sec.lineup { margin-top: 30px; }
+.lrows { display: flex; flex-direction: column; gap: 6px; }
+.lrow { position: relative; overflow: hidden; width: 100%; display: grid; grid-template-columns: 22px 48px minmax(0, 1fr) auto; gap: 11px; align-items: center; padding: 11px 11px 11px 10px; border-radius: 8px; background: rgb(24 27 33 / .78); border: 1px solid rgb(45 50 60 / .6); border-top-color: rgb(196 202 212 / .09); color: var(--text); text-align: left; font-weight: 400; cursor: pointer; transition: background .2s; }
+.lrow:hover { background: rgb(33 37 45 / .92); }
+.lrow.gold::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: linear-gradient(180deg, var(--gold-hi), var(--gold) 50%, var(--gold-lo)); }
+.lrow.empty { background: rgb(24 27 33 / .4); }
+.lrow .slotc { font: 600 11px var(--font-num); letter-spacing: .04em; color: var(--muted); text-align: center; }
+.lrow .nm { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.lrow .nm b { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lrow .nm .team-chip { flex: none; min-width: 0; font-size: 10px; line-height: 15px; padding: 0 4px; }
+.lrow .meta { display: flex; align-items: center; gap: 5px; margin-top: 4px; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.lrow .meta span { overflow: hidden; text-overflow: ellipsis; }
+.lrow .pend { margin-top: 2px; font-size: 11px; color: var(--warn); }
+.lrow .hint { font-size: 12.5px; color: var(--muted); }
+.ring0 { flex: none; width: 48px; height: 48px; box-sizing: border-box; border-radius: 50%; border: 1px dashed var(--line-2); }
+.ring0.sm { width: 34px; height: 34px; }
+.flag { flex: none; font-size: 10px; font-weight: 500; line-height: 16px; border-radius: 999px; padding: 0 6px; color: var(--warn); background: rgb(240 184 74 / .12); }
+.flag.bad { color: var(--bad); background: rgb(255 107 107 / .12); }
+.ldot { flex: none; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--live); }
+.pod { display: flex; background: var(--surface-2); border-radius: 6px; padding: 6px 3px; border-top: 1px solid rgb(196 202 212 / .06); }
+.pod > div { min-width: 30px; padding: 0 4px; text-align: center; }
+.pod small { display: block; font: 600 9.5px var(--font-mix); letter-spacing: .08em; color: var(--muted); white-space: nowrap; }
+.pod small.warn { color: var(--warn); }
+.pod b { display: block; font: 700 19px/1.15 var(--font-num); color: var(--muted); white-space: nowrap; }
+.pod b.hi { color: var(--text); }
+.pod b.dim { color: var(--dim); }
+.pod b.gold { color: var(--gold); }
+
+/* 卡冊：狀態燈、LIVE 點、空位卡 */
+.mcard-art { position: relative; }
+.mcard-art .fdot { position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--dot); box-shadow: 0 0 6px var(--dot); animation: pulse 2.2s ease-in-out infinite; }
+.mcard-line .ldot { width: 4px; height: 4px; margin-right: 4px; vertical-align: middle; }
+.mcard-line.warn { color: var(--warn); }
+.mcard-line.muted { color: var(--muted); }
+.cempty { width: 100%; aspect-ratio: 5 / 7; padding: 0; border-radius: 8px; border: 1px dashed var(--line-2); background: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--muted); font-weight: 400; }
+.cempty b { font: 600 14px var(--font-num); }
+.cempty small { font-size: 10.5px; }
+
+/* 03 後備：兩欄精簡格 */
+.bgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.bcell { width: 100%; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); color: var(--text); text-align: left; font-weight: 400; cursor: pointer; transition: background .2s; }
+.bcell:hover { background: #14161b; }
+.bcell > div:last-child { min-width: 0; }
+.bcell .bn { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--silver); white-space: nowrap; overflow: hidden; }
+.bcell .bs { margin-top: 1px; font: 500 11px var(--font-mix); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bcell .fd { flex: none; width: 5px; height: 5px; border-radius: 50%; }
+
 /* 本期所有對戰 */
 .lglist { display: flex; flex-direction: column; gap: 6px; }
 .lgrow { position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: center; padding: 11px 14px; border-radius: 8px; background: rgb(24 27 33 / .45); border: 1px solid var(--line); color: var(--text); text-decoration: none; }

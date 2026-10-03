@@ -32,6 +32,20 @@ export function Avatar({ team, number, size }: { team: string | null | undefined
   )
 }
 
+/** 等級頭像（設計稿 v6）：外圈金銀銅金屬框、內圈球隊色、中間背號。 */
+export function TierAvatar({ team, number, tier, size }: {
+  team: string | null | undefined
+  number: string | null | undefined
+  tier: Tier
+  size?: 'sm' | 'lg'
+}) {
+  return (
+    <div className={`tav ${tier} ${size ?? ''}`} style={{ ['--tc' as string]: cpblTeam(team).bg }}>
+      <div>{number ?? ''}</div>
+    </div>
+  )
+}
+
 export type Tier = 'gold' | 'silver' | 'bronze'
 
 /** 卡框等級：依當季表現排名自動決定，純外觀。 */
@@ -80,37 +94,48 @@ export function PlayerCard({ name, team, number, positions, line, tier, back }: 
 
 /**
  * 小球員卡（設計稿樣式）：金屬框、格紋背號、等級字；點擊翻面看背面數據。
- * 用於本期關鍵卡、王牌對決；純外觀，不可交易或購買。
+ * 用於本期關鍵卡、王牌對決、隊伍首頁卡冊；純外觀，不可交易或購買。
+ * 傳入 onOpen 時改為「點擊開啟選單」（卡冊），不翻面。
  */
-export function MiniCard({ name, team, number, slot, tier, line, back, backLabel, foot }: {
+export function MiniCard({ name, team, number, slot, tier, line, back, backLabel, foot, onOpen, dot, live, tone }: {
   name: string
   team: string
   number: string | null
   slot: string
   tier: Tier
   line: string
-  back: [string, string][]
-  backLabel: string
+  back?: [string, string][]
+  backLabel?: string
   foot?: string
+  onOpen?: () => void
+  /** 右上角狀態燈顏色（二軍、未出賽） */
+  dot?: string
+  /** 比賽進行中：摘要前加紅點 */
+  live?: boolean
+  tone?: 'warn' | 'muted'
 }) {
   const [flipped, setFlipped] = useState(false)
   return (
-    <button type="button" className={`mcard ${tier} ${flipped ? 'flipped' : ''}`} onClick={() => setFlipped(!flipped)}
-      style={{ ['--tc' as string]: cpblTeam(team).bg }} aria-label={`${name} 球員卡，點擊翻面`}>
+    <button type="button" className={`mcard ${tier} ${flipped ? 'flipped' : ''}`}
+      onClick={onOpen ?? (() => setFlipped(!flipped))}
+      style={{ ['--tc' as string]: cpblTeam(team).bg }} aria-label={onOpen ? `${name}，開啟調整選單` : `${name} 球員卡，點擊翻面`}>
       <div className="mcard-in">
         <div className="mcard-face">
           <div className="mcard-body">
             <div className="mcard-top"><span>{slot}</span><TeamChip code={team} /></div>
-            <div className="mcard-art"><b>{number ?? ''}</b><small>{TIER_LABEL[tier]}</small></div>
+            <div className="mcard-art">
+              <b>{number ?? ''}</b><small>{TIER_LABEL[tier]}</small>
+              {dot && <span className="fdot" style={{ ['--dot' as string]: dot }} />}
+            </div>
             <div className="mcard-name">{name}</div>
-            <div className="mcard-line">{line}</div>
+            <div className={`mcard-line ${tone ?? ''}`}>{live && <i className="ldot" />}{line}</div>
           </div>
         </div>
         <div className="mcard-face back">
           <div className="mcard-body">
             <div className="mcard-bname">{name}</div>
             <div className="mcard-blabel">{backLabel}</div>
-            <div className="mcard-rows">{back.map(([k, v]) => <div key={k}><span>{k}</span><b>{v}</b></div>)}</div>
+            <div className="mcard-rows">{(back ?? []).map(([k, v]) => <div key={k}><span>{k}</span><b>{v}</b></div>)}</div>
             {foot && <div className="mcard-foot">{foot}</div>}
           </div>
         </div>
