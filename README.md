@@ -25,7 +25,7 @@ server/src/main/java/tw/cpblf/
 ├── demo/       模擬賽季資料源、demo 種子資料、時間快轉
 ├── pipeline/   Schedule Poller、Registration Sync、Settlement、Live Poller、對帳、監控、排程
 ├── scoring/    十類別計算、對戰判定、provisional / 鎖定、半季冠軍與總冠軍
-├── season/     半季 / 雙週對戰期 / 循環賽程、戰績
+├── season/     半季 / 雙週對戰期 / 每期雙對手賽程、戰績
 ├── roster/     effective-dated 名單、每日鎖定、位置資格、缺陣狀態、NA 回歸、註銷釋出
 ├── waiver/     Waiver 與 FAAB
 ├── trade/      交易與聯盟審核
