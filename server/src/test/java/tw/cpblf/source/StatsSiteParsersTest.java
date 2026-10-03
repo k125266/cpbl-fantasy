@@ -98,6 +98,108 @@ class StatsSiteParsersTest {
         assertThat(StatsSiteParsers.normalizePosition("投手")).isEqualTo("P");
     }
 
+    static StatsSiteParsers.GamePage game(int sno) throws IOException {
+        return StatsSiteParsers.parseGame(fixture("game-2026-A-" + sno + ".md"), 2026, "A", sno);
+    }
+
+    @Test
+    void finishedGameHeaderAndScore() throws IOException {
+        var g = game(200).game();
+        // 標題為「客隊 vs 主隊」：中信兄弟 3 : 0 富邦悍將（新莊）
+        assertThat(g.awayTeamName()).isEqualTo("中信兄弟");
+        assertThat(g.homeTeamName()).isEqualTo("富邦悍將");
+        assertThat(g.awayScore()).isEqualTo(3);
+        assertThat(g.homeScore()).isEqualTo(0);
+        assertThat(g.status()).isEqualTo(SourceModels.GameStatus.FINAL);
+        assertThat(g.date()).isEqualTo(java.time.LocalDate.of(2026, 10, 3));
+        assertThat(g.gameSno()).isEqualTo(200);
+    }
+
+    @Test
+    void battingLinesKeepOnlyCountingFields() throws IOException {
+        var box = game(200).box();
+        var wang = box.batters().stream().filter(b -> b.name().equals("王威晨")).findFirst().orElseThrow();
+        // 打席 4、打數 3、安打 2、三振 0、保送 1、全壘打 0、得分 1
+        assertThat(wang.home()).isFalse();
+        assertThat(wang.pa()).isEqualTo(4);
+        assertThat(wang.ab()).isEqualTo(3);
+        assertThat(wang.h()).isEqualTo(2);
+        assertThat(wang.bb()).isEqualTo(1);
+        assertThat(wang.hr()).isZero();
+        assertThat(wang.r()).isEqualTo(1);
+        // 網站沒有守位、打點、盜壘
+        assertThat(wang.positions()).isEmpty();
+        assertThat(wang.rbi()).isZero();
+        assertThat(wang.sb()).isZero();
+        // 代打（沒有棒次）也算進來：中信 11 人、富邦 10 人
+        assertThat(box.batters().stream().filter(b -> !b.home())).hasSize(11);
+        assertThat(box.batters().stream().filter(b -> b.home())).hasSize(10);
+    }
+
+    @Test
+    void pitchingLinesConvertInningsAndMarkStarter() throws IOException {
+        var box = game(200).box();
+        var fub = box.pitchers().stream().filter(p -> p.home()).toList();
+        assertThat(fub).hasSize(5);
+        assertThat(fub.get(0).name()).isEqualTo("瑪帝斯");
+        assertThat(fub.get(0).started()).isTrue();
+        assertThat(fub.get(0).outs()).isEqualTo(18);
+        // 廖任磊 0.2 局、被安打 0、三振 1、保送 2、責失分 3
+        var liao = fub.stream().filter(p -> p.name().equals("廖任磊")).findFirst().orElseThrow();
+        assertThat(liao.started()).isFalse();
+        assertThat(liao.outs()).isEqualTo(2);
+        assertThat(liao.h()).isZero();
+        assertThat(liao.k()).isEqualTo(1);
+        assertThat(liao.bb()).isEqualTo(2);
+        assertThat(liao.er()).isEqualTo(3);
+        // 雙方各 9 局 = 27 個出局數
+        assertThat(fub.stream().mapToInt(SourceModels.PitcherLine::outs).sum()).isEqualTo(27);
+    }
+
+    @Test
+    void winAndSaveComeFromTheDecisionCards() throws IOException {
+        var box = game(200).box();
+        var win = box.pitchers().stream().filter(p -> p.w() == 1).toList();
+        var save = box.pitchers().stream().filter(p -> p.sv() == 1).toList();
+        assertThat(win).extracting(SourceModels.PitcherLine::name).containsExactly("勝騎士");
+        assertThat(save).extracting(SourceModels.PitcherLine::name).containsExactly("呂彥青");
+        assertThat(box.pitchers()).allMatch(p -> p.hld() == 0);
+    }
+
+    /** CPBLF-2：先發 7.0 局 1 責失分即為 QS。 */
+    @Test
+    void qualityStartCanBeDerived() throws IOException {
+        var box = game(277).box();
+        var starter = box.pitchers().stream().filter(p -> p.name().equals("艾菩樂")).findFirst().orElseThrow();
+        assertThat(starter.started()).isTrue();
+        assertThat(starter.outs()).isEqualTo(21);
+        assertThat(starter.er()).isEqualTo(1);
+        assertThat(starter.w()).isEqualTo(1);
+        // 廖乙忠 4.2 局 = 14 個出局數
+        assertThat(box.pitchers().stream().filter(p -> p.name().equals("廖乙忠")).findFirst().orElseThrow().outs()).isEqualTo(14);
+    }
+
+    @Test
+    void runsAddUpToTheFinalScore() throws IOException {
+        for (int sno : new int[]{199, 200, 201, 277}) {
+            var page = game(sno);
+            int home = page.box().batters().stream().filter(b -> b.home()).mapToInt(SourceModels.BatterLine::r).sum();
+            int away = page.box().batters().stream().filter(b -> !b.home()).mapToInt(SourceModels.BatterLine::r).sum();
+            assertThat(home).as("sno %d home", sno).isEqualTo(page.game().homeScore());
+            assertThat(away).as("sno %d away", sno).isEqualTo(page.game().awayScore());
+        }
+    }
+
+    @Test
+    void scheduledGameHasNoScoreOrLines() throws IOException {
+        var page = game(274);
+        assertThat(page.game().status()).isEqualTo(SourceModels.GameStatus.SCHEDULED);
+        assertThat(page.game().date()).isEqualTo(java.time.LocalDate.of(2026, 10, 5));
+        assertThat(page.game().homeScore()).isNull();
+        assertThat(page.box().batters()).isEmpty();
+        assertThat(page.box().pitchers()).isEmpty();
+    }
+
     @Test
     void unexpectedPageStructureFailsLoudly() {
         assertThatThrownBy(() -> StatsSiteParsers.parsePlayerList("# 球員名鑑\n沒有結果"))
