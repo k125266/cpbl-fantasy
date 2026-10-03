@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type Matchup, type RosterPlayer, type RosterResponse, type SlotName, type StandingRow } from '../api'
-import { Avatar, BottomSheet, ErrorBox, fmtDate, fmtTime, Loading, TeamChip, toast, useLoad, weekday } from '../components'
-import { cpblTeam } from '../teams'
+import { Avatar, BottomSheet, ErrorBox, fmtDate, fmtTime, Loading, MatchTicket, TeamChip, toast, useLoad, weekday } from '../components'
+import { fmtPts, myMatchups, periodDay, type MySide } from '../matchups'
+import { cpblTeam, fantasyTeamColor } from '../teams'
 
 interface Seat {
   slot: SlotName
@@ -52,10 +53,9 @@ export default function TeamPage() {
   const data = roster.data
   const team = league?.teams.find((t) => t.id === id)
   const halfNo = league?.currentPeriod?.halfNo ?? 1
-  const st = (halfNo === 2 ? standings.data?.half2 : standings.data?.half1)?.find((r) => r.teamId === id)
+  const halfRows = (halfNo === 2 ? standings.data?.half2 : standings.data?.half1) ?? []
   // 每期雙對手：本期有兩場
-  const current = (matchups.data || []).filter((m) => m.periodId === data.period?.id && (m.teamA === id || m.teamB === id))
-  const myScores = current.map((m) => (m.teamA === id ? m.scoreA : m.scoreB) ?? '–')
+  const tickets = myMatchups(matchups.data ?? [], data.period?.id, id)
 
   const seats = (slots: SlotName[]): Seat[] => {
     const out: Seat[] = []
@@ -75,20 +75,9 @@ export default function TeamPage() {
   }
 
   return (
-    <div className="stack">
-      <div className="teamhead">
-        <div className="crest"><div>{(team?.abbr ?? data.teamName).slice(0, 1)}</div></div>
-        <div style={{ minWidth: 0 }}>
-          <div className="teamname">{data.teamName}</div>
-          <div className="teamsub">
-            {st && <><span className="num">{st.wins}-{st.losses}-{st.ties}</span>・第 {st.rank} 名・</>}{team?.owner}
-          </div>
-        </div>
-        <div className="bigpts">
-          <span className="num gold-text">{myScores.length ? myScores.join(' / ') : '–'}</span>
-          <small>{myScores.length > 1 ? '本期兩場類別分' : '本期類別分'}</small>
-        </div>
-      </div>
+    <div className="stack" style={{ paddingTop: 0 }}>
+      <TeamHero teamId={id} name={data.teamName} abbr={team?.abbr ?? ''} owner={team?.owner ?? ''} mine={mine} halfNo={halfNo}
+        rows={halfRows} tickets={tickets} today={data.today} teamIds={(league?.teams ?? []).map((t) => t.id)} />
 
       <div className="pills">
         <span className="pill">{fmtDate(data.today)} 週{weekday(data.today)}</span>
@@ -111,6 +100,75 @@ export default function TeamPage() {
       {sheet && (
         <MoveSheet player={sheet} data={data} mine={mine} onClose={() => setSheet(null)} onDone={() => { setSheet(null); reload() }} />
       )}
+    </div>
+  )
+}
+
+/** 隊伍頭部：名次與戰績、撕線下方本期兩張小票根與進度。 */
+function TeamHero({ teamId, name, abbr, owner, mine, halfNo, rows, tickets, today, teamIds }: {
+  teamId: number
+  name: string
+  abbr: string
+  owner: string
+  mine: boolean
+  halfNo: number
+  rows: StandingRow[]
+  tickets: MySide[]
+  today: string
+  teamIds: number[]
+}) {
+  const st = rows.find((r) => r.teamId === teamId)
+  const half = halfNo === 2 ? '下' : '上'
+  // 與第 1 名（或第 2 名）的場差：((勝差) + (敗差)) / 2
+  const gap = (a: StandingRow, b: StandingRow) => ((a.wins - b.wins) + (b.losses - a.losses)) / 2
+  let gbText = ''
+  if (st) {
+    const other = rows.find((r) => r.rank === (st.rank === 1 ? 2 : 1))
+    const g = other ? (st.rank === 1 ? gap(st, other) : gap(other, st)) : 0
+    gbText = g === 0 ? (other ? '並列第 1' : '') : st.rank === 1 ? `領先 ${fmtPts(g)} 場` : `落後 ${fmtPts(g)} 場`
+  }
+  const m0 = tickets[0]?.m
+  const allFinal = tickets.length > 0 && tickets.every((t) => t.final)
+  const allPending = tickets.every((t) => t.m.status === 'PENDING')
+  const live = tickets.some((t) => t.live)
+  const w = tickets.filter((t) => t.result === 'W').length
+  const l = tickets.filter((t) => t.result === 'L').length
+  const t = tickets.length - w - l
+  const { day, len } = m0 ? periodDay(m0.start, m0.end, today) : { day: 0, len: 1 }
+
+  return (
+    <div className="thero">
+      <div className="wm" aria-hidden="true">{abbr}</div>
+      <div className="th-top">
+        <div style={{ minWidth: 0 }}>
+          <div className="kick-en">{mine ? 'MY TEAM' : 'TEAM'} · H{halfNo}{st ? ` RANK ${st.rank}` : ''}</div>
+          <div className="th-name">{name}</div>
+          <div className="th-sub">{owner}{st && `・${half}半季第 ${st.rank} 名`}{gbText && `・${gbText}`}</div>
+        </div>
+        <div className="th-rec">
+          <small>H{halfNo} · W – L – T</small>
+          <b>{st?.wins ?? 0}<i>-</i>{st?.losses ?? 0}<i>-</i>{st?.ties ?? 0}</b>
+        </div>
+      </div>
+
+      <div className="th-cut">
+        {m0 ? (
+          <>
+            <div className="mh-top">
+              <span><b className="c-w" style={{ fontWeight: 500 }}>TICKETS</b> · {m0.kind === 'FINAL' ? 'FINAL' : `PERIOD ${m0.periodNo}`} · {fmtDate(m0.start)}–{fmtDate(m0.end)}</span>
+              {!allPending && <span className={`livepill ${live ? 'live' : ''}`}>{live ? 'LIVE' : 'FINAL'}</span>}
+            </div>
+            <div className={`th-tix ${tickets.length === 1 ? 'one' : ''}`}>
+              {tickets.map((v, i) => <MatchTicket key={v.m.id} v={v} no={i + 1} size="sm" color={fantasyTeamColor(v.oppId, teamIds)} />)}
+            </div>
+            <div className="mh-tot">
+              <span>{allPending ? '本期尚未開始' : `本期 ${w} 勝 ${l} 敗${t ? ` ${t} 和` : ''}`} · 類別合計 <b>{fmtPts(tickets.reduce((a, x) => a + x.me, 0))}</b> : {fmtPts(tickets.reduce((a, x) => a + x.op, 0))}</span>
+              <span>{allPending ? `${fmtDate(m0.start)} 開始` : `DAY ${allFinal ? len : day} / ${len}`}</span>
+            </div>
+            <div className="dayline"><i style={{ width: `${allFinal ? 100 : allPending ? 0 : (day / len) * 100}%` }} /></div>
+          </>
+        ) : <p className="muted small" style={{ margin: 0 }}>目前不在對戰期間（開季前或例行賽結束）。</p>}
+      </div>
     </div>
   )
 }
