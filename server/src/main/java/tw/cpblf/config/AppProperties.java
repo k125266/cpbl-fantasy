@@ -26,9 +26,14 @@ public record AppProperties(
         return "demo".equalsIgnoreCase(source);
     }
 
+    /**
+     * @param baseUrl      官網 www.cpbl.com.tw（source=web）
+     * @param statsBaseUrl 中職進階數據網站 stats.cpbl.com.tw（source=stats）
+     */
     public record Crawler(
             String userAgent,
             String baseUrl,
+            String statsBaseUrl,
             int livePollIntervalSeconds,
             long minRequestIntervalMs,
             int maxRetries,
