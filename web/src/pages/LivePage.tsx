@@ -29,8 +29,8 @@ interface Line {
   player_id: number
   name: string
   cpbl_team_code: string
-  pa: number; ab: number; h: number; hr: number; r: number; rbi: number; sb: number; bb: number
-  pitched: boolean; outs: number; p_h: number; p_bb: number; p_er: number; p_k: number
+  pa: number; ab: number; h: number; hr: number; r: number; bb: number
+  pitched: boolean; outs: number; p_h: number; p_bb: number; p_er: number; p_k: number; sv: number; w: number
   fetched_at: string
 }
 
@@ -92,8 +92,8 @@ export default function LivePage() {
                 <tr key={`${l.team_id}-${l.player_id}`}>
                   <td>{l.abbr}</td>
                   <td><TeamChip code={l.cpbl_team_code} /> {l.name} <span className="muted small">{l.slot}</span></td>
-                  <td className="small">{l.pa > 0 ? `${l.h}-${l.ab} R${l.r} HR${l.hr} RBI${l.rbi} SB${l.sb}` : ''}</td>
-                  <td className="small">{l.pitched ? `${Math.floor(l.outs / 3)}.${l.outs % 3} IP ${l.p_er} ER ${l.p_k} K` : ''}</td>
+                  <td className="small">{l.pa > 0 ? `${l.h}-${l.ab} R${l.r} HR${l.hr} BB${l.bb}` : ''}</td>
+                  <td className="small">{l.pitched ? `${Math.floor(l.outs / 3)}.${l.outs % 3} IP ${l.p_er} ER ${l.p_k} K${l.w ? ' W' : ''}${l.sv ? ' SV' : ''}` : ''}</td>
                 </tr>
               ))}
             </tbody>

@@ -6,7 +6,7 @@ import { Avatar, BottomSheet, ErrorBox, FeedRow, fmtDateTime, ICONS, Loading, Pl
 import { cpblTeam } from '../teams'
 
 const POS = ['', 'IF', 'OF', 'UTIL', 'SP', 'RP']
-const SORTS = ['rank', 'R', 'HR', 'RBI', 'SB', 'AVG', 'QS', 'K', 'SV+HLD', 'ERA', 'WHIP']
+const SORTS = ['rank', 'R', 'HR', 'H', 'BB', 'AVG', 'QS', 'K', 'W+SV', 'ERA', 'WHIP']
 
 export function isPitcherRow(p: { eligible: string[] }) {
   return p.eligible.some((e) => e === 'SP' || e === 'RP') && !p.eligible.some((e) => e === 'IF' || e === 'OF' || e === 'UTIL')
@@ -14,14 +14,14 @@ export function isPitcherRow(p: { eligible: string[] }) {
 
 export function cardLine(p: PlayerRow) {
   const s = p.stats
-  return isPitcherRow(p) ? `${s.ERA} ERA ${s.K}K` : `${s.AVG} ${s.HR}HR ${s.RBI}RBI`
+  return isPitcherRow(p) ? `${s.ERA} ERA ${s.K}K` : `${s.AVG} ${s.HR}HR ${s.H}H`
 }
 
 export function cardBack(p: PlayerRow): [string, string][] {
   const s = p.stats
   return isPitcherRow(p)
-    ? [['防禦率', s.ERA], ['三振', s.K], ['優質先發', s.QS], ['救援+中繼', s['SV+HLD']], ['WHIP', s.WHIP], ['局數', s.IP]]
-    : [['打擊率', s.AVG], ['全壘打', s.HR], ['打點', s.RBI], ['得分', s.R], ['盜壘', s.SB], ['打數', s.AB]]
+    ? [['防禦率', s.ERA], ['三振', s.K], ['優質先發', s.QS], ['勝投+救援', s['W+SV']], ['WHIP', s.WHIP], ['局數', s.IP]]
+    : [['打擊率', s.AVG], ['全壘打', s.HR], ['安打', s.H], ['得分', s.R], ['保送', s.BB], ['打數', s.AB]]
 }
 
 export default function PlayersPage() {
