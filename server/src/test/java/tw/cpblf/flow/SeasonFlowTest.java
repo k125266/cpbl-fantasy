@@ -74,12 +74,13 @@ class SeasonFlowTest extends IntegrationTest {
         demo.advanceDays(23); // 3/20 起算 → 4/11 23:30：第 1 期 (3/28–4/10) 結束，48 小時緩衝中
         var p1 = season.periods(leagueId).get(0);
         assertThat(p1.status()).isEqualTo("PROVISIONAL");
+        // 每期雙對手：5 隊每期 5 場
         assertThat(count("select count(*) from matchup where scoring_period_id = ? and status = 'PROVISIONAL' and result is not null", p1.id()))
-                .isEqualTo(2);
+                .isEqualTo(5);
         demo.advanceDays(2); // → 4/13 23:30，已過 4/13 00:00 鎖定時間
         p1 = season.periods(leagueId).get(0);
         assertThat(p1.status()).isEqualTo("LOCKED");
-        assertThat(count("select count(*) from matchup where scoring_period_id = ? and status = 'LOCKED'", p1.id())).isEqualTo(2);
+        assertThat(count("select count(*) from matchup where scoring_period_id = ? and status = 'LOCKED'", p1.id())).isEqualTo(5);
     }
 
     /** 規則書 6.3：延賽後補賽，數據一律以實際開打日歸屬，原定日期保留。 */

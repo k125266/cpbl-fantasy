@@ -85,7 +85,7 @@ public class SeasonService {
         }
         List<LocalDate[]> p2 = split(req.half2Start(), regularEnd2, periodDays);
 
-        List<List<long[]>> rounds = roundRobin(teams);
+        List<List<long[]>> rounds = ringRounds(teams);
         int roundIdx = 0;
         roundIdx = createPeriods(h1, p1, rounds, roundIdx);
         createPeriods(h2, p2, rounds, roundIdx);
@@ -144,27 +144,28 @@ public class SeasonService {
         return out;
     }
 
-    /** 圓桌法循環賽；隊數為奇數時每輪一隊輪空。 */
-    static List<List<long[]>> roundRobin(List<Long> teams) {
-        List<Long> t = new ArrayList<>(teams);
-        if (t.size() % 2 == 1) {
-            t.add(null);
-        }
-        int n = t.size();
+    /**
+     * 每期雙對手：隊伍排成一圈，每期與左右兩隊各打一場，沒有輪空。
+     * 步距 k = 1…⌊(N−1)/2⌋ 輪流使用，每輪配對為 (t[j], t[j+k])，每隊各當一次 A 方、一次 B 方；
+     * 跑完所有步距剛好每對隊伍各碰一次（5 隊：步距 1、2 交替，每兩期一個循環）。
+     * 隊數為偶數時再補一輪對角配對（每隊 1 場），確保每對隊伍都會碰到；2 隊時即每期 1 場。
+     */
+    static List<List<long[]>> ringRounds(List<Long> teams) {
+        int n = teams.size();
         List<List<long[]>> rounds = new ArrayList<>();
-        for (int r = 0; r < n - 1; r++) {
+        for (int k = 1; k <= (n - 1) / 2; k++) {
             List<long[]> pairs = new ArrayList<>();
-            for (int i = 0; i < n / 2; i++) {
-                Long a = t.get(i);
-                Long b = t.get(n - 1 - i);
-                if (a != null && b != null) {
-                    pairs.add(r % 2 == 0 ? new long[]{a, b} : new long[]{b, a});
-                }
+            for (int j = 0; j < n; j++) {
+                pairs.add(new long[]{teams.get(j), teams.get((j + k) % n)});
             }
             rounds.add(pairs);
-            // 固定第一隊，其餘旋轉
-            Long last = t.remove(n - 1);
-            t.add(1, last);
+        }
+        if (n % 2 == 0) {
+            List<long[]> pairs = new ArrayList<>();
+            for (int j = 0; j < n / 2; j++) {
+                pairs.add(new long[]{teams.get(j), teams.get(j + n / 2)});
+            }
+            rounds.add(pairs);
         }
         return rounds;
     }
