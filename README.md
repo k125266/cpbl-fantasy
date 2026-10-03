@@ -6,6 +6,7 @@
 - 開發依據：開發 backlog（CPBLF-*）
 - 規則書未明定之處的實作選擇：[`docs/decisions.md`](docs/decisions.md)
 - 官網資料可行性驗證（M0）現況：[`docs/m0-data-feasibility.md`](docs/m0-data-feasibility.md)
+- 計分類別（R、HR、H、BB、AVG ／ QS、K、W+SV、ERA、WHIP）修訂草案：[`docs/rulebook-amendment-categories.md`](docs/rulebook-amendment-categories.md)
 
 > ⚠️ **上線前必讀**：開發環境無法連線 cpbl.com.tw，官網 box score 與一軍名單的欄位尚未實際驗證。
 > 系統目前以 **demo 模式**（模擬賽季、虛構球員）完整運作。
