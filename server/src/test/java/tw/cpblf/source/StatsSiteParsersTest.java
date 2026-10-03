@@ -201,6 +201,19 @@ class StatsSiteParsersTest {
     }
 
     @Test
+    void sitemapListsGamesOfTheRequestedYearAndKind() {
+        String xml = """
+                <url><loc>https://stats.cpbl.com.tw/schedule/2026-A-277</loc></url>
+                <url><loc>https://stats.cpbl.com.tw/schedule/2026-A-14</loc></url>
+                <url><loc>https://stats.cpbl.com.tw/schedule/2026-F-5</loc></url>
+                <url><loc>https://stats.cpbl.com.tw/schedule/2025-A-3</loc></url>
+                <url><loc>https://stats.cpbl.com.tw/players/0000004633</loc></url>
+                <url><loc>https://stats.cpbl.com.tw/schedule/2026-A-277</loc></url>
+                """;
+        assertThat(StatsSiteParsers.parseSitemapGames(xml, 2026, "A")).containsExactly(14, 277);
+    }
+
+    @Test
     void unexpectedPageStructureFailsLoudly() {
         assertThatThrownBy(() -> StatsSiteParsers.parsePlayerList("# 球員名鑑\n沒有結果"))
                 .isInstanceOf(SourceStructureException.class);

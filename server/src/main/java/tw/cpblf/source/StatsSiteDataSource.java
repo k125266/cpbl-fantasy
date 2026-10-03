@@ -43,15 +43,27 @@ public class StatsSiteDataSource implements CpblDataSource {
         return "stats";
     }
 
+    /**
+     * 比賽網址取自網站提供的 sitemap（只含近期與即將進行的比賽，符合 llms.txt「網址由 sitemap 取得」的要求），
+     * 再逐場讀比賽頁。開賽時間頁面上沒有，startTime 為 null（待實測後補）。
+     */
     @Override
     public List<SourceGame> fetchSchedule(int year, String kindCode) {
-        // 待今晚比賽進行中實測頁面格式後實作（PR B 後續步驟）
-        throw new UnsupportedOperationException("stats 資料源的賽程解析尚未實作");
+        String sitemap = http.get(baseUrl + "/sitemap.xml");
+        List<SourceGame> out = new java.util.ArrayList<>();
+        for (int sno : StatsSiteParsers.parseSitemapGames(sitemap, year, kindCode)) {
+            out.add(gamePage(year, kindCode, sno).game());
+        }
+        return out;
     }
 
     @Override
     public BoxScore fetchBoxScore(int year, String kindCode, int gameSno) {
-        throw new UnsupportedOperationException("stats 資料源的 box score 解析尚未實作");
+        return gamePage(year, kindCode, gameSno).box();
+    }
+
+    private StatsSiteParsers.GamePage gamePage(int year, String kindCode, int sno) {
+        return StatsSiteParsers.parseGame(markdown("/schedule/" + year + "-" + kindCode + "-" + sno), year, kindCode, sno);
     }
 
     /** 翻完球員列表（/players?page=N）。球隊名以「二軍」結尾者不在一軍名單中。 */

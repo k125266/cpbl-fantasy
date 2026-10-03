@@ -107,6 +107,24 @@ public final class StatsSiteParsers {
     }
 
     // ------------------------------------------------------------------
+    // sitemap.xml：網站提供的比賽網址（近期與即將進行的比賽）
+    // ------------------------------------------------------------------
+
+    private static final Pattern SITEMAP_GAME = Pattern.compile("/schedule/(\\d{4})-([A-Z])-(\\d+)<");
+
+    /** sitemap 中指定年度與賽事類別的比賽編號（依編號排序、去重）。 */
+    public static List<Integer> parseSitemapGames(String xml, int year, String kindCode) {
+        java.util.TreeSet<Integer> out = new java.util.TreeSet<>();
+        Matcher m = SITEMAP_GAME.matcher(xml);
+        while (m.find()) {
+            if (Integer.parseInt(m.group(1)) == year && m.group(2).equals(kindCode)) {
+                out.add(Integer.parseInt(m.group(3)));
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    // ------------------------------------------------------------------
     // 單場比賽頁 /schedule/{year}-{kind}-{sno}
     // ------------------------------------------------------------------
 
