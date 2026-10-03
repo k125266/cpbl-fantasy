@@ -23,3 +23,15 @@ export const CPBL_TEAMS: Record<string, CpblTeamStyle> = {
 export function cpblTeam(code: string | null | undefined): CpblTeamStyle {
   return (code && CPBL_TEAMS[code]) || { code: code || '?', short: code || '?', bg: '#777', fg: '#fff' }
 }
+
+/**
+ * Fantasy 隊伍（玩家隊伍）的識別色，用於票根色條、戰績表左側色條。
+ * 與中職球隊無關；依隊伍 id 排序後輪流套用色盤，不需存資料庫。
+ */
+const FANTASY_PALETTE = ['#7b8cff', '#e8603c', '#3cb4c8', '#a77be0', '#78c27a']
+
+export function fantasyTeamColor(teamId: number | null | undefined, allTeamIds: number[]): string {
+  if (teamId == null) return '#3a404c'
+  const i = [...allTeamIds].sort((a, b) => a - b).indexOf(teamId)
+  return i < 0 ? '#3a404c' : FANTASY_PALETTE[i % FANTASY_PALETTE.length]
+}

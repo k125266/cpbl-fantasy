@@ -7,6 +7,8 @@
   --surface-2: #21252d;
   --surface-3: #2a2f39;
   --line: #2d323c;
+  --line-2: #3a404c;
+  --dim: #4a505c;
   --text: #eef0f4;
   --muted: #8d95a4;
   --gold: #d8b25a;
@@ -25,6 +27,8 @@
   --metal-bronze: linear-gradient(135deg, #f0bf96 0%, var(--bronze) 45%, #6e3f22 100%);
   --font-num: "Barlow Condensed", "Arial Narrow", sans-serif;
   --font-text: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  /* 數字與中文混排（例：M01・左鄰） */
+  --font-mix: "Barlow Condensed", "Noto Sans TC", "PingFang TC", sans-serif;
   --radius: 16px;
   color-scheme: dark;
 }
@@ -347,6 +351,69 @@ tr.me td { background: rgb(216 178 90 / .07); }
 .center-box { max-width: 420px; margin: 40px auto; }
 footer.site { margin-top: 32px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 12px; }
 footer.site p { margin: 4px 0; }
+
+/* ---------- 票根（對戰頁 8a、隊伍首頁 v6 共用；數值依 Claude Design 設計稿）---------- */
+.stamp { flex: none; display: flex; align-items: center; justify-content: center; box-sizing: border-box; border-radius: 6px; border: 1px solid var(--line-2); color: var(--silver); font-weight: 900; white-space: nowrap; transform: rotate(-6deg); }
+.stamp.w { color: var(--gold-hi); border-color: rgb(216 178 90 / .7); background: rgb(216 178 90 / .08); }
+.stamp.l { color: var(--bad); border-color: rgb(255 107 107 / .5); background: rgb(255 107 107 / .06); }
+.stamp.lg { min-width: 44px; height: 44px; padding: 0 4px; font-size: 14px; }
+.stamp.lg.final { font-size: 22px; }
+.stamp.sm { height: 24px; padding: 0 6px; border-radius: 4px; font-size: 12px; transform: rotate(-5deg); }
+
+.catsegs { display: flex; gap: 3px; }
+.catsegs > div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.catsegs i { width: 100%; height: 2px; border-radius: 1px; background: var(--surface-3); }
+.catsegs .me i { background: var(--gold); }
+.catsegs .op i { background: var(--silver-lo); }
+.catsegs span { font: 500 8px var(--font-num); color: var(--muted); }
+.catsegs .me span { color: var(--gold); }
+.catsegs.tight { gap: 2px; }
+
+.c-w { color: var(--gold); }
+.c-l { color: var(--bad); }
+.c-t { color: var(--silver); }
+
+button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-align: left; text-decoration: none; padding: 0; }
+.tk { position: relative; border-radius: 8px; background: rgb(24 27 33 / .85); border: 1px solid var(--line); border-top-color: rgb(196 202 212 / .14); cursor: pointer; transition: border-color .2s, background .2s; }
+.tk-name { position: relative; font-size: 18px; font-weight: 700; margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tk-rec { position: relative; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.tk-score { position: relative; display: flex; align-items: baseline; font: 700 66px/.85 var(--font-num); margin-top: 12px; }
+.tk-score .op { color: var(--silver-lo); }
+.tk-score .colon { color: var(--line-2); font-weight: 500; font-size: 38px; margin: 0 6px; }
+
+/* 大票根：對戰頁，可左右滑 */
+.tk.lg { flex: none; width: 310px; display: flex; scroll-snap-align: start; }
+.tk.lg.active { border-color: rgb(216 178 90 / .55); border-top-color: rgb(246 225 162 / .7); }
+.tk-main { position: relative; flex: 1; min-width: 0; padding: 14px 12px 12px 16px; overflow: hidden; }
+.tk-wm { position: absolute; right: -6px; top: -16px; font: 800 110px/1 var(--font-num); color: rgb(238 240 244 / .03); pointer-events: none; }
+.tk-kick { position: relative; font: 600 10.5px var(--font-mix); letter-spacing: .16em; color: var(--muted); }
+.tk-kick b { color: var(--gold); font-weight: 600; }
+.tk-main .catsegs { position: relative; margin-top: 14px; }
+.tk-cut { width: 0; border-left: 1px dashed var(--line-2); margin: 14px 0; }
+.tk-stub { width: 70px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+.tk-stub small { font: 600 9px var(--font-num); letter-spacing: .22em; color: var(--muted); }
+.tk-stub .diff { font: 600 12px var(--font-num); }
+.tk-notch { position: absolute; right: 62px; width: 14px; height: 14px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); }
+.tk-notch.t { top: -8px; clip-path: inset(50% 0 0 0); }
+.tk-notch.b { bottom: -8px; clip-path: inset(0 0 50% 0); }
+
+/* 小票根：隊伍首頁頭部，兩張並排 */
+.tk.sm { display: block; min-width: 0; }
+.tk.sm.w { border-top-color: rgb(246 225 162 / .6); }
+.tk.sm:hover { background: rgb(33 37 45 / .92); text-decoration: none; }
+.tk-sm-top { padding: 10px 12px 12px; }
+.tk-sm-kick { display: flex; justify-content: space-between; align-items: center; font: 600 10px var(--font-mix); letter-spacing: .14em; color: var(--muted); }
+.tk-sm-kick i { width: 14px; height: 4px; border-radius: 1px; background: var(--tc, var(--line-2)); }
+.tk.sm .tk-name { font-size: 14px; font-weight: 600; margin-top: 5px; }
+.tk.sm .tk-score { font-size: 48px; margin-top: 10px; }
+.tk.sm .tk-score .colon { font-size: 28px; margin: 0 4px; }
+.tk-label { font-size: 11px; margin-top: 6px; }
+.tk-sm-cut { position: relative; border-top: 1px dashed var(--line-2); margin: 0 10px; }
+.tk-sm-cut::before, .tk-sm-cut::after { content: ""; position: absolute; top: -6px; width: 12px; height: 12px; box-sizing: border-box; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); }
+.tk-sm-cut::before { left: -17px; clip-path: inset(0 0 0 50%); }
+.tk-sm-cut::after { right: -17px; clip-path: inset(0 50% 0 0); }
+.tk-sm-bot { display: flex; align-items: center; gap: 8px; padding: 9px 10px 10px 12px; }
+.tk-sm-bot .catsegs { flex: 1; min-width: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
