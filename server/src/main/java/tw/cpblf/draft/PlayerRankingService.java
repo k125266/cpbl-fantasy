@@ -32,8 +32,8 @@ public class PlayerRankingService {
         this.props = props;
     }
 
-    record Line(long id, String name, String listed, long ab, long h, long r, long hr, long rbi, long sb, long outs, long er,
-                long ph, long pbb, long k, long svh, long qs) {
+    record Line(long id, String name, String listed, long ab, long h, long r, long hr, long bb, long outs, long er,
+                long ph, long pbb, long k, long wsv, long qs) {
     }
 
     public record Ranked(long playerId, double score, int rank) {
@@ -43,9 +43,9 @@ public class PlayerRankingService {
         List<Line> lines = jdbc.sql("""
                 select p.id, p.name, p.listed_position,
                        coalesce(sum(gs.ab),0), coalesce(sum(gs.h),0), coalesce(sum(gs.r),0), coalesce(sum(gs.hr),0),
-                       coalesce(sum(gs.rbi),0), coalesce(sum(gs.sb),0), coalesce(sum(gs.outs),0), coalesce(sum(gs.p_er),0),
+                       coalesce(sum(gs.bb),0), coalesce(sum(gs.outs),0), coalesce(sum(gs.p_er),0),
                        coalesce(sum(gs.p_h),0), coalesce(sum(gs.p_bb),0), coalesce(sum(gs.p_k),0),
-                       coalesce(sum(gs.sv + gs.hld),0),
+                       coalesce(sum(gs.w + gs.sv),0),
                        coalesce(sum(case when gs.outs >= 18 and gs.p_er <= 3 then 1 else 0 end),0)
                 from player p
                 left join game_stat gs on gs.player_id = p.id
@@ -54,7 +54,7 @@ public class PlayerRankingService {
                 """).param(props.seasonYear())
                 .query((rs, n) -> new Line(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getLong(4), rs.getLong(5),
                         rs.getLong(6), rs.getLong(7), rs.getLong(8), rs.getLong(9), rs.getLong(10), rs.getLong(11),
-                        rs.getLong(12), rs.getLong(13), rs.getLong(14), rs.getLong(15), rs.getLong(16)))
+                        rs.getLong(12), rs.getLong(13), rs.getLong(14), rs.getLong(15)))
                 .list();
 
         List<Line> hitters = lines.stream().filter(l -> l.ab() > 0).toList();
@@ -66,12 +66,12 @@ public class PlayerRankingService {
         Map<Long, Double> score = new HashMap<>();
         addZ(score, hitters, l -> l.r());
         addZ(score, hitters, l -> l.hr());
-        addZ(score, hitters, l -> l.rbi());
-        addZ(score, hitters, l -> l.sb());
+        addZ(score, hitters, l -> l.h());
+        addZ(score, hitters, l -> l.bb());
         addZ(score, hitters, l -> l.h() - lgAvg * l.ab());
         addZ(score, pitchers, l -> l.qs());
         addZ(score, pitchers, l -> l.k());
-        addZ(score, pitchers, l -> l.svh());
+        addZ(score, pitchers, l -> l.wsv());
         addZ(score, pitchers, l -> lgEraPerOut * l.outs() - l.er());
         addZ(score, pitchers, l -> lgWhipPerOut * l.outs() - (l.ph() + l.pbb()));
 

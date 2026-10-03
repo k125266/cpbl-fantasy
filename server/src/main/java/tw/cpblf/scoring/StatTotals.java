@@ -2,16 +2,17 @@ package tw.cpblf.scoring;
 
 /**
  * 一段期間內的分子分母加總。比率類別一律由加總值計算（規則書 5.4），不得平均每日值。
+ * bb 為打者保送，pBb 為投手被保送。
  */
 public record StatTotals(
-        long ab, long h, long r, long hr, long rbi, long sb,
-        long outs, long er, long pH, long pBb, long k, long sv, long hld, long qs) {
+        long ab, long h, long r, long hr, long bb,
+        long outs, long er, long pH, long pBb, long k, long sv, long w, long qs) {
 
-    public static final StatTotals ZERO = new StatTotals(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    public static final StatTotals ZERO = new StatTotals(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
     public StatTotals plus(StatTotals o) {
-        return new StatTotals(ab + o.ab, h + o.h, r + o.r, hr + o.hr, rbi + o.rbi, sb + o.sb,
-                outs + o.outs, er + o.er, pH + o.pH, pBb + o.pBb, k + o.k, sv + o.sv, hld + o.hld, qs + o.qs);
+        return new StatTotals(ab + o.ab, h + o.h, r + o.r, hr + o.hr, bb + o.bb,
+                outs + o.outs, er + o.er, pH + o.pH, pBb + o.pBb, k + o.k, sv + o.sv, w + o.w, qs + o.qs);
     }
 
     /** 類別值；分母為零時回傳 null（無數據），而非 0。 */
@@ -19,12 +20,12 @@ public record StatTotals(
         return switch (c) {
             case R -> (double) r;
             case HR -> (double) hr;
-            case RBI -> (double) rbi;
-            case SB -> (double) sb;
+            case H -> (double) h;
+            case BB -> (double) bb;
             case AVG -> ab == 0 ? null : (double) h / ab;
             case QS -> (double) qs;
             case K -> (double) k;
-            case SVHLD -> (double) (sv + hld);
+            case WSV -> (double) (w + sv);
             case ERA -> outs == 0 ? null : er * 27.0 / outs;
             case WHIP -> outs == 0 ? null : (pH + pBb) * 3.0 / outs;
         };
@@ -42,11 +43,11 @@ public record StatTotals(
         int raw = switch (c) {
             case R -> Long.compare(r, o.r);
             case HR -> Long.compare(hr, o.hr);
-            case RBI -> Long.compare(rbi, o.rbi);
-            case SB -> Long.compare(sb, o.sb);
+            case H -> Long.compare(h, o.h);
+            case BB -> Long.compare(bb, o.bb);
             case QS -> Long.compare(qs, o.qs);
             case K -> Long.compare(k, o.k);
-            case SVHLD -> Long.compare(sv + hld, o.sv + o.hld);
+            case WSV -> Long.compare(w + sv, o.w + o.sv);
             // h/ab vs o.h/o.ab
             case AVG -> Long.compare(h * o.ab, o.h * ab);
             // er/outs vs o.er/o.outs

@@ -89,7 +89,7 @@ public class FeedService {
         return d.atTime(22, 0).atZone(clock.zone()).toOffsetDateTime();
     }
 
-    /** 亮眼表現：多轟、猛打、多打點、多盜、優質先發、無失分長局數、救援成功。 */
+    /** 亮眼表現：多轟、猛打、多保送、優質先發、無失分長局數、救援成功、勝投。 */
     private List<FeedItem> performances(List<Long> ids, LocalDate from, LocalDate to) {
         if (ids.isEmpty()) {
             return List.of();
@@ -97,7 +97,7 @@ public class FeedService {
         return jdbc.sql("""
                 select p.id, p.name, p.cpbl_team_code, p.jersey_number, g.play_date,
                        case when gs.team_code = g.home_team_code then g.away_team_code else g.home_team_code end as opp,
-                       gs.ab, gs.h, gs.hr, gs.rbi, gs.sb, gs.pitched, gs.started, gs.outs, gs.p_er, gs.p_k, gs.sv, gs.hld
+                       gs.ab, gs.h, gs.hr, gs.bb, gs.pitched, gs.started, gs.outs, gs.p_er, gs.p_k, gs.sv, gs.w
                 from game_stat gs join game g on g.id = gs.game_id join player p on p.id = gs.player_id
                 where gs.player_id in (:ids) and g.status = 'FINAL' and g.play_date between :from and :to
                 order by g.play_date desc
@@ -105,23 +105,23 @@ public class FeedService {
                 .query((rs, n) -> {
                     String name = rs.getString(2);
                     String text = null;
-                    int h = rs.getInt("h"), ab = rs.getInt("ab"), hr = rs.getInt("hr"), rbi = rs.getInt("rbi"), sb = rs.getInt("sb");
+                    int h = rs.getInt("h"), ab = rs.getInt("ab"), hr = rs.getInt("hr"), bb = rs.getInt("bb");
                     int outs = rs.getInt("outs"), er = rs.getInt("p_er"), k = rs.getInt("p_k");
                     String ip = (outs / 3) + "." + (outs % 3);
                     if (hr >= 2) {
-                        text = name + " 單場 " + hr + " 轟 " + rbi + " 打點（" + h + "-" + ab + "）";
+                        text = name + " 單場 " + hr + " 轟（" + h + "-" + ab + "）";
                     } else if (h >= 3) {
-                        text = name + " 猛打賞，" + ab + " 打數 " + h + " 安" + (hr > 0 ? "含 1 轟" : "") + (rbi > 0 ? "、" + rbi + " 打點" : "");
-                    } else if (rbi >= 4) {
-                        text = name + " 單場 " + rbi + " 打點";
-                    } else if (sb >= 2) {
-                        text = name + " 單場 " + sb + " 次盜壘成功";
+                        text = name + " 猛打賞，" + ab + " 打數 " + h + " 安" + (hr > 0 ? "含 1 轟" : "");
+                    } else if (bb >= 3) {
+                        text = name + " 單場 " + bb + " 次保送";
                     } else if (rs.getBoolean("started") && outs >= 18 && er <= 3) {
                         text = name + " 優質先發：" + ip + " 局 " + er + " 自責分 " + k + " 次三振";
                     } else if (rs.getBoolean("pitched") && outs >= 9 && er == 0) {
                         text = name + " " + ip + " 局無失分";
                     } else if (rs.getInt("sv") > 0) {
                         text = name + " 拿下救援成功";
+                    } else if (rs.getInt("w") > 0) {
+                        text = name + " 拿下勝投";
                     }
                     if (text == null) {
                         return null;

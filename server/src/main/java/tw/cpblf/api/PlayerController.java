@@ -241,8 +241,8 @@ public class PlayerController {
                 """).param(playerId).query().listOfRows());
         out.put("gameLog", jdbc.sql("""
                 select g.play_date, g.game_sno, case when gs.team_code = g.home_team_code then g.away_team_code else g.home_team_code end as opponent,
-                       gs.positions, gs.pa, gs.ab, gs.r, gs.h, gs.hr, gs.rbi, gs.sb, gs.bb,
-                       gs.pitched, gs.started, gs.outs, gs.p_h, gs.p_bb, gs.p_er, gs.p_k, gs.sv, gs.hld, gs.revision, gs.is_final
+                       gs.positions, gs.pa, gs.ab, gs.r, gs.h, gs.hr, gs.bb,
+                       gs.pitched, gs.started, gs.outs, gs.p_h, gs.p_bb, gs.p_er, gs.p_k, gs.sv, gs.w, gs.revision, gs.is_final
                 from game_stat gs join game g on g.id = gs.game_id where gs.player_id = ?
                 order by g.play_date desc, g.game_sno desc limit 40
                 """).param(playerId).query().listOfRows());
