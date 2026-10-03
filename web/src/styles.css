@@ -257,7 +257,7 @@ pre.mono { white-space: pre-wrap; font-size: 12px; margin: 0; }
 .pcard-inner { position: relative; width: 100%; height: 100%; transition: transform .6s cubic-bezier(.2,.8,.2,1); transform-style: preserve-3d; }
 .pcard.flipped .pcard-inner { transform: rotateY(180deg); }
 .face { position: absolute; inset: 0; border-radius: 14px; backface-visibility: hidden; -webkit-backface-visibility: hidden; padding: 3px; background: var(--tier); box-shadow: 0 8px 22px rgb(0 0 0 / .45); }
-.face-in { height: 100%; border-radius: 11px; overflow: hidden; display: grid; grid-template-rows: auto 1fr auto; background: radial-gradient(120% 80% at 50% 0%, var(--surface-3), var(--surface) 70%); position: relative; }
+.face-in { height: 100%; border-radius: 11px; overflow: hidden; display: grid; grid-template-rows: auto 1fr auto; background: radial-gradient(120% 80% at 50% 0%, color-mix(in srgb, var(--tc, var(--surface-3)) 22%, var(--surface-3)), var(--surface) 70%); position: relative; }
 .face-in::after { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / .09) 45%, transparent 60%); pointer-events: none; }
 .face.back { transform: rotateY(180deg); }
 .pc-top { display: flex; justify-content: space-between; align-items: center; padding: 8px 9px 0; }
@@ -473,6 +473,58 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 .drow .mid { text-align: center; background: var(--surface-2); border-radius: 6px; padding: 3px 0; }
 .drow .mid b { display: block; font: 700 14px/1.1 var(--font-num); letter-spacing: .06em; }
 .drow .mid small { display: block; font: 500 9.5px var(--font-mix); color: var(--muted); }
+.sec .hint { margin-left: auto; font-size: 11px; color: var(--muted); }
+
+/* 小球員卡：本期關鍵卡、卡冊、王牌對決（金屬框 + 格紋背號，可翻面） */
+.cards3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.mcard { position: relative; display: block; width: 100%; aspect-ratio: 5 / 7; padding: 0; border: 0; border-radius: 8px; background: none; perspective: 800px; color: var(--text); text-align: center; font-weight: 400; cursor: pointer; }
+.mcard.gold { --metal: var(--metal-gold); --ink: var(--gold); }
+.mcard.silver { --metal: var(--metal-silver); --ink: var(--silver); }
+.mcard.bronze { --metal: var(--metal-bronze); --ink: var(--bronze); }
+.mcard-in { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform .6s cubic-bezier(.2,.7,.2,1); }
+.mcard.flipped .mcard-in { transform: rotateY(180deg); }
+.mcard-face { position: absolute; inset: 0; border-radius: 8px; padding: 1px; background: var(--metal); backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.mcard-face.back { transform: rotateY(180deg); }
+/* 卡面帶一層淡淡的所屬球隊色（--tc 由元件依中職球隊設定） */
+.mcard-body { height: 100%; box-sizing: border-box; border-radius: 7px; display: flex; flex-direction: column;
+  background: linear-gradient(165deg, color-mix(in srgb, var(--tc, var(--surface)) 16%, var(--surface)) 0%, var(--surface) 65%); }
+.mcard-top { display: flex; justify-content: space-between; align-items: center; padding: 8px 8px 0; font: 600 11px var(--font-num); letter-spacing: .06em; color: var(--muted); }
+.mcard-top .team-chip { min-width: 0; font-size: 9.5px; line-height: 14px; padding: 0 3px; }
+.mcard-art { flex: 1; margin: 6px 8px 5px; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  background-image: linear-gradient(rgb(238 240 244 / .05) 1px, transparent 1px), linear-gradient(90deg, rgb(238 240 244 / .05) 1px, transparent 1px); background-size: 5px 5px; }
+.mcard-art b { font: 700 44px/1 var(--font-num); color: var(--text); }
+.mcard-art small { font: 600 8.5px var(--font-num); letter-spacing: .24em; color: var(--ink); }
+.mcard-name { padding: 0 6px 6px; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mcard-line { margin: 0 6px 6px; border-radius: 4px; background: var(--surface-2); padding: 4px 2px; font: 700 12px/14px var(--font-mix); white-space: nowrap; overflow: hidden; }
+.mcard-face.back .mcard-body { padding: 8px 8px 7px; text-align: left; background-color: color-mix(in srgb, var(--tc, #1d2027) 10%, #1d2027);
+  background-image: linear-gradient(rgb(238 240 244 / .035) 1px, transparent 1px), linear-gradient(90deg, rgb(238 240 244 / .035) 1px, transparent 1px); background-size: 5px 5px; }
+.mcard-bname { font-size: 12.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mcard-blabel { font: 600 8.5px var(--font-mix); letter-spacing: .2em; color: var(--ink); margin-top: 2px; }
+.mcard-rows { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.mcard-rows div { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid rgb(58 64 76 / .7); padding-bottom: 3px; }
+.mcard-rows span { font: 600 10px var(--font-num); letter-spacing: .06em; color: var(--muted); }
+.mcard-rows b { font: 700 16px/1 var(--font-num); }
+.mcard-foot { font: 500 9.5px var(--font-mix); color: var(--muted); text-align: center; }
+
+/* 本期所有對戰 */
+.lglist { display: flex; flex-direction: column; gap: 6px; }
+.lgrow { position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: center; padding: 11px 14px; border-radius: 8px; background: rgb(24 27 33 / .45); border: 1px solid var(--line); color: var(--text); text-decoration: none; }
+.lgrow:hover { background: rgb(33 37 45 / .8); text-decoration: none; }
+.lgrow.mine { background: rgb(24 27 33 / .78); }
+.lgrow.mine::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: linear-gradient(180deg, var(--gold-hi), var(--gold) 50%, var(--gold-lo)); }
+.lgrow .n { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lgrow .n.r { text-align: right; }
+.lgrow.mine .n.r { color: var(--silver); }
+.lgrow .sc { text-align: center; }
+.lgrow .sc div { font: 700 22px/1 var(--font-num); }
+.lgrow .sc .lo { color: var(--silver-lo); }
+.lgrow .sc .colon { color: var(--line-2); margin: 0 4px; }
+.lgrow .sc small { display: block; margin-top: 2px; font: 600 9px var(--font-num); letter-spacing: .14em; color: var(--muted); }
+.lgrow .sc small.live { color: var(--live); }
+.pchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.pchips a { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); font: 600 12px var(--font-mix); letter-spacing: .06em; color: var(--muted); text-decoration: none; }
+.pchips a[aria-current="page"] { color: var(--gold-hi); border-color: rgb(216 178 90 / .55); }
+.pchips a.pending { opacity: .45; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

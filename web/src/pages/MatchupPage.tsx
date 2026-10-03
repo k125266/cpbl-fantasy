@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useApp } from '../App'
-import { api, type CategoryResult, type Contribution, type Matchup, type MatchupDetail, type StandingRow } from '../api'
-import { ErrorBox, fmtDate, fmtDateTime, Loading, MATCHUP_STATUS, MatchTicket, PlayerLink, TeamChip, useLoad } from '../components'
-import { fmtPts, myMatchups, type MySide } from '../matchups'
+import { api, type CategoryResult, type Matchup, type MatchupDetail, type StandingRow } from '../api'
+import { celebrate, ErrorBox, fmtDate, fmtDateTime, Loading, MatchTicket, MiniCard, tierOf, useLoad } from '../components'
+import { cardStats, fmtPts, myMatchups, topContributors, type MySide } from '../matchups'
 
 interface Standings {
   half1: StandingRow[]
@@ -99,28 +99,50 @@ export default function MatchupPage() {
       {active.m.note && <div className="alert info" style={{ marginTop: 8 }}>{active.m.note}</div>}
       <p className="note">每類別 1 分；平手或任一方無數據各得 0.5；總分 5:5 為和局。</p>
 
-      <div className="stack">
-        <ActiveContributions id={active.m.id} side={active.side} />
-        <div className="h2">所有對戰</div>
-        {[...byPeriod.values()].reverse().filter((ms) => ms[0].status !== 'PENDING' || ms[0].periodId === league?.currentPeriod?.id).map((ms) => (
-          <div className="card flush" key={ms[0].periodId}>
-            <div className="listhead">{periodLabel(ms[0])}<small>{fmtDate(ms[0].start)} – {fmtDate(ms[0].end)}</small></div>
-            <div className="mlist">
-              {ms.map((m) => (
-                <Link key={m.id} to={`/matchups/${m.id}`}>
-                  <span style={{ fontWeight: m.teamA === me || m.teamB === me ? 900 : 500 }}>{m.teamAName ?? '待定'} vs {m.teamBName ?? '待定'}</span>
-                  <span className="row">
-                    {m.scoreA != null && <span className="num" style={{ fontSize: 17 }}>{m.scoreA} : {m.scoreB}</span>}
-                    <span className={`badge ${MATCHUP_STATUS[m.status].cls}`}>{MATCHUP_STATUS[m.status].text}</span>
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </div>
-        ))}
-        <p className="note">尚未開始的對戰期不列出。</p>
+      <KeyCards matchupId={active.m.id} side={active.side} periodTag={focus.kind === 'FINAL' ? 'FINAL' : `P${focus.periodNo}`}
+        shared={tickets.length > 1} />
+
+      <div className="sec dim">
+        <span className="no">03</span><span className="t">本期所有對戰</span>
+        <span className="en">{(byPeriod.get(focus.periodId) ?? []).length} MATCHES</span>
       </div>
+      <div className="lglist">
+        {(byPeriod.get(focus.periodId) ?? []).map((m) => <LeagueRow key={m.id} m={m} viewTeam={viewTeam} />)}
+      </div>
+      <nav className="pchips" aria-label="其他期別">
+        {[...byPeriod.values()].map((ms) => {
+          const target = ms.find((m) => m.teamA === viewTeam || m.teamB === viewTeam) ?? ms[0]
+          return (
+            <Link key={ms[0].periodId} to={`/matchups/${target.id}`} aria-current={ms[0].periodId === focus.periodId ? 'page' : undefined}
+              className={ms[0].status === 'PENDING' ? 'pending' : ''} title={periodLabel(ms[0])}>
+              {ms[0].kind === 'FINAL' ? '總冠軍' : `${ms[0].halfNo === 1 ? '上' : '下'} P${ms[0].periodNo}`}
+            </Link>
+          )
+        })}
+      </nav>
     </div>
+  )
+}
+
+/** 本期所有對戰的一列：自己的對戰把自己放左邊並加金邊。 */
+function LeagueRow({ m, viewTeam }: { m: Matchup; viewTeam: number }) {
+  const mine = m.teamA === viewTeam || m.teamB === viewTeam
+  const flip = m.teamB === viewTeam
+  const l = { name: flip ? m.teamBName : m.teamAName, s: Number((flip ? m.scoreB : m.scoreA) ?? 0) }
+  const r = { name: flip ? m.teamAName : m.teamBName, s: Number((flip ? m.scoreA : m.scoreB) ?? 0) }
+  const st = m.status === 'LIVE' ? 'LIVE' : m.status === 'PENDING' ? '—' : m.status === 'PROVISIONAL' ? 'FINAL*' : 'FINAL'
+  return (
+    <Link to={`/matchups/${m.id}`} className={`lgrow ${mine ? 'mine' : ''}`}>
+      <span className="n">{l.name ?? '待定'}</span>
+      <div className="sc">
+        <div>
+          <span className={l.s < r.s ? 'lo' : ''}>{fmtPts(l.s)}</span><span className="colon">:</span>
+          <span className={r.s < l.s ? 'lo' : ''}>{fmtPts(r.s)}</span>
+        </div>
+        <small className={m.status === 'LIVE' ? 'live' : ''}>{st}</small>
+      </div>
+      <span className="n r">{r.name ?? '待定'}</span>
+    </Link>
   )
 }
 
@@ -139,6 +161,19 @@ function PeriodHero({ tickets, focus, today, teamName, row }: {
   const l = tickets.filter((t) => t.result === 'L').length
   const t = tickets.length - w - l
   const sweep = allFinal && tickets.length > 1 && w === tickets.length
+
+  // 同期雙勝：每期只自動放一次彩帶（記在瀏覽器），之後可點 SWEEP 再放
+  const sweepKey = `sweep-${focus.periodId}-${tickets[0]?.side === 'A' ? tickets[0]?.m.teamA : tickets[0]?.m.teamB}`
+  useEffect(() => {
+    if (!sweep) return
+    try {
+      if (localStorage.getItem(sweepKey)) return
+      localStorage.setItem(sweepKey, '1')
+    } catch {
+      // 無法使用瀏覽器儲存時仍然播放一次
+    }
+    celebrate()
+  }, [sweep, sweepKey])
 
   const start = new Date(focus.start)
   const len = Math.round((new Date(focus.end).getTime() - start.getTime()) / 86400000) + 1
@@ -182,6 +217,7 @@ function PeriodHero({ tickets, focus, today, teamName, row }: {
         <span>{dayLabel}</span>
       </div>
       <div className="dayline"><i style={{ width: `${allFinal ? 100 : allPending ? 0 : (day / len) * 100}%` }} /></div>
+      {sweep && <button type="button" className="sweep" onClick={celebrate}><b>SWEEP · 同期雙勝</b><span>再放一次彩帶</span></button>}
     </div>
   )
 }
@@ -217,53 +253,29 @@ function CategoryDuel({ v }: { v: MySide }) {
   )
 }
 
-function avg(h: number, ab: number) {
-  return ab === 0 ? '—' : (h / ab).toFixed(3).replace(/^0/, '')
-}
-function era(er: number, outs: number) {
-  return outs === 0 ? '—' : ((er * 27) / outs).toFixed(2)
-}
-
-/** 暫時保留的逐人貢獻表；下一步改成「本期關鍵卡」。 */
-function ActiveContributions({ id, side }: { id: number; side: 'A' | 'B' }) {
+/** 02 本期關鍵卡：我方本期貢獻最多的三位。兩場用同一份名單與數據，所以不隨票根切換。 */
+function KeyCards({ matchupId, side, periodTag, shared }: { matchupId: number; side: 'A' | 'B'; periodTag: string; shared: boolean }) {
   const { leagueId } = useApp()
-  const { data } = useLoad(() => api.get<MatchupDetail>(`/api/leagues/${leagueId}/matchups/${id}`), [leagueId, id])
-  const players = side === 'A' ? data?.playersA : data?.playersB
-  return players ? <Contributions title="本期先發貢獻" players={players} /> : null
-}
-
-function Contributions({ title, players }: { title: string; players: Contribution[] }) {
-  const hitters = players.filter((p) => p.totals.ab > 0 || p.totals.r > 0 || p.totals.sb > 0)
-  const pitchers = players.filter((p) => p.totals.outs > 0)
+  const { data } = useLoad(() => api.get<MatchupDetail>(`/api/leagues/${leagueId}/matchups/${matchupId}`), [leagueId, matchupId])
+  const top = topContributors(side === 'A' ? data?.playersA : data?.playersB, 3)
   return (
-    <div className="card flush">
-      <div className="listhead">{title}</div>
-      <div className="table-wrap" style={{ padding: '0 14px' }}>
-        <table>
-          <thead><tr><th>打者</th><th className="num">H/AB</th><th className="num">R</th><th className="num">HR</th><th className="num">RBI</th><th className="num">SB</th><th className="num">AVG</th></tr></thead>
-          <tbody>
-            {hitters.map((p) => (
-              <tr key={p.playerId}>
-                <td><TeamChip code={p.cpblTeam} /> <PlayerLink id={p.playerId} name={p.name} /></td>
-                <td className="num">{p.totals.h}/{p.totals.ab}</td><td className="num">{p.totals.r}</td><td className="num">{p.totals.hr}</td>
-                <td className="num">{p.totals.rbi}</td><td className="num">{p.totals.sb}</td><td className="num">{avg(p.totals.h, p.totals.ab)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <table style={{ marginTop: 8 }}>
-          <thead><tr><th>投手</th><th className="num">IP</th><th className="num">QS</th><th className="num">K</th><th className="num">SV+H</th><th className="num">ERA</th></tr></thead>
-          <tbody>
-            {pitchers.map((p) => (
-              <tr key={p.playerId}>
-                <td><TeamChip code={p.cpblTeam} /> <PlayerLink id={p.playerId} name={p.name} /></td>
-                <td className="num">{Math.floor(p.totals.outs / 3)}.{p.totals.outs % 3}</td><td className="num">{p.totals.qs}</td>
-                <td className="num">{p.totals.k}</td><td className="num">{p.totals.sv + p.totals.hld}</td><td className="num">{era(p.totals.er, p.totals.outs)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <>
+      <div className="sec">
+        <span className="no">02</span><span className="t">本期關鍵卡</span><span className="en">KEY CARDS</span>
+        <span className="hint">{shared ? '兩場共用・' : ''}點卡翻面</span>
       </div>
-    </div>
+      {top.length === 0 ? <p className="muted small">本期還沒有數據。</p> : (
+        <div className="cards3">
+          {top.map((c) => {
+            const s = cardStats(c)
+            const rank = data?.ranks?.[c.playerId]
+            return (
+              <MiniCard key={c.playerId} name={c.name} team={c.cpblTeam} number={c.jerseyNumber} slot={s.slot} tier={tierOf(rank)}
+                line={s.line} back={s.back} backLabel={`${periodTag} · 本期`} foot={rank ? `本季第 ${rank} 名` : undefined} />
+            )
+          })}
+        </div>
+      )}
+    </>
   )
 }

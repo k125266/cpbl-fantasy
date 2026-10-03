@@ -55,7 +55,7 @@ export function PlayerCard({ name, team, number, positions, line, tier, back }: 
   const [flipped, setFlipped] = useState(false)
   return (
     <button type="button" className={`pcard tier-${tier} ${flipped ? 'flipped' : ''}`} onClick={() => setFlipped(!flipped)}
-      aria-label={`${name} 球員卡，點擊翻面`}>
+      style={{ ['--tc' as string]: cpblTeam(team).bg }} aria-label={`${name} 球員卡，點擊翻面`}>
       <div className="pcard-inner">
         <div className="face front">
           <div className="face-in">
@@ -71,6 +71,47 @@ export function PlayerCard({ name, team, number, positions, line, tier, back }: 
           <div className="face-in">
             <div className="pc-name">{name} <span className="pc-pos">本季</span></div>
             <table><tbody>{back.map(([k, v]) => <tr key={k}><td>{k}</td><td>{v}</td></tr>)}</tbody></table>
+          </div>
+        </div>
+      </div>
+    </button>
+  )
+}
+
+/**
+ * 小球員卡（設計稿樣式）：金屬框、格紋背號、等級字；點擊翻面看背面數據。
+ * 用於本期關鍵卡、王牌對決；純外觀，不可交易或購買。
+ */
+export function MiniCard({ name, team, number, slot, tier, line, back, backLabel, foot }: {
+  name: string
+  team: string
+  number: string | null
+  slot: string
+  tier: Tier
+  line: string
+  back: [string, string][]
+  backLabel: string
+  foot?: string
+}) {
+  const [flipped, setFlipped] = useState(false)
+  return (
+    <button type="button" className={`mcard ${tier} ${flipped ? 'flipped' : ''}`} onClick={() => setFlipped(!flipped)}
+      style={{ ['--tc' as string]: cpblTeam(team).bg }} aria-label={`${name} 球員卡，點擊翻面`}>
+      <div className="mcard-in">
+        <div className="mcard-face">
+          <div className="mcard-body">
+            <div className="mcard-top"><span>{slot}</span><TeamChip code={team} /></div>
+            <div className="mcard-art"><b>{number ?? ''}</b><small>{TIER_LABEL[tier]}</small></div>
+            <div className="mcard-name">{name}</div>
+            <div className="mcard-line">{line}</div>
+          </div>
+        </div>
+        <div className="mcard-face back">
+          <div className="mcard-body">
+            <div className="mcard-bname">{name}</div>
+            <div className="mcard-blabel">{backLabel}</div>
+            <div className="mcard-rows">{back.map(([k, v]) => <div key={k}><span>{k}</span><b>{v}</b></div>)}</div>
+            {foot && <div className="mcard-foot">{foot}</div>}
           </div>
         </div>
       </div>
