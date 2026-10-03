@@ -53,8 +53,9 @@ export default function TeamPage() {
   const team = league?.teams.find((t) => t.id === id)
   const halfNo = league?.currentPeriod?.halfNo ?? 1
   const st = (halfNo === 2 ? standings.data?.half2 : standings.data?.half1)?.find((r) => r.teamId === id)
-  const current = (matchups.data || []).find((m) => m.periodId === data.period?.id && (m.teamA === id || m.teamB === id))
-  const myScore = current ? (current.teamA === id ? current.scoreA : current.scoreB) : null
+  // 每期雙對手：本期有兩場
+  const current = (matchups.data || []).filter((m) => m.periodId === data.period?.id && (m.teamA === id || m.teamB === id))
+  const myScores = current.map((m) => (m.teamA === id ? m.scoreA : m.scoreB) ?? '–')
 
   const seats = (slots: SlotName[]): Seat[] => {
     const out: Seat[] = []
@@ -84,8 +85,8 @@ export default function TeamPage() {
           </div>
         </div>
         <div className="bigpts">
-          <span className="num gold-text">{myScore ?? '–'}</span>
-          <small>本期類別分</small>
+          <span className="num gold-text">{myScores.length ? myScores.join(' / ') : '–'}</span>
+          <small>{myScores.length > 1 ? '本期兩場類別分' : '本期類別分'}</small>
         </div>
       </div>
 
