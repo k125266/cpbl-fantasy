@@ -1,57 +1,81 @@
-# M0 資料可行性驗證：現況
+# M0 資料可行性驗證：實測結論
 
-> 對應 backlog CPBLF-1 ～ CPBLF-5。
+> 對應 backlog CPBLF-1 ～ CPBLF-5。2026-10-04 於本機實測。
 
-## 先說結論
+## 結論
 
-開發環境的網路政策封鎖了 `cpbl.com.tw`，所以 **M0 沒辦法對官網做實際請求驗證**。
-目前的結論來自 PyPI 套件 `mcp-cpbl-statistics` 0.1.1 的原始碼（backlog 建議的參考來源）。
-它已經對官網做過實際整合，可以佐證 endpoint、CSRF 流程與部分欄位名稱。
+- **官網 www.cpbl.com.tw 不可用**。
+  - HiNetCDN 的規則（回應標頭 `X-Cache: RULE`）讓自我標示的爬蟲 UA 一律收到 404，只有首頁例外。
+  - 只放行瀏覽器、curl 這類 UA；要通過就得冒充其他軟體，違反規則書 10.3「可識別的 User-Agent」，因此停止。
+  - `CpblWebDataSource` 保留，日後官方開放時可再使用。
+- **改用中職官方進階數據網站 stats.cpbl.com.tw**（中職與運動部、國科會、野球革命合作）。
+  - 原本的 UA `CPBLFantasyBot/0.1 (private non-commercial league)` 可以正常連線。
+  - 設定 `cpblf.source=stats` 啟用（`StatsSiteDataSource`、`StatsSiteParsers`）。
 
-系統已經做成可以在 M0 結果出來前先開發、驗證所有規則的形式：
+## 網站的使用規範（`robots.txt`、`llms.txt`、`/.well-known/ai-catalog.json`）
 
-- 資料源抽象為 `CpblDataSource`，有兩個實作：
-  - `CpblWebDataSource`：官網爬蟲
-  - `SimulatedDataSource`：確定性的模擬賽季，demo 與測試用
-- 官網欄位名稱只出現在 `CpblParsers` 一個檔案裡，同時也是欄位白名單（CPBLF-70）。
-  M0 驗證完成後，如果欄位名稱不同，只要改這個檔案。
+- 允許讀取公開頁面；禁止 `/api/`（網站自用）；`Content-Signal: ai-train=no`，禁止拿來訓練 AI。
+- 請求時帶 `Accept: text/markdown` 會得到 Markdown 版頁面，表格與連結保留。
+- 「不要自行推測或建立球員 ID、賽事 ID，實際網址請由列表或 sitemap.xml 取得」。
+  - 名單同步與每日賽程完全遵守：網址取自球員列表與 sitemap。
+  - **例外**：2026 整季重播（E12）需要過去約 330 場比賽頁，sitemap 只列近期約 15 場。經使用者同意，封存時依序編號抓取（一次性、間隔 ≥ 1.5 秒）。
+- 比賽頁回應為 `cache-control: no-store`，每次請求都即時產生。
 
-## 已佐證（來自 mcp-cpbl-statistics 原始碼）
+## 頁面與欄位
 
-| 項目 | 結論 |
-|---|---|
-| 存取方式 | 純 HTTP 即可，不需要 headless browser。先 GET 頁面取得 session cookie，再從頁面 JS 擷取 `RequestVerificationToken: '...'`，最後以 header `RequestVerificationToken`、`X-Requested-With: XMLHttpRequest` POST 到 XHR endpoint |
-| 賽程 | `POST /schedule/getgamedatas`，form：`calendar=YYYY/01/01`、`location=`、`kindCode=A`。回應的 `GameDatas` 是 JSON 字串 |
-| 賽程欄位 | `GameSno`、`GameDate`、`PreExeDate`（表定開賽時間）、`KindCode`、`HomeTeamName`、`VisitingTeamName`、`HomeScore`、`VisitingScore`、`IsGameStop`（"1" = 延賽／取消）、`PresentStatus`（1 = 已結束） |
-| kind_code | A 一軍例行賽、B 明星賽、C 總冠軍賽、D 二軍例行賽、E 季後挑戰賽、G 熱身賽 |
-| 打擊欄位命名 | `HitCnt` 是**打數**、`HittingCnt` 是**安打**（容易搞混）。另有 `PlateAppearances`、`HomeRunCnt`、`RunBattedINCnt`、`ScoreCnt`、`StealBaseOKCnt`、`BasesONBallsCnt` |
-| 投球局數 | `InningPitchedCnt`（整數局）＋ `InningPitchedDiv3Cnt`（1/3 局數）→ outs = 前者 × 3 + 後者。**QS 可推導**（CPBLF-2） |
-| HLD | 年度投球成績有 `ReliefPointCnt`（中繼成功）原生欄位，救援成功為 `SaveOK`。**HLD 為官網原生欄位，規則書 5.2 的 SV+HLD 可維持**（CPBLF-3） |
-| 球員主檔 | `/player` 頁的 `div.PlayersList` 列出各隊球員與 `acnt`（原生 id）；`/team/person?acnt=` 的 `dd.pos`、`dd.nationality` 提供守備位置與國籍（CPBLF-4 的 id／國籍／球隊／位置） |
-| 逐場成績 | `POST /team/getfollowscore`（`acnt`、`defendStation`、`year`、`kindCode`）回傳球員逐場數據，可作為 box score 之外的第二資料來源 |
+| 頁面 | 取得的欄位 | 用途 |
+|---|---|---|
+| `/players?page=N`（每頁 8 人，共約 517 人） | 球員 ID、姓名、背號、球隊、守位 | 名單同步（每日一次，約 65 個請求） |
+| 球隊名以「二軍」結尾 | 一軍／二軍 | `first_team_status`（MINORS） |
+| `/players/{id}` | 原名 | 洋將判斷（新球員才抓） |
+| `/sitemap.xml` | 近期與即將進行的比賽網址 | 每日賽程 |
+| `/schedule/{year}-{kind}-{sno}` | 客隊 vs 主隊、比分、狀態、日期、球場；雙方打者與投手表；勝投、敗投、救援成功卡片 | 賽程與 box score |
 
-## 未驗證（上線前必須完成）
+- **打者**：打席、打數、安打、三振、保送、全壘打、得分。
+- **投手**：局數（`0.2` 格式，換算為 outs）、用球數、被安打、三振、保送、失分、責失分。各隊投手表第一位為先發。
+- **勝投、救援成功**：頁首卡片附球員連結。
+- 球員 ID 與官網 acnt 相同（例：`0000006906`）。
 
-| 項目 | 目前實作的假設 | 風險 | 位置 |
-|---|---|---|---|
-| Box score endpoint | `GET /box/index?year=&kindCode=&gameSno=` 取 token → `POST /box/getlive`（`GameSno`、`KindCode`、`Year`、`PrevOrNext`、`PresentStatus`），回應含 `BattingJson`、`PitchingJson` | 高 | `CpblWebDataSource.fetchBoxScore` |
-| Box score 打擊列欄位 | `HitterAcnt`、`HitterName`、`VisitingHomeType`（1 客 2 主）、`DefendStation`，數據欄位沿用上表命名 | 高 | `CpblParsers.BATTING_FIELDS` |
-| Box score 投球列欄位 | `PitcherAcnt`、`PitcherName`、`SaveOK`、`ReliefPointCnt`；先發投手以「各隊投球列第一位」判定 | 中 | `CpblParsers.PITCHING_FIELDS` |
-| 一軍登錄名單 | `/player` 頁姓名前綴標記 `◎` 代表一軍登錄 | 高 | `CpblWebDataSource.FIRST_TEAM_MARKERS` |
-| 註銷判定 | 由「60 人註冊名單差異」推導（不在名單中即註銷） | 中 | `RegistrationSync` |
-| 延賽 / 補賽日期（CPBLF-5） | 補賽後同一 `GameSno` 的 `GameDate` 變為實際開打日；系統保留第一次看到的日期為原定日期 | 中 | `SchedulePoller.upsert` |
-| 「進行中」狀態 | 賽程 API 沒有進行中狀態；過了 `PreExeDate` 且未結束就視為進行中 | 低 | `SchedulePoller.effectiveStatus` |
+## 網站沒有的資料與影響
 
-防呆設計：結構不符時一律丟出 `SourceStructureException`，中止該 job 並告警，不會靜默寫入錯誤資料。
+| 缺少 | 影響 | 處理 |
+|---|---|---|
+| 打點、盜壘、中繼 | RBI、SB、SV+HLD 無法計分 | 改為 H、BB、W+SV（`rulebook-amendment-categories.md`） |
+| 打者守備位置 | 無法依出賽累積 IF／OF 資格 | `game_stat.positions` 為空，位置資格只看登錄位置 |
+| 國籍欄位 | 洋將需推斷 | 見下方「洋將判斷」 |
+| 開賽時間 | 名單鎖定需要 | **待實測**：首頁把 17:05 顯示成 01:05，疑似以 UTC−8 輸出 |
+| 比賽進行中的格式 | 即時比分 | **待實測**：比賽中的狀態文字、局數、逐人數據是否即時更新 |
+| 歷史一軍登錄紀錄 | 重播時無法還原當時的一軍／二軍 | 重播改用近似判定（E12） |
 
-- **缺欄位**：打擊列缺 `HitterAcnt`，或投球列缺 `InningPitchedCnt`
-- **一軍名單解析不出任何標記**：中止同步，不會把所有人都誤判成下二軍
-- **單次同步會註銷超過 20% 球員**：視為結構變動，中止同步
+## 洋將判斷
 
-## 驗證步驟（在可連線的環境執行）
+- 依球員頁的「原名」判斷：**有全大寫的英文單字（姓氏）**就是洋將，例如 `Mario SANCHEZ`、`SUZUKI Shunsuke`、`OTAKI Kouji`。
+- 不能只看「有沒有英文字母」：
+  - 原住民族球員的原名是族名拼音（`Ma Yaw Ciru`、`Haro Ngayaw`、`Namoh．Iyang`）；
+  - 本土球員也可能是中文名拼音（`Yu Cheng-Yi`）。
+- 已知例外：陳思仲的原名是 `John Peter CLARK`，會被判為洋將，但疑似以本土身分登錄。需要人工修正（E13 管理員設定頁）。
+- 姓名前的 `*`、`#` 標記，網站沒有說明意義，只去除、不使用。
 
-1. `curl` 取得 `/box/index?year=2026&kindCode=A&gameSno=1`，確認頁面 JS 中的 token 格式與 `/box/getlive` 的 form 參數。
-2. 將回應存成 fixture，放到 `server/src/test/resources/fixtures/`，改寫 `CpblParsersTest` 改用真實 fixture。
-3. 以近 10 場比賽驗算 QS：拿官網的先發局數與自責分跟 parser 輸出比對（CPBLF-2 AC）。
-4. 確認一軍登錄名單的實際呈現方式。如果不是 `/player` 前綴標記，請修改 `fetchRegistration`。
-5. 找一場已補賽的比賽，確認 `GameDate` 是原定日還是實際日（CPBLF-5）。
+## 2026-10-04 實測結果
+
+- **名單同步**：517 人，耗時 14.5 分鐘（含 517 位新球員的個人頁），無錯誤、無速率限制。
+  - 一軍 169 人（每隊 28～29 人）、二軍 348 人。
+  - 守位：投手 269、捕手 48、內野 119、外野 81。
+  - 洋將 42 人（規則修正後）。
+- **賽程與結算**：sitemap 取得 12 場（10/1～10/5）。7 場已結束的比賽全部結算，無未知球員。
+  - 抽查 A-200（10/3 中信 3:0 富邦）：打者、投手數據、勝投勝騎士、救援呂彥青，都與網站一致。
+  - 10/3 的 3 場（A-199～201）是延賽後的補賽，頁面日期為實際開打日。
+- **測試**：`StatsSiteParsersTest` 用真實頁面當 fixture，驗證以下項目（CPBLF-2）：
+  - 名單、二軍判定、洋將判斷；
+  - 比分、局數換算、先發、勝投與救援；
+  - 雙方得分加總等於比分；
+  - QS 推導。
+
+## 防呆設計
+
+結構不符時一律丟出 `SourceStructureException`，中止該 job 並告警，不會靜默寫入錯誤資料。
+
+- **頁面缺少預期的標題或欄位**：中止；已結束的比賽必須有雙方打者表與投手表。
+- **名單只取得不到 95% 的人數，或沒有任何一軍球員**：中止同步，不會把所有人誤判為下二軍。
+- **單次同步會註銷超過 20% 的球員**：視為結構變動，中止（`RegistrationSync`）。
+- **box score 出現未知球員**：中斷該場結算並告警（`BoxScoreMapper`）。

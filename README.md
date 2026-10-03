@@ -5,12 +5,12 @@
 - 規則依據：《CPBL Fantasy Baseball 規則書 v0.1》
 - 開發依據：開發 backlog（CPBLF-*）
 - 規則書未明定之處的實作選擇：[`docs/decisions.md`](docs/decisions.md)
-- 官網資料可行性驗證（M0）現況：[`docs/m0-data-feasibility.md`](docs/m0-data-feasibility.md)
+- 資料來源實測結論（M0）：[`docs/m0-data-feasibility.md`](docs/m0-data-feasibility.md)
 - 計分類別（R、HR、H、BB、AVG ／ QS、K、W+SV、ERA、WHIP）修訂草案：[`docs/rulebook-amendment-categories.md`](docs/rulebook-amendment-categories.md)
 
-> ⚠️ **上線前必讀**：開發環境無法連線 cpbl.com.tw，官網 box score 與一軍名單的欄位尚未實際驗證。
-> 系統目前以 **demo 模式**（模擬賽季、虛構球員）完整運作。
-> 切換到正式資料源之前，請先依 `docs/m0-data-feasibility.md` 完成驗證。
+> ⚠️ **資料來源**：官網 cpbl.com.tw 的 CDN 會擋爬蟲，改用中職進階數據網站 stats.cpbl.com.tw（`CPBLF_SOURCE=stats`）。
+> 名單、賽程與已結束比賽的 box score 已實測可用；**即時比分與開賽時間尚待比賽進行中實測**。
+> 預設仍是 **demo 模式**（模擬賽季、虛構球員）。詳見 `docs/m0-data-feasibility.md`。
 
 ## 技術架構
 
@@ -65,6 +65,22 @@ Demo 流程：
 
 前端開發可另外執行 `cd web && npm run dev`（Vite 會把 `/api` proxy 到 8080）。
 
+### 真實資料（stats 模式）
+
+用另一個資料庫，避免和 demo 的虛構球員混在一起：
+
+```powershell
+docker compose exec db psql -U cpblf -c "create database cpblf_stats"
+cd server
+$env:CPBLF_SOURCE='stats'; $env:CPBLF_DB_URL='jdbc:postgresql://localhost:5432/cpblf_stats'; $env:CPBLF_SCHEDULER_ENABLED='false'
+.\mvnw.cmd spring-boot:run
+```
+
+第一位註冊的帳號是系統管理員。之後在「系統」頁手動執行 job：
+- `registration-sync`：名單同步。第一次約 15 分鐘，要逐一讀取每位新球員的個人頁。
+- `schedule-poller`：從 sitemap 取得近期比賽。
+- `settlement`：結算已結束的比賽。
+
 ## 測試
 
 ```bash
@@ -79,6 +95,7 @@ cd web && npm run typecheck
 | Settlement 重跑一百次結果一致、修正寫 revision log、未知球員中斷、24 小時 is_final（CPBLF-14） | `SettlementJobTest` |
 | 交易後歷史對戰比分不變（CPBLF-22） | `SeasonFlowTest.tradeDoesNotChangeHistoricalScores` |
 | 非白名單欄位不會被寫入（CPBLF-70） | `CpblParsersTest` |
+| 進階數據網站的名單、二軍、洋將、比賽頁解析（真實頁面 fixture）、QS 推導（CPBLF-2） | `StatsSiteParsersTest` |
 | 頻率與 User-Agent 設定不合規時啟動失敗（CPBLF-71） | `CrawlerSettingsValidatorTest` |
 | Schema 無金錢相關欄位（CPBLF-73） | `SchemaComplianceTest` |
 | 比率類別先加總再相除、無數據不判敗、5:5 和局 | `MatchupScorerTest` |
@@ -88,7 +105,7 @@ cd web && npm run typecheck
 
 | 環境變數 | 說明 | 預設 |
 |---|---|---|
-| `CPBLF_SOURCE` | `demo` 或 `web` | `demo` |
+| `CPBLF_SOURCE` | `demo`、`stats`（中職進階數據網站）或 `web`（官網，目前被 CDN 擋） | `demo` |
 | `CPBLF_DB_URL` / `CPBLF_DB_USER` / `CPBLF_DB_PASSWORD` | 資料庫 | localhost/cpblf |
 | `CPBLF_SEASON_YEAR` | 賽季年度 | 2026 |
 | `CPBLF_USER_AGENT` | 爬蟲 User-Agent，**必填**，請包含聯絡方式 | — |
