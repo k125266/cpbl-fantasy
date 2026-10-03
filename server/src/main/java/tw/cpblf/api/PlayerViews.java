@@ -39,7 +39,9 @@ public class PlayerViews {
                         String jerseyNumber) {
     }
 
-    public record TodayGame(long gameId, String opponent, boolean home, OffsetDateTime startTime, String status) {
+    /** 當日比賽。teamScore / oppScore 以該球員所屬球隊為準；inning 僅進行中有值（例：7上）。 */
+    public record TodayGame(long gameId, String opponent, boolean home, OffsetDateTime startTime, String status,
+                            Integer teamScore, Integer oppScore, String inning) {
     }
 
     public Map<Long, Basic> basics(Collection<Long> ids) {
@@ -62,16 +64,23 @@ public class PlayerViews {
         return statuses.statuses(league, ids, clock.today());
     }
 
-    /** 各中職球隊當日的比賽（含當日宣布延賽者）。 */
+    /** 各中職球隊當日的比賽（含當日宣布延賽者）。比分：已結束取 game，進行中取 live_game。 */
     public Map<String, TodayGame> todayGames(LocalDate date) {
         Map<String, TodayGame> out = new HashMap<>();
         jdbc.sql("""
-                select id, home_team_code, away_team_code, start_time, status from game
-                where play_date = ? and status <> 'CANCELLED'
+                select g.id, g.home_team_code, g.away_team_code, g.start_time, g.status,
+                       case when g.status = 'FINAL' then g.home_score else coalesce(lg.home_score, g.home_score) end,
+                       case when g.status = 'FINAL' then g.away_score else coalesce(lg.away_score, g.away_score) end,
+                       case when g.status = 'FINAL' then null else lg.inning_text end
+                from game g left join live_game lg on lg.game_id = g.id
+                where g.play_date = ? and g.status <> 'CANCELLED'
                 """).param(date).query((rs, n) -> {
             OffsetDateTime st = rs.getObject(4, OffsetDateTime.class);
-            out.put(rs.getString(2), new TodayGame(rs.getLong(1), rs.getString(3), true, st, rs.getString(5)));
-            out.put(rs.getString(3), new TodayGame(rs.getLong(1), rs.getString(2), false, st, rs.getString(5)));
+            Integer hs = rs.getObject(6, Integer.class);
+            Integer as = rs.getObject(7, Integer.class);
+            String inning = rs.getString(8);
+            out.put(rs.getString(2), new TodayGame(rs.getLong(1), rs.getString(3), true, st, rs.getString(5), hs, as, inning));
+            out.put(rs.getString(3), new TodayGame(rs.getLong(1), rs.getString(2), false, st, rs.getString(5), as, hs, inning));
             return null;
         }).list();
         return out;
@@ -88,8 +97,13 @@ public class PlayerViews {
         return m;
     }
 
-    /** 今日數據一行字。比賽進行中取 live 表（非最終），已結算取 game_stat。 */
-    public record TodayLine(String text, boolean live) {
+    /** 今日數據一行字與數字。比賽進行中取 live 表（非最終），已結算取 game_stat。 */
+    public record TodayLine(String text, boolean live, TodayStats stats) {
+    }
+
+    /** 今日數據（隊伍首頁數據格用）：pitched 為 true 時看投球欄位，否則看打擊欄位。 */
+    public record TodayStats(boolean pitched, int ab, int h, int hr, int rbi, int r, int sb, int outs, int er, int k,
+                             int sv, int hld) {
     }
 
     public Map<Long, TodayLine> todayLines(Collection<Long> ids, LocalDate date) {
@@ -120,7 +134,10 @@ public class PlayerViews {
                             if (rs.getInt("bb") > 0) sb.append(", BB");
                         }
                         if (!sb.isEmpty()) {
-                            out.putIfAbsent(rs.getLong("player_id"), new TodayLine(sb.toString(), live));
+                            TodayStats stats = new TodayStats(rs.getBoolean("pitched"), rs.getInt("ab"), rs.getInt("h"),
+                                    rs.getInt("hr"), rs.getInt("rbi"), rs.getInt("r"), rs.getInt("sb"), rs.getInt("outs"),
+                                    rs.getInt("p_er"), rs.getInt("p_k"), rs.getInt("sv"), rs.getInt("hld"));
+                            out.putIfAbsent(rs.getLong("player_id"), new TodayLine(sb.toString(), live, stats));
                         }
                         return null;
                     }).list();

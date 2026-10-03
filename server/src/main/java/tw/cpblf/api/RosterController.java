@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import tw.cpblf.auth.Auth;
 import tw.cpblf.config.AppClock;
+import tw.cpblf.draft.PlayerRankingService;
 import tw.cpblf.league.League;
 import tw.cpblf.league.LeagueService;
 import tw.cpblf.roster.PlayerStatusService;
@@ -36,22 +37,26 @@ public class RosterController {
     private final ScoringService scoring;
     private final SeasonService season;
     private final AppClock clock;
+    private final PlayerRankingService ranking;
 
     public RosterController(LeagueService leagues, RosterService roster, PlayerViews views, ScoringService scoring,
-                            SeasonService season, AppClock clock) {
+                            SeasonService season, AppClock clock, PlayerRankingService ranking) {
         this.leagues = leagues;
         this.roster = roster;
         this.views = views;
         this.scoring = scoring;
         this.season = season;
         this.clock = clock;
+        this.ranking = ranking;
     }
 
+    /** rank：本季排名（金銀銅框用），沒有數據時為 null。 */
     public record RosterPlayer(long playerId, String name, String cpblTeam, String jerseyNumber, boolean foreign,
                                String listedPosition, String slot,
                                List<String> eligible, PlayerStatusService.PlayerStatus status, boolean locked,
                                LocalDate pendingFrom, LocalDate leavingOn, PlayerViews.TodayGame game,
-                               Map<String, String> period, PlayerViews.TodayLine today, Map<String, String> season) {
+                               Map<String, String> period, PlayerViews.TodayLine today, Map<String, String> season,
+                               Integer rank) {
     }
 
     @GetMapping("/teams/{teamId}/roster")
@@ -72,6 +77,7 @@ public class RosterController {
         var games = views.todayGames(today);
         SeasonService.Period period = season.periodOn(leagueId, today).orElse(null);
         var lines = views.todayLines(ids, today);
+        var ranks = ranking.rankings();
         LocalDate seasonStart = LocalDate.of(league.seasonYear(), 1, 1);
 
         List<RosterPlayer> players = new ArrayList<>();
@@ -88,7 +94,8 @@ public class RosterController {
                     current == null ? pending.validFrom() : null,
                     current != null && current.validTo() != null ? current.validTo() : null,
                     games.get(b.team()), totals == null ? null : PlayerViews.statLine(totals), lines.get(pid),
-                    PlayerViews.statLine(scoring.playerTotals(pid, seasonStart, today))));
+                    PlayerViews.statLine(scoring.playerTotals(pid, seasonStart, today)),
+                    ranks.containsKey(pid) ? ranks.get(pid).rank() : null));
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("teamId", teamId);

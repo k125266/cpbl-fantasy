@@ -201,11 +201,32 @@ export interface TodayGame {
   home: boolean
   startTime: string | null
   status: string
+  /** 以該球員所屬球隊為準 */
+  teamScore: number | null
+  oppScore: number | null
+  /** 進行中才有，例：7上 */
+  inning: string | null
+}
+
+export interface TodayStats {
+  pitched: boolean
+  ab: number
+  h: number
+  hr: number
+  rbi: number
+  r: number
+  sb: number
+  outs: number
+  er: number
+  k: number
+  sv: number
+  hld: number
 }
 
 export interface TodayLine {
   text: string
   live: boolean
+  stats: TodayStats
 }
 
 export interface RosterPlayer {
@@ -225,6 +246,8 @@ export interface RosterPlayer {
   period: Record<string, string> | null
   today: TodayLine | null
   season: Record<string, string>
+  /** 本季排名（金銀銅框用） */
+  rank: number | null
 }
 
 export interface RosterResponse {
