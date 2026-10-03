@@ -19,13 +19,15 @@ cpblf:
   zone: Asia/Taipei
   season-year: ${CPBLF_SEASON_YEAR:2026}
   kind-code: A
-  # 資料來源：demo（模擬賽季，本機開發/展示用）或 web（cpbl.com.tw）
+  # 資料來源：demo（模擬賽季，本機開發/展示用）、stats（中職進階數據網站）或 web（cpbl.com.tw，CDN 擋爬蟲 UA，目前不可用）
   source: ${CPBLF_SOURCE:demo}
   scheduler-enabled: ${CPBLF_SCHEDULER_ENABLED:true}
   crawler:
     # 規則書 10.3 / CPBLF-71：必須可識別；未設定時啟動失敗
     user-agent: "${CPBLF_USER_AGENT:CPBLFantasyBot/0.1 (private non-commercial league)}"
     base-url: https://www.cpbl.com.tw
+    # robots.txt 允許公開頁面、禁止 /api/；只讀公開頁面（docs/m0-data-feasibility.md）
+    stats-base-url: https://stats.cpbl.com.tw
     # Live Poller 間隔，下限 60 秒，低於此值啟動失敗
     live-poll-interval-seconds: ${CPBLF_LIVE_POLL_SECONDS:60}
     # 一般請求之間的最小間隔

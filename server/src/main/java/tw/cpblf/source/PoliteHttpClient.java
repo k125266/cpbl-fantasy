@@ -43,6 +43,12 @@ public class PoliteHttpClient {
         return send(base(url).GET().build());
     }
 
+    public String get(String url, Map<String, String> headers) {
+        HttpRequest.Builder b = base(url).GET();
+        headers.forEach(b::header);
+        return send(b.build());
+    }
+
     public String postForm(String url, Map<String, String> form, Map<String, String> headers) {
         String body = form.entrySet().stream()
                 .map(e -> enc(e.getKey()) + "=" + enc(e.getValue()))
