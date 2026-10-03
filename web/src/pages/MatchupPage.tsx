@@ -36,7 +36,7 @@ export default function MatchupPage() {
 
   return (
     <div className="stack">
-      {defaultId ? <MatchupDetail id={defaultId} /> : <p className="muted">本期輪空或賽程尚未產生。</p>}
+      {defaultId ? <MatchupDetail id={defaultId} /> : <p className="muted">賽程尚未產生。</p>}
       <div className="h2">所有對戰</div>
       {[...byPeriod.values()].reverse().filter((ms) => ms[0].status !== 'PENDING' || ms[0].periodId === league?.currentPeriod?.id).map((ms) => (
         <div className="card flush" key={ms[0].periodId}>
