@@ -52,6 +52,14 @@ export function myMatchups(all: Matchup[], periodId: number | null | undefined, 
     .map((m) => mySide(m, teamId))
 }
 
+/** 對戰期第幾天（1 起算，最多 len）與總天數；today 早於開始日時 day 為 0。 */
+export function periodDay(start: string, end: string, today: string): { day: number; len: number } {
+  const s = new Date(start).getTime()
+  const len = Math.round((new Date(end).getTime() - s) / 86400000) + 1
+  const day = Math.min(len, Math.max(0, Math.round((new Date(today).getTime() - s) / 86400000) + 1))
+  return { day, len }
+}
+
 /** 類別分差文字：整數或 .5（平手、無數據各得 0.5）。 */
 export function fmtPts(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1)

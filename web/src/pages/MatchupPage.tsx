@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type CategoryResult, type Matchup, type MatchupDetail, type StandingRow } from '../api'
 import { celebrate, ErrorBox, fmtDate, fmtDateTime, Loading, MatchTicket, MiniCard, tierOf, useLoad } from '../components'
-import { cardStats, fmtPts, myMatchups, topContributors, type MySide } from '../matchups'
+import { cardStats, fmtPts, myMatchups, periodDay, topContributors, type MySide } from '../matchups'
 
 interface Standings {
   half1: StandingRow[]
@@ -27,7 +27,6 @@ export default function MatchupPage() {
   const list = useLoad(() => api.get<Matchup[]>(`/api/leagues/${leagueId}/matchups`), [leagueId])
   const standings = useLoad(() => api.get<Standings>(`/api/leagues/${leagueId}/standings`), [leagueId])
   const [activeId, setActiveId] = useState<number | null>(null)
-  const rail = useRef<HTMLDivElement>(null)
 
   // 換到別場對戰（網址改變）時，回到預設選中的那張
   useEffect(() => setActiveId(null), [matchupId])
@@ -55,17 +54,6 @@ export default function MatchupPage() {
   const halfRows = focus.halfNo === 2 ? standings.data?.half2 : standings.data?.half1
   const rowOf = (teamId: number | null) => halfRows?.find((r) => r.teamId === teamId)
 
-  const select = (i: number) => {
-    setActiveId(tickets[i].m.id)
-    rail.current?.scrollTo({ left: i * TICKET_STEP, behavior: 'smooth' })
-  }
-  const onScroll = () => {
-    const el = rail.current
-    if (!el) return
-    const i = Math.round(el.scrollLeft / TICKET_STEP)
-    if (tickets[i] && tickets[i].m.id !== active.m.id) setActiveId(tickets[i].m.id)
-  }
-
   const byPeriod = new Map<number, Matchup[]>()
   for (const m of all) {
     if (!byPeriod.has(m.periodId)) byPeriod.set(m.periodId, [])
@@ -77,19 +65,8 @@ export default function MatchupPage() {
       <PeriodHero tickets={tickets} focus={focus} today={system?.today ?? league?.today ?? ''}
         teamName={league?.teams.find((t) => t.id === viewTeam)?.name ?? ''} row={rowOf(viewTeam)} />
 
-      <div className="rail" ref={rail} onScroll={onScroll}>
-        {tickets.map((v, i) => (
-          <MatchTicket key={v.m.id} v={v} no={i + 1} size="lg" rec={recText(rowOf(v.oppId))}
-            active={i === activeIdx} onClick={() => select(i)} />
-        ))}
-      </div>
-      {tickets.length > 1 && (
-        <div className="dots">
-          {tickets.map((v, i) => (
-            <button key={v.m.id} type="button" aria-label={`第 ${i + 1} 場`} aria-current={i === activeIdx} onClick={() => select(i)} />
-          ))}
-        </div>
-      )}
+      <TicketRail key={focus.periodId} tickets={tickets} activeIdx={activeIdx} rowOf={rowOf}
+        onSelect={(i) => setActiveId(tickets[i].m.id)} />
 
       <div className="sec">
         <span className="no">01</span><span className="t">類別對決</span><span className="sub">vs {active.oppName ?? '待定'}</span>
@@ -121,6 +98,54 @@ export default function MatchupPage() {
         })}
       </nav>
     </div>
+  )
+}
+
+/**
+ * 可左右滑的大票根列。一進頁面就捲到選中的那張（例如從隊伍首頁點「vs 港都海風」進來），
+ * 之後點票根、點圓點或滑動都會切換選中的那場。
+ */
+function TicketRail({ tickets, activeIdx, rowOf, onSelect }: {
+  tickets: MySide[]
+  activeIdx: number
+  rowOf: (teamId: number | null) => StandingRow | undefined
+  onSelect: (i: number) => void
+}) {
+  const rail = useRef<HTMLDivElement>(null)
+  const programmatic = useRef(false)
+
+  useEffect(() => {
+    const el = rail.current
+    if (!el) return
+    programmatic.current = true
+    el.scrollTo({ left: activeIdx * TICKET_STEP, behavior: 'smooth' })
+    const t = setTimeout(() => { programmatic.current = false }, 450)
+    return () => clearTimeout(t)
+  }, [activeIdx])
+
+  const onScroll = () => {
+    const el = rail.current
+    if (!el || programmatic.current) return
+    const i = Math.round(el.scrollLeft / TICKET_STEP)
+    if (tickets[i] && i !== activeIdx) onSelect(i)
+  }
+
+  return (
+    <>
+      <div className="rail" ref={rail} onScroll={onScroll}>
+        {tickets.map((v, i) => (
+          <MatchTicket key={v.m.id} v={v} no={i + 1} size="lg" rec={recText(rowOf(v.oppId))}
+            active={i === activeIdx} onClick={() => onSelect(i)} />
+        ))}
+      </div>
+      {tickets.length > 1 && (
+        <div className="dots">
+          {tickets.map((v, i) => (
+            <button key={v.m.id} type="button" aria-label={`第 ${i + 1} 場`} aria-current={i === activeIdx} onClick={() => onSelect(i)} />
+          ))}
+        </div>
+      )}
+    </>
   )
 }
 
@@ -175,9 +200,7 @@ function PeriodHero({ tickets, focus, today, teamName, row }: {
     celebrate()
   }, [sweep, sweepKey])
 
-  const start = new Date(focus.start)
-  const len = Math.round((new Date(focus.end).getTime() - start.getTime()) / 86400000) + 1
-  const day = Math.min(len, Math.max(0, Math.round((new Date(today).getTime() - start.getTime()) / 86400000) + 1))
+  const { day, len } = periodDay(focus.start, focus.end, today)
   const locksAt = tickets.find((x) => x.m.status === 'PROVISIONAL')?.m.locksAt
   const dayLabel = allPending ? `${fmtDate(focus.start)} 開始`
     : allFinal ? (locksAt ? `DAY ${len} / ${len} · ${fmtDateTime(locksAt)} 確定` : `DAY ${len} / ${len} · 已確定`)
