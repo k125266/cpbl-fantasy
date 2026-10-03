@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type Matchup, type RosterPlayer, type RosterResponse, type SlotName, type StandingRow } from '../api'
-import { BottomSheet, ErrorBox, fmtDate, fmtTime, Loading, MatchTicket, MiniCard, TeamChip, TierAvatar, tierOf, toast, useLoad, weekday } from '../components'
+import { BottomSheet, ErrorBox, fmtDate, fmtTime, Loading, MatchTicket, MiniCard, TeamChip, TIER_LABEL, TierAvatar, tierOf, toast, useLoad, weekday } from '../components'
 import { fmtPts, myMatchups, periodDay, type MySide } from '../matchups'
 import { cpblTeam, fantasyTeamColor } from '../teams'
 
@@ -384,6 +384,49 @@ function canPlay(p: RosterPlayer, slot: SlotName) {
 
 const SLOT_OPTIONS: SlotName[] = ['IF', 'OF', 'UTIL', 'SP', 'RP', 'BN', 'NA']
 
+const HIT_COLS = ['H/AB', 'R', 'HR', 'RBI', 'SB', 'AVG']
+const PIT_COLS = ['IP', 'QS', 'K', 'SV+HLD', 'ERA', 'WHIP']
+
+/** 選單頂部：等級頭像與排名、可守位置、今日數據格，以及本期／本季的類別數據（更多到球員資料頁看）。 */
+function SheetHead({ player }: { player: RosterPlayer }) {
+  const x = lineInfo(player)
+  const cols = isPitcherRow(player) ? PIT_COLS : HIT_COLS
+  const rows: [string, Record<string, string>][] = player.period ? [['本期', player.period], ['本季', player.season]] : [['本季', player.season]]
+  const cell = (r: Record<string, string>, c: string) => (c === 'H/AB' ? `${r.H ?? 0}-${r.AB ?? 0}` : r[c] ?? '—')
+  const elig = player.eligible.filter((s) => s !== 'BN' && s !== 'NA')
+  return (
+    <>
+      <div className="shead">
+        <TierAvatar team={player.cpblTeam} number={player.jerseyNumber} tier={x.tier} size="lg" />
+        <div style={{ minWidth: 0 }}>
+          <div className="nm">
+            <b>{player.name}</b><TeamChip code={player.cpblTeam} />
+            {x.flag && <span className={`flag ${x.flag.bad ? 'bad' : ''}`}>{x.flag.text}</span>}
+          </div>
+          <div className={`rk ${x.tier}`}>{TIER_LABEL[x.tier]}{player.rank ? ` · 本季第 ${player.rank} 名` : ''}</div>
+          <div className="el">目前 {player.slot}・可守 {elig.length ? elig.join(' / ') : '—'}</div>
+        </div>
+      </div>
+      <div className="stoday">
+        <div className="meta">{x.live && <span className="ldot" />}<span>今日・{x.meta}</span></div>
+        <div className="pod">
+          {x.pod.map((c) => (
+            <div key={c.label}><small className={c.warn ? 'warn' : ''}>{c.label}</small><b className={c.cls ?? ''}>{c.val}</b></div>
+          ))}
+        </div>
+      </div>
+      <table className="stbl">
+        <thead><tr><th />{cols.map((c) => <th key={c}>{c}</th>)}</tr></thead>
+        <tbody>
+          {rows.map(([label, r]) => (
+            <tr key={label}><th>{label}</th>{cols.map((c) => <td key={c}>{cell(r, c)}</td>)}</tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  )
+}
+
 function MoveSheet({ player, data, mine, onClose, onDone }: {
   player: RosterPlayer
   data: RosterResponse
@@ -431,7 +474,7 @@ function MoveSheet({ player, data, mine, onClose, onDone }: {
 
   return (
     <BottomSheet onClose={onClose} label={`調整 ${player.name}`}>
-      <h3><TeamChip code={player.cpblTeam} />{player.name}<span className="ps">{player.eligible.join(',')}</span></h3>
+      <SheetHead player={player} />
       <ErrorBox error={error} />
       {mine && !target && !confirmDrop && (
         player.locked ? (

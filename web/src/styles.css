@@ -184,6 +184,20 @@ pre.mono { white-space: pre-wrap; font-size: 12px; margin: 0; }
 .slot-opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .slot-opts button { border-radius: 12px; padding: 10px 0; font-family: var(--font-num); font-weight: 800; font-size: 18px; }
 .slot-opts button small { display: block; font-family: var(--font-text); font-weight: 500; font-size: 11px; color: var(--muted); }
+.shead { display: flex; gap: 12px; align-items: center; }
+.shead .nm { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.shead .nm b { font-size: 18px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shead .rk { margin-top: 3px; font: 700 11px var(--font-mix); letter-spacing: .12em; color: var(--bronze); }
+.shead .rk.gold { color: var(--gold); }
+.shead .rk.silver { color: var(--silver); }
+.shead .el { margin-top: 2px; font-size: 12px; color: var(--muted); }
+.stoday { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.stoday .meta { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 12px; color: var(--muted); }
+.stoday .meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stbl { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.stbl th { font: 600 9.5px var(--font-mix); letter-spacing: .06em; color: var(--muted); text-align: right; padding: 0 2px 4px; white-space: nowrap; }
+.stbl tbody th { width: 34px; text-align: left; font: 500 11px var(--font-text); letter-spacing: 0; padding: 6px 0; border-top: 1px solid var(--line); }
+.stbl td { text-align: right; font: 700 16px var(--font-num); color: var(--text); padding: 6px 2px; border-top: 1px solid var(--line); white-space: nowrap; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .toast { position: fixed; left: 50%; bottom: calc(100px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--surface-3); border: 1px solid rgb(216 178 90 / .4); color: var(--gold-hi); padding: 8px 16px; border-radius: 999px; font-size: 13px; z-index: 60; max-width: calc(100vw - 32px); text-align: center; }
 
