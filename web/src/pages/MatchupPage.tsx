@@ -1,14 +1,8 @@
 import { useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useApp } from '../App'
-import { api, type CategoryResult, type Contribution, type Matchup } from '../api'
+import { api, type CategoryResult, type Contribution, type Matchup, type MatchupDetail } from '../api'
 import { celebrate, ErrorBox, fmtDate, fmtDateTime, Loading, MATCHUP_STATUS, PlayerLink, TeamChip, useLoad } from '../components'
-
-interface Detail {
-  matchup: Matchup
-  playersA?: Contribution[]
-  playersB?: Contribution[]
-}
 
 function periodLabel(m: Matchup) {
   return m.kind === 'FINAL' ? '總冠軍賽' : `${m.halfNo === 1 ? '上' : '下'}半季 第 ${m.periodNo} 期`
@@ -61,7 +55,7 @@ export default function MatchupPage() {
 
 function MatchupDetail({ id }: { id: number }) {
   const { leagueId, league } = useApp()
-  const { data, error, loading } = useLoad(() => api.get<Detail>(`/api/leagues/${leagueId}/matchups/${id}`), [leagueId, id])
+  const { data, error, loading } = useLoad(() => api.get<MatchupDetail>(`/api/leagues/${leagueId}/matchups/${id}`), [leagueId, id])
   const m = data?.matchup
   const me = league?.myTeamId
   const flip = m != null && m.teamB === me

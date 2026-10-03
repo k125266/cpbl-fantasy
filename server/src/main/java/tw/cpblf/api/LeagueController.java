@@ -19,6 +19,7 @@ import tw.cpblf.auth.CurrentUser;
 import tw.cpblf.common.ApiException;
 import tw.cpblf.config.AppClock;
 import tw.cpblf.config.AppProperties;
+import tw.cpblf.draft.PlayerRankingService;
 import tw.cpblf.league.League;
 import tw.cpblf.league.LeagueService;
 import tw.cpblf.league.NotificationService;
@@ -37,9 +38,11 @@ public class LeagueController {
     private final NotificationService notifications;
     private final AppClock clock;
     private final AppProperties props;
+    private final PlayerRankingService ranking;
 
     public LeagueController(LeagueService leagues, SeasonService season, MatchupService matchups, ScoringService scoring,
-                            NotificationService notifications, AppClock clock, AppProperties props) {
+                            NotificationService notifications, AppClock clock, AppProperties props,
+                            PlayerRankingService ranking) {
         this.leagues = leagues;
         this.season = season;
         this.matchups = matchups;
@@ -47,6 +50,7 @@ public class LeagueController {
         this.notifications = notifications;
         this.clock = clock;
         this.props = props;
+        this.ranking = ranking;
     }
 
     /** 公開：系統時鐘與模式（前端顯示 demo 標示用）。 */
@@ -151,8 +155,20 @@ public class LeagueController {
         out.put("matchup", m);
         LocalDate to = m.end().isAfter(clock.today()) ? clock.today() : m.end();
         if (m.teamA() != null && m.teamB() != null) {
-            out.put("playersA", scoring.contributions(m.teamA(), m.start(), to));
-            out.put("playersB", scoring.contributions(m.teamB(), m.start(), to));
+            var playersA = scoring.contributions(m.teamA(), m.start(), to);
+            var playersB = scoring.contributions(m.teamB(), m.start(), to);
+            out.put("playersA", playersA);
+            out.put("playersB", playersB);
+            // 本季排名：球員卡金銀銅框用
+            var all = ranking.rankings();
+            Map<Long, Integer> ranks = new LinkedHashMap<>();
+            for (var p : java.util.stream.Stream.concat(playersA.stream(), playersB.stream()).toList()) {
+                var r = all.get(p.playerId());
+                if (r != null) {
+                    ranks.put(p.playerId(), r.rank());
+                }
+            }
+            out.put("ranks", ranks);
         }
         return out;
     }

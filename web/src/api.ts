@@ -182,8 +182,17 @@ export interface Contribution {
   playerId: number
   name: string
   cpblTeam: string
+  jerseyNumber: string | null
   slots: string
   totals: StatTotals
+}
+
+export interface MatchupDetail {
+  matchup: Matchup
+  playersA?: Contribution[]
+  playersB?: Contribution[]
+  /** playerId → 本季排名（球員卡金銀銅框用） */
+  ranks?: Record<string, number>
 }
 
 export interface TodayGame {
