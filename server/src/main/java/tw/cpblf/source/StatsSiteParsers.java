@@ -101,9 +101,16 @@ public final class StatsSiteParsers {
         return new SourcePlayer(cpblPlayerId, name, team, normalizePosition(position), foreign, jersey);
     }
 
-    /** 原名含拉丁字母（例：Steven MOYA、OTAKI Kouji）即為外籍球員；本土球員原名為中文。 */
+    /** 全大寫的拉丁字母單字（姓氏），例：Steven MOYA 的 MOYA、OTAKI Kouji 的 OTAKI。 */
+    private static final Pattern UPPERCASE_SURNAME = Pattern.compile("\\b[A-Z]{2,}\\b");
+
+    /**
+     * 外籍球員的原名以全大寫寫出姓氏（Mario SANCHEZ、SUZUKI Shunsuke）。
+     * 原住民族球員的原名是族名拼音（Ma Yaw Ciru、Namoh．Iyang），本土球員也可能是中文名拼音（Yu Cheng-Yi），
+     * 都沒有全大寫單字，所以不能只看「有沒有英文字母」。極少數例外（例：以本土身分登錄的外籍血統球員）需人工修正。
+     */
     static boolean isForeignOriginalName(String originalName) {
-        return originalName.chars().anyMatch(c -> (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'));
+        return UPPERCASE_SURNAME.matcher(originalName).find();
     }
 
     /** 網站守位（投手、捕手、一壘手…左外野手）轉為登錄位置 P / C / IF / OF。 */

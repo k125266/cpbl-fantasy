@@ -75,6 +75,20 @@ class StatsSiteParsersTest {
         assertThat(yin.foreign()).isFalse();
     }
 
+    /** 2026-10-04 實際同步 517 人時，原本「有英文字母就是洋將」的規則把原住民族球員誤判為洋將。 */
+    @Test
+    void indigenousRomanizedNamesAreNotForeign() {
+        assertThat(StatsSiteParsers.isForeignOriginalName("Ma Yaw Ciru")).isFalse();
+        assertThat(StatsSiteParsers.isForeignOriginalName("Haro Ngayaw")).isFalse();
+        assertThat(StatsSiteParsers.isForeignOriginalName("Namoh．Iyang（朱祥麟）")).isFalse();
+        assertThat(StatsSiteParsers.isForeignOriginalName("Masegesege ‧Abalrini/瑪仕革斯．俄霸律尼")).isFalse();
+        assertThat(StatsSiteParsers.isForeignOriginalName("Yu Cheng-Yi")).isFalse();
+        assertThat(StatsSiteParsers.isForeignOriginalName("尹柏淮")).isFalse();
+        assertThat(StatsSiteParsers.isForeignOriginalName("Mario SANCHEZ")).isTrue();
+        assertThat(StatsSiteParsers.isForeignOriginalName("SUZUKI Shunsuke")).isTrue();
+        assertThat(StatsSiteParsers.isForeignOriginalName("OTAKI Kouji")).isTrue();
+    }
+
     @Test
     void positionsMapToListedPositions() {
         assertThat(StatsSiteParsers.normalizePosition("游擊手")).isEqualTo("IF");
