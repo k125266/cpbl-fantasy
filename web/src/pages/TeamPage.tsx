@@ -476,7 +476,9 @@ function MoveSheet({ player, data, mine, onClose, onDone }: {
   const [confirmDrop, setConfirmDrop] = useState(false)
   const [error, setError] = useState<unknown>(null)
 
-  const allowed = (s: SlotName) => s !== player.slot && canPlay(player, s)
+  const isFull = (s: SlotName) => data.players.filter((p) => p.slot === s).length >= (data.slotCounts[s] ?? 0)
+  // 副標順序同設計稿：無資格 → 二軍名額 → 已滿・交換 → 板凳 → 可移入
+  const subOf = (s: SlotName) => !canPlay(player, s) ? '無資格' : s === 'NA' ? '二軍名額' : isFull(s) ? '已滿・交換' : s === 'BN' ? '板凳' : '可移入'
 
   const move = async (moves: { playerId: number; slot: SlotName }[]) => {
     setError(null)
@@ -490,8 +492,7 @@ function MoveSheet({ player, data, mine, onClose, onDone }: {
   }
 
   const choose = (s: SlotName) => {
-    const occupants = data.players.filter((p) => p.slot === s)
-    if (occupants.length < (data.slotCounts[s] ?? 0)) {
+    if (!isFull(s)) {
       move([{ playerId: player.playerId, slot: s }])
     } else {
       setTarget(s)
@@ -512,53 +513,55 @@ function MoveSheet({ player, data, mine, onClose, onDone }: {
     <BottomSheet onClose={onClose} label={`調整 ${player.name}`}>
       <SheetHead player={player} />
       <ErrorBox error={error} />
+      {mine && player.locked && !confirmDrop && (
+        // 鎖定的球員維持今日不能調整（不做次日生效排程）
+        <div className="mv-lock"><span className="flag">已鎖定</span>比賽已開打，今日無法調整</div>
+      )}
       {mine && !target && !confirmDrop && (
-        player.locked ? (
-          <p className="ps" style={{ margin: 0 }}>今日比賽已開打，位置已鎖定，明天才能調整。</p>
-        ) : (
-          <>
-            <p className="ps" style={{ margin: 0 }}>目前在 {player.slot}，移到：</p>
-            <div className="slot-opts">
-              {SLOT_OPTIONS.filter((s) => s !== player.slot && (s !== 'NA' || player.status.code === 'MINORS')).map((s) => (
-                <button key={s} type="button" disabled={!allowed(s)} onClick={() => choose(s)}>
-                  {s}<small>{s === 'BN' ? '板凳' : s === 'NA' ? '二軍名額' : allowed(s) ? '可移入' : '無資格'}</small>
-                </button>
-              ))}
-            </div>
-          </>
-        )
+        <>
+          <div className="mv-cap">目前在 <b>{player.slot}</b>，移到</div>
+          <div className="slot-opts">
+            {SLOT_OPTIONS.filter((s) => s !== player.slot && (s !== 'NA' || player.status.code === 'MINORS')).map((s) => (
+              <button key={s} type="button" disabled={player.locked || !canPlay(player, s)} onClick={() => choose(s)}>
+                {s}<small>{subOf(s)}</small>
+              </button>
+            ))}
+          </div>
+        </>
       )}
       {target && (
         <>
-          <p className="ps" style={{ margin: 0 }}>{target} 已滿，選一位交換到 {player.slot}：</p>
-          {data.players.filter((p) => p.slot === target).map((p) => {
-            const fits = canPlay(p, player.slot)
-            return (
-              <button key={p.playerId} type="button" className="btn-block" disabled={p.locked || !fits}
-                onClick={() => move([{ playerId: player.playerId, slot: target }, { playerId: p.playerId, slot: player.slot }])}>
-                {p.name}{p.locked ? '（已鎖定）' : !fits ? `（無 ${player.slot} 資格）` : ''}
-              </button>
-            )
-          })}
-          <button type="button" className="btn-block" onClick={() => setTarget(null)}>返回</button>
+          <div className="mv-cap">{target} 已滿，選一位交換到 {player.slot}</div>
+          <div className="mv-swap">
+            {data.players.filter((p) => p.slot === target).map((p) => {
+              const fits = canPlay(p, player.slot)
+              return (
+                <button key={p.playerId} type="button" disabled={p.locked || !fits}
+                  onClick={() => move([{ playerId: player.playerId, slot: target }, { playerId: p.playerId, slot: player.slot }])}>
+                  <span>{p.name}</span><small>{!fits ? `無 ${player.slot} 資格` : p.locked ? '已鎖定' : '立即交換'}</small>
+                </button>
+              )
+            })}
+          </div>
+          <button type="button" className="mvbtn" onClick={() => setTarget(null)}>返回</button>
         </>
       )}
       {confirmDrop ? (
         <>
-          <p className="ps" style={{ margin: 0 }}>確定釋出 {player.name}？釋出後進入 waiver 期，其他隊伍可以出價。</p>
-          <div className="row2">
-            <button type="button" className="danger" onClick={drop}>確定釋出</button>
-            <button type="button" onClick={() => setConfirmDrop(false)}>取消</button>
+          <div className="mv-drop">確定釋出 <b>{player.name}</b>？釋出後進入 waiver 期，其他隊伍可以用 FAAB 出價。</div>
+          <div className="mv-2">
+            <button type="button" className="mvbtn red" onClick={drop}>確定釋出</button>
+            <button type="button" className="mvbtn" onClick={() => setConfirmDrop(false)}>取消</button>
           </div>
         </>
       ) : !target && (
-        <>
-          <button type="button" className="primary btn-block" onClick={() => navigate(`/players/${player.playerId}`)}>查看球員資料</button>
-          <div className="row2">
-            {mine ? <button type="button" className="danger" onClick={() => setConfirmDrop(true)}>釋出</button> : <span />}
-            <button type="button" onClick={onClose}>關閉</button>
+        <div className="mv-acts">
+          <button type="button" className="mvbtn gold" onClick={() => navigate(`/players/${player.playerId}`)}>查看球員資料</button>
+          <div className="mv-2">
+            {mine ? <button type="button" className="mvbtn bad" onClick={() => setConfirmDrop(true)}>釋出</button> : <span />}
+            <button type="button" className="mvbtn" onClick={onClose}>關閉</button>
           </div>
-        </>
+        </div>
       )}
     </BottomSheet>
   )

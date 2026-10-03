@@ -177,9 +177,29 @@ pre.mono { white-space: pre-wrap; font-size: 12px; margin: 0; }
 .sheet { background: var(--surface); border-top: 1px solid var(--line); border-radius: 20px 20px 0 0; padding: 16px 16px calc(20px + env(safe-area-inset-bottom, 0px)); max-width: 480px; width: 100%; margin: 0 auto; display: grid; gap: 12px; animation: up .25s ease-out; max-height: 85vh; overflow-y: auto; }
 @keyframes up { from { transform: translateY(40px); opacity: 0; } }
 .sheet h3 { margin: 0; font-size: 17px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.slot-opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.slot-opts button { border-radius: 12px; padding: 10px 0; font-family: var(--font-num); font-weight: 800; font-size: 18px; }
-.slot-opts button small { display: block; font-family: var(--font-text); font-weight: 500; font-size: 11px; color: var(--muted); }
+/* 隊伍首頁的球員選單（設計稿 v6）：方角細框按鈕 */
+.slot-opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: -4px; }
+.slot-opts button { border-radius: 6px; padding: 10px 0; background: transparent; font: 700 18px/1.2 var(--font-num); transition: background .15s; }
+.slot-opts button small { display: block; margin-top: 1px; font: 400 10.5px var(--font-text); color: var(--muted); }
+.slot-opts button:disabled { opacity: .35; }
+.slot-opts button:not(:disabled):hover, .mvbtn:hover, .mv-swap button:not(:disabled):hover { background: var(--surface-2); }
+.mv-cap { font-size: 12px; color: var(--muted); }
+.mv-cap b { font: 600 14px var(--font-num); color: var(--text); }
+.mv-lock { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); }
+.mv-swap { display: flex; flex-direction: column; gap: 6px; margin-top: -4px; }
+.mv-swap button { display: flex; justify-content: space-between; align-items: center; padding: 11px 14px; border-radius: 6px; background: transparent; font-size: 13.5px; font-weight: 400; }
+.mv-swap button small { font-size: 11.5px; color: var(--muted); }
+.mv-swap button:disabled { opacity: .35; }
+.mv-acts { display: flex; flex-direction: column; gap: 8px; }
+.mv-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.mvbtn { width: 100%; padding: 10px; border-radius: 6px; background: transparent; font-size: 13.5px; font-weight: 400; }
+.mvbtn.gold { padding: 11px; border-color: rgb(216 178 90 / .55); color: var(--gold-hi); font-weight: 500; }
+.mvbtn.gold:hover { background: rgb(216 178 90 / .06); }
+.mvbtn.bad { color: var(--bad); }
+.mvbtn.red { color: var(--bad); border-color: rgb(255 107 107 / .45); }
+.mvbtn.red:hover { background: rgb(255 107 107 / .06); }
+.mv-drop { font-size: 13px; line-height: 1.7; color: var(--muted); }
+.mv-drop b { font-weight: 400; color: var(--text); }
 /* ALERT 提醒列（隊伍首頁）：滿版紅色列＋跑馬燈，點擊展開 */
 @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 /* min-width: 0：不讓跑馬燈的 max-content 寬度撐開 .stack 的 grid 欄 */
