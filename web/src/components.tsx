@@ -148,8 +148,8 @@ export function MiniCard({ name, team, number, slot, tier, line, back, backLabel
 
 const RES_CLASS: Record<Res, string> = { W: 'w', L: 'l', T: 't' }
 /** 計分類別固定順序（同後端 Category） */
-export const CATEGORY_ORDER = ['R', 'HR', 'RBI', 'SB', 'AVG', 'QS', 'K', 'SV+HLD', 'ERA', 'WHIP']
-const CATEGORY_SHORT: Record<string, string> = { 'SV+HLD': 'SVH' }
+export const CATEGORY_ORDER = ['R', 'HR', 'H', 'BB', 'AVG', 'QS', 'K', 'W+SV', 'ERA', 'WHIP']
+const CATEGORY_SHORT: Record<string, string> = { 'W+SV': 'WSV' }
 
 /** 結果章：結束後為勝／敗／和，進行中為領先／落後／平手。 */
 export function Stamp({ result, final, size, text }: { result: Res; final: boolean; size: 'lg' | 'sm'; text?: string }) {

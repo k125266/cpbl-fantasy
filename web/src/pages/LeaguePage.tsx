@@ -128,7 +128,7 @@ export default function LeaguePage() {
             儲存設定
           </button>
         )}
-        <p className="small muted">名單結構：IF 4 / OF 3 / UTIL 1 / SP 4 / RP 2 / 板凳 6 / NA {l.slotsNa}。計分 5x5：R、HR、RBI、SB、AVG／QS、K、SV+HLD、ERA、WHIP。</p>
+        <p className="small muted">名單結構：IF 4 / OF 3 / UTIL 1 / SP 4 / RP 2 / 板凳 6 / NA {l.slotsNa}。計分 5x5：R、HR、H、BB、AVG／QS、K、W+SV、ERA、WHIP。</p>
       </div>
     </>
   )

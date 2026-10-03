@@ -29,6 +29,9 @@
 
 ## 計分
 
+- **10 個類別**（修訂草案見 `rulebook-amendment-categories.md`）：R、HR、H、BB、AVG ／ QS、K、W+SV、ERA、WHIP。
+  - 資料源（中職進階數據網站）沒有打點、盜壘、中繼，所以 H、BB、W+SV 取代 RBI、SB、SV+HLD。
+  - `game_stat` 的 `rbi`、`sb`、`hld` 欄位保留但不計分。
 - **任一方某類別無數據**（AB = 0 或 outs = 0）：雙方各得 0.5 分。
   - 規則書寫「不判定為敗」。有數據的一方也不算勝，避免「完全不排投手」拿到 ERA／WHIP 分數。
 - **QS** 依規則書公式，不檢查是否為先發。實務上後援投不到 6 局，結果相同。

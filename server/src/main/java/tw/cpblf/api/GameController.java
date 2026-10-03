@@ -56,8 +56,8 @@ public class GameController {
         out.put("games", games(today.toString()));
         List<Map<String, Object>> lines = new ArrayList<>(jdbc.sql("""
                 select t.id as team_id, t.abbr, re.slot, p.id as player_id, p.name, p.cpbl_team_code,
-                       ls.pa, ls.ab, ls.h, ls.hr, ls.r, ls.rbi, ls.sb, ls.bb,
-                       ls.pitched, ls.outs, ls.p_h, ls.p_bb, ls.p_er, ls.p_k, ls.fetched_at
+                       ls.pa, ls.ab, ls.h, ls.hr, ls.r, ls.bb,
+                       ls.pitched, ls.outs, ls.p_h, ls.p_bb, ls.p_er, ls.p_k, ls.sv, ls.w, ls.fetched_at
                 from live_game_stat ls
                 join game g on g.id = ls.game_id and g.play_date = ?
                 join player p on p.id = ls.player_id

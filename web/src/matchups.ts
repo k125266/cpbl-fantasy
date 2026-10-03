@@ -85,12 +85,12 @@ function ip(outs: number) {
 
 /**
  * 本期貢獻分（只用來挑關鍵卡，不影響計分）：
- * 打者 R + 2·HR + RBI + 1.5·SB + H；投手 IP + K + 3·QS + 2·(SV+HLD) − 2·ER。
+ * 打者 R + 2·HR + H + BB；投手 IP + K + 3·QS + 2·(W+SV) − 2·ER。
  */
 export function contributionScore(c: Contribution): number {
   const t = c.totals
-  if (isPitcher(c)) return t.outs / 3 + t.k + 3 * t.qs + 2 * (t.sv + t.hld) - 2 * t.er
-  return t.r + 2 * t.hr + t.rbi + 1.5 * t.sb + t.h
+  if (isPitcher(c)) return t.outs / 3 + t.k + 3 * t.qs + 2 * (t.w + t.sv) - 2 * t.er
+  return t.r + 2 * t.hr + t.h + t.bb
 }
 
 /** 依貢獻分取前 n 位（分數須大於 0）。 */
@@ -109,20 +109,20 @@ export function cardStats(c: Contribution): { slot: string; line: string; back: 
   const slot = c.slots.split(',').find((s) => s !== 'BN' && s !== 'NA') ?? c.slots.split(',')[0] ?? ''
   if (isPitcher(c)) {
     const era = t.outs ? ((t.er * 27) / t.outs).toFixed(2) : '—'
-    const svh = t.sv + t.hld
-    const parts = [t.qs ? `${t.qs} QS` : '', t.k ? `${t.k} K` : '', svh ? `${svh} SV+H` : ''].filter(Boolean).slice(0, 2)
+    const wsv = t.w + t.sv
+    const parts = [t.qs ? `${t.qs} QS` : '', t.k ? `${t.k} K` : '', wsv ? `${wsv} W+SV` : ''].filter(Boolean).slice(0, 2)
     return {
       slot,
       line: parts.join(' · ') || `${ip(t.outs)} IP`,
-      back: [['IP', ip(t.outs)], ['K', String(t.k)], ['ERA', era], slot === 'RP' ? ['SV+H', String(svh)] : ['QS', String(t.qs)]],
+      back: [['IP', ip(t.outs)], ['K', String(t.k)], ['ERA', era], slot === 'RP' ? ['W+SV', String(wsv)] : ['QS', String(t.qs)]],
     }
   }
   const avg = t.ab ? (t.h / t.ab).toFixed(3).replace(/^0/, '') : '—'
-  const parts = [t.hr ? `${t.hr} HR` : '', t.rbi ? `${t.rbi} RBI` : '', t.sb ? `${t.sb} SB` : '', t.r ? `${t.r} R` : ''].filter(Boolean).slice(0, 2)
+  const parts = [t.hr ? `${t.hr} HR` : '', t.r ? `${t.r} R` : '', t.bb ? `${t.bb} BB` : ''].filter(Boolean).slice(0, 2)
   return {
     slot,
     line: parts.join(' · ') || `${avg} · ${t.h}-${t.ab}`,
-    back: [['H/AB', `${t.h}-${t.ab}`], ['HR', String(t.hr)], ['RBI', String(t.rbi)], t.sb ? ['SB', String(t.sb)] : ['R', String(t.r)]],
+    back: [['H/AB', `${t.h}-${t.ab}`], ['HR', String(t.hr)], ['R', String(t.r)], ['BB', String(t.bb)]],
   }
 }
 

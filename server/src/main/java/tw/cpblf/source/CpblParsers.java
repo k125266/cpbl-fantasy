@@ -119,7 +119,9 @@ public final class CpblParsers {
                     IpConverter.outs(num(p, "InningPitchedCnt"), num(p, "InningPitchedDiv3Cnt")),
                     num(p, "HittingCnt"), num(p, "BasesONBallsCnt"), num(p, "EarnedRunCnt"), num(p, "StrikeOutCnt"),
                     num(p, "SaveOK") > 0 ? 1 : 0,
-                    num(p, "ReliefPointCnt") > 0 ? 1 : 0));
+                    num(p, "ReliefPointCnt") > 0 ? 1 : 0,
+                    // 官網 box score 的勝投欄位未驗證，暫不讀取
+                    0));
         }
         int homeRuns = batters.values().stream().filter(BatterLine::home).mapToInt(BatterLine::r).sum();
         int awayRuns = batters.values().stream().filter(b -> !b.home()).mapToInt(BatterLine::r).sum();

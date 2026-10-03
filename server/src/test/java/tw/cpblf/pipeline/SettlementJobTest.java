@@ -50,7 +50,7 @@ class SettlementJobTest extends IntegrationTest {
     BoxScore box(int hits) {
         return new BoxScore(GameStatus.FINAL, null, 1, 0,
                 List.of(new BatterLine("P1", "打者甲", true, "SS", 4, 4, 1, hits, 1, 1, 0, 0)),
-                List.of(new PitcherLine("P2", "投手乙", false, true, 19, 7, 2, 3, 6, 0, 0)));
+                List.of(new PitcherLine("P2", "投手乙", false, true, 19, 7, 2, 3, 6, 0, 0, 0)));
     }
 
     SettlementJob.GameResult apply(BoxScore b) {

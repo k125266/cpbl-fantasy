@@ -102,8 +102,8 @@ public class PlayerViews {
     }
 
     /** 今日數據（隊伍首頁數據格用）：pitched 為 true 時看投球欄位，否則看打擊欄位。 */
-    public record TodayStats(boolean pitched, int ab, int h, int hr, int rbi, int r, int sb, int outs, int er, int k,
-                             int sv, int hld) {
+    public record TodayStats(boolean pitched, int ab, int h, int hr, int bb, int r, int outs, int er, int k,
+                             int sv, int w) {
     }
 
     public Map<Long, TodayLine> todayLines(Collection<Long> ids, LocalDate date) {
@@ -111,7 +111,7 @@ public class PlayerViews {
         if (ids.isEmpty()) {
             return out;
         }
-        String cols = "player_id, batted, pa, ab, h, hr, rbi, r, sb, bb, pitched, outs, p_er, p_k, sv, hld";
+        String cols = "player_id, batted, pa, ab, h, hr, r, bb, pitched, outs, p_er, p_k, sv, w";
         for (String table : new String[]{"game_stat", "live_game_stat"}) {
             boolean live = table.startsWith("live");
             jdbc.sql("select s." + cols.replace(", ", ", s.") + " from " + table + " s join game g on g.id = s.game_id"
@@ -123,20 +123,18 @@ public class PlayerViews {
                             int outs = rs.getInt("outs");
                             sb.append(outs / 3).append('.').append(outs % 3).append(" 局 ").append(rs.getInt("p_er")).append(" 責 ")
                                     .append(rs.getInt("p_k")).append(" K");
+                            if (rs.getInt("w") > 0) sb.append("・W");
                             if (rs.getInt("sv") > 0) sb.append("・SV");
-                            if (rs.getInt("hld") > 0) sb.append("・HLD");
                         } else if (rs.getBoolean("batted") && rs.getInt("pa") > 0) {
                             sb.append(rs.getInt("h")).append("/").append(rs.getInt("ab")).append(" H/AB");
                             if (rs.getInt("hr") > 0) sb.append(", ").append(rs.getInt("hr") > 1 ? rs.getInt("hr") + " " : "").append("HR");
-                            if (rs.getInt("rbi") > 0) sb.append(", ").append(rs.getInt("rbi")).append(" RBI");
                             if (rs.getInt("r") > 0) sb.append(", ").append(rs.getInt("r")).append(" R");
-                            if (rs.getInt("sb") > 0) sb.append(", ").append(rs.getInt("sb")).append(" SB");
-                            if (rs.getInt("bb") > 0) sb.append(", BB");
+                            if (rs.getInt("bb") > 0) sb.append(", ").append(rs.getInt("bb") > 1 ? rs.getInt("bb") + " " : "").append("BB");
                         }
                         if (!sb.isEmpty()) {
                             TodayStats stats = new TodayStats(rs.getBoolean("pitched"), rs.getInt("ab"), rs.getInt("h"),
-                                    rs.getInt("hr"), rs.getInt("rbi"), rs.getInt("r"), rs.getInt("sb"), rs.getInt("outs"),
-                                    rs.getInt("p_er"), rs.getInt("p_k"), rs.getInt("sv"), rs.getInt("hld"));
+                                    rs.getInt("hr"), rs.getInt("bb"), rs.getInt("r"), rs.getInt("outs"),
+                                    rs.getInt("p_er"), rs.getInt("p_k"), rs.getInt("sv"), rs.getInt("w"));
                             out.putIfAbsent(rs.getLong("player_id"), new TodayLine(sb.toString(), live, stats));
                         }
                         return null;

@@ -145,7 +145,7 @@ public class SettlementJob {
         for (Long pid : existing.keySet()) {
             if (!incoming.containsKey(pid)) {
                 StatRow old = existing.get(pid);
-                incoming.put(pid, new StatRow(old.teamCode(), false, "", 0, 0, 0, 0, 0, 0, 0, 0, false, false, 0, 0, 0, 0, 0, 0, 0));
+                incoming.put(pid, new StatRow(old.teamCode(), false, "", 0, 0, 0, 0, 0, 0, 0, 0, false, false, 0, 0, 0, 0, 0, 0, 0, 0));
             }
         }
 
@@ -190,21 +190,21 @@ public class SettlementJob {
     private void insert(long gameId, long playerId, StatRow s, Instant now) {
         jdbc.sql("""
                 insert into game_stat (game_id, player_id, team_code, batted, positions, pa, ab, r, h, hr, rbi, sb, bb,
-                                       pitched, started, outs, p_h, p_bb, p_er, p_k, sv, hld, revision, created_at, updated_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                                       pitched, started, outs, p_h, p_bb, p_er, p_k, sv, hld, w, revision, created_at, updated_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
                 """).params(gameId, playerId, s.teamCode(), s.batted(), s.positions(), s.pa(), s.ab(), s.r(), s.h(), s.hr(),
                 s.rbi(), s.sb(), s.bb(), s.pitched(), s.started(), s.outs(), s.pH(), s.pBb(), s.pEr(), s.pK(), s.sv(), s.hld(),
-                Timestamp.from(now), Timestamp.from(now)).update();
+                s.w(), Timestamp.from(now), Timestamp.from(now)).update();
     }
 
     private void update(long gameId, long playerId, StatRow s, int revision, Instant now) {
         jdbc.sql("""
                 update game_stat set batted = ?, positions = ?, pa = ?, ab = ?, r = ?, h = ?, hr = ?, rbi = ?, sb = ?, bb = ?,
-                       pitched = ?, started = ?, outs = ?, p_h = ?, p_bb = ?, p_er = ?, p_k = ?, sv = ?, hld = ?,
+                       pitched = ?, started = ?, outs = ?, p_h = ?, p_bb = ?, p_er = ?, p_k = ?, sv = ?, hld = ?, w = ?,
                        revision = ?, is_final = false, updated_at = ?
                 where game_id = ? and player_id = ?
                 """).params(s.batted(), s.positions(), s.pa(), s.ab(), s.r(), s.h(), s.hr(), s.rbi(), s.sb(), s.bb(),
-                s.pitched(), s.started(), s.outs(), s.pH(), s.pBb(), s.pEr(), s.pK(), s.sv(), s.hld(), revision,
+                s.pitched(), s.started(), s.outs(), s.pH(), s.pBb(), s.pEr(), s.pK(), s.sv(), s.hld(), s.w(), revision,
                 Timestamp.from(now), gameId, playerId).update();
     }
 

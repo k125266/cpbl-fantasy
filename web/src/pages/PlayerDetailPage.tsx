@@ -6,8 +6,8 @@ import { Avatar, ErrorBox, FeedRow, fmtDate, Loading, TeamChip, tierOf, toast, u
 import { cpblTeam } from '../teams'
 import { AcquireSheet } from './PlayersPage'
 
-const HIT_TILES = ['AVG', 'HR', 'RBI', 'R', 'SB']
-const PIT_TILES = ['ERA', 'WHIP', 'K', 'QS', 'SV+HLD']
+const HIT_TILES = ['AVG', 'HR', 'H', 'R', 'BB']
+const PIT_TILES = ['ERA', 'WHIP', 'K', 'QS', 'W+SV']
 const RANGES: ['season' | '14d' | '7d', string][] = [['season', '本季'], ['14d', '近 14 天'], ['7d', '近 7 天']]
 
 export default function PlayerDetailPage() {
@@ -110,7 +110,7 @@ export default function PlayerDetailPage() {
             <thead>
               <tr><th>日期</th><th>對手</th>{pit
                 ? <><th className="num">局數</th><th className="num">自責</th><th className="num">三振</th><th>結果</th></>
-                : <><th>守位</th><th className="num">H/AB</th><th className="num">HR</th><th className="num">RBI</th><th className="num">SB</th></>}</tr>
+                : <><th>守位</th><th className="num">H/AB</th><th className="num">HR</th><th className="num">R</th><th className="num">BB</th></>}</tr>
             </thead>
             <tbody>
               {data.gameLog.slice(0, 8).map((g, i) => (
@@ -121,13 +121,13 @@ export default function PlayerDetailPage() {
                     <>
                       <td className="num">{Math.floor(Number(g.outs) / 3)}.{Number(g.outs) % 3}</td>
                       <td className="num">{String(g.p_er)}</td><td className="num">{String(g.p_k)}</td>
-                      <td className="small">{g.started ? '先發' : ''}{Number(g.sv) > 0 ? ' SV' : Number(g.hld) > 0 ? ' HLD' : ''}</td>
+                      <td className="small">{g.started ? '先發' : ''}{Number(g.w) > 0 ? ' W' : ''}{Number(g.sv) > 0 ? ' SV' : ''}</td>
                     </>
                   ) : (
                     <>
                       <td className="small">{String(g.positions || '代')}</td>
                       <td className="num">{String(g.h)}/{String(g.ab)}</td><td className="num">{String(g.hr)}</td>
-                      <td className="num">{String(g.rbi)}</td><td className="num">{String(g.sb)}</td>
+                      <td className="num">{String(g.r)}</td><td className="num">{String(g.bb)}</td>
                     </>
                   )}
                 </tr>

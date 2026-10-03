@@ -59,7 +59,7 @@ function lineInfo(p: RosterPlayer) {
     if (ts?.pitched) {
       const ip = `${Math.floor(ts.outs / 3)}.${ts.outs % 3}`
       pod = [{ label: 'IP', val: ip, cls: 'hi' }, { label: 'ER', val: ts.er, cls: n(ts.er) }, { label: 'K', val: ts.k, cls: n(ts.k) }]
-      short = `${ip}IP ${ts.k}K`
+      short = `${ip}IP ${ts.k}K` + (ts.w ? ' W' : ts.sv ? ' SV' : '')
     } else {
       pod = [{ label: '今日', val: '—', cls: 'dim' }, season]
       short = g && g.status !== 'SCHEDULED' ? '未登板' : '—'
@@ -68,9 +68,9 @@ function lineInfo(p: RosterPlayer) {
     pod = [
       { label: 'H/AB', val: `${ts.h}-${ts.ab}`, cls: ts.h ? 'hi' : undefined },
       { label: 'HR', val: ts.hr, cls: n(ts.hr, 'gold') },
-      ts.sb && !ts.rbi ? { label: 'SB', val: ts.sb, cls: 'hi' } : { label: 'RBI', val: ts.rbi, cls: n(ts.rbi) },
+      { label: 'BB', val: ts.bb, cls: n(ts.bb) },
     ]
-    short = `${ts.h}-${ts.ab}` + (ts.hr ? ' HR' : ts.rbi ? ` ${ts.rbi}RBI` : '')
+    short = `${ts.h}-${ts.ab}` + (ts.hr ? ' HR' : ts.bb ? ` ${ts.bb}BB` : '')
   } else {
     pod = [season]
   }
@@ -422,8 +422,8 @@ function canPlay(p: RosterPlayer, slot: SlotName) {
 
 const SLOT_OPTIONS: SlotName[] = ['IF', 'OF', 'UTIL', 'SP', 'RP', 'BN', 'NA']
 
-const HIT_COLS = ['H/AB', 'R', 'HR', 'RBI', 'SB', 'AVG']
-const PIT_COLS = ['IP', 'QS', 'K', 'SV+HLD', 'ERA', 'WHIP']
+const HIT_COLS = ['H/AB', 'R', 'HR', 'BB', 'AVG']
+const PIT_COLS = ['IP', 'QS', 'K', 'W+SV', 'ERA', 'WHIP']
 
 /** 選單頂部：等級頭像與排名、可守位置、今日數據格，以及本期／本季的類別數據（更多到球員資料頁看）。 */
 function SheetHead({ player }: { player: RosterPlayer }) {

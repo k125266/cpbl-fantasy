@@ -166,15 +166,15 @@ export interface StatTotals {
   h: number
   r: number
   hr: number
-  rbi: number
-  sb: number
+  /** 打者保送（投手被保送為 pBb） */
+  bb: number
   outs: number
   er: number
   pH: number
   pBb: number
   k: number
   sv: number
-  hld: number
+  w: number
   qs: number
 }
 
@@ -213,14 +213,13 @@ export interface TodayStats {
   ab: number
   h: number
   hr: number
-  rbi: number
+  bb: number
   r: number
-  sb: number
   outs: number
   er: number
   k: number
   sv: number
-  hld: number
+  w: number
 }
 
 export interface TodayLine {
