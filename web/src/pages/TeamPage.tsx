@@ -124,7 +124,7 @@ export default function TeamPage() {
   const tickets = myMatchups(matchups.data ?? [], data.period?.id, id)
 
   const starters = data.players.filter((p) => !['BN', 'NA'].includes(p.slot))
-  const problems = starters.filter((p) => p.status.code !== 'ACTIVE' || p.game?.status === 'POSTPONED')
+  const alerts = alertsOf(starters)
   const reload = () => {
     roster.reload()
     reloadLeague()
@@ -135,6 +135,8 @@ export default function TeamPage() {
       <TeamHero teamId={id} name={data.teamName} abbr={team?.abbr ?? ''} owner={team?.owner ?? ''} mine={mine} halfNo={halfNo}
         rows={halfRows} tickets={tickets} today={data.today} teamIds={(league?.teams ?? []).map((t) => t.id)} />
 
+      {mine && alerts.length > 0 && <AlertBar alerts={alerts} onOpen={setSheet} />}
+
       <div className="pills">
         <span className="pill">{fmtDate(data.today)} 週{weekday(data.today)}</span>
         <span className="pill">FAAB {data.faabBudget}</span>
@@ -143,8 +145,6 @@ export default function TeamPage() {
       </div>
 
       {data.lineupLockReason && <div className="alert error">名單鎖定中：{data.lineupLockReason}</div>}
-
-      {mine && problems.length > 0 && <TodayNotice problems={problems} onOpen={setSheet} />}
 
       <div>
         <Lineup data={data} onOpen={setSheet} onEmpty={mine ? () => navigate('/players') : undefined} />
@@ -226,27 +226,63 @@ function TeamHero({ teamId, name, abbr, owner, mine, halfNo, rows, tickets, toda
   )
 }
 
-function TodayNotice({ problems, onOpen }: { problems: RosterPlayer[]; onOpen: (p: RosterPlayer) => void }) {
-  const [all, setAll] = useState(false)
-  const status = problems.filter((p) => p.status.code !== 'ACTIVE')
-  const postponed = problems.filter((p) => p.status.code === 'ACTIVE')
-  const shown = all ? status : status.slice(0, 3)
+interface Alert {
+  key: string
+  kind: string
+  bad: boolean
+  name: string
+  desc: string
+  player: RosterPlayer
+}
+
+/** 先發球員的提醒：二軍、未出賽、已註銷逐人一則；延賽依場次合併。只寫客觀出賽狀態，不放逐球事件。 */
+function alertsOf(starters: RosterPlayer[]): Alert[] {
+  const out: Alert[] = []
+  for (const [code, kind, bad] of [['MINORS', '二軍', false], ['IDLE', '未出賽', true], ['DELISTED', '已註銷', true]] as const) {
+    for (const p of starters.filter((s) => s.status.code === code)) {
+      out.push({ key: `${code}-${p.playerId}`, kind, bad, name: p.name, desc: `${p.slot} 先發，${code === 'MINORS' ? '目前在二軍' : p.status.text}`, player: p })
+    }
+  }
+  const ppd = new Map<number, RosterPlayer[]>()
+  for (const p of starters.filter((s) => s.status.code === 'ACTIVE' && s.game?.status === 'POSTPONED')) {
+    ppd.set(p.game!.gameId, [...(ppd.get(p.game!.gameId) ?? []), p])
+  }
+  for (const [gameId, ps] of ppd) {
+    const g = ps[0].game!
+    const [away, home] = g.home ? [g.opponent, ps[0].cpblTeam] : [ps[0].cpblTeam, g.opponent]
+    out.push({ key: `PPD-${gameId}`, kind: '延賽', bad: false, name: `${cpblTeam(away).short} @ ${cpblTeam(home).short}`,
+      desc: `延賽，${ps.map((p) => p.name).join('、')} 今日不出賽`, player: ps[0] })
+  }
+  return out
+}
+
+/** ALERT 提醒列：跑馬燈輪播（減少動態效果時只顯示第一則），點擊展開，每則可直接換人。 */
+function AlertBar({ alerts, onOpen }: { alerts: Alert[]; onOpen: (p: RosterPlayer) => void }) {
+  const [open, setOpen] = useState(false)
+  const item = (a: Alert, k: string) => (
+    <span key={k} className="ai"><span className={`tag ${a.bad ? 'bad' : ''}`}>{a.kind}</span><span>{a.name}　{a.desc}</span></span>
+  )
   return (
-    <div className="notice">
-      <div className="notice-title">今天要注意</div>
-      {shown.map((p) => (
-        <div className="nrow" key={p.playerId}>
-          <span className="d" style={{ background: 'var(--bad)' }} />
-          <span><b>{p.name}</b> 在 {p.slot} 先發，{p.status.text}</span>
-          <button type="button" className="small" onClick={() => onOpen(p)}>換人</button>
-        </div>
-      ))}
-      {status.length > 3 && !all && <button type="button" className="small" style={{ justifySelf: 'start' }} onClick={() => setAll(true)}>還有 {status.length - 3} 位</button>}
-      {postponed.length > 0 && (
-        <div className="nrow">
-          <span className="d" style={{ background: 'var(--warn)' }} />
-          <span>{postponed.length} 名先發所屬球隊今日延賽：{postponed.map((p) => p.name).join('、')}</span>
-          <span />
+    <div className="alertbar">
+      <button type="button" className="ab-head" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span className="ab-tag"><i />ALERT</span>
+        <span className="ab-mq">
+          <span className="ab-track">{[...alerts, ...alerts].map((a, i) => item(a, `${a.key}-${i}`))}</span>
+          <span className="ab-still">{item(alerts[0], 'still')}</span>
+        </span>
+        <span className="ab-n">{String(alerts.length).padStart(2, '0')}<small>{open ? '▴' : '▾'}</small></span>
+      </button>
+      {open && (
+        <div className="ab-list">
+          {alerts.map((a) => (
+            <div key={a.key} className="ab-row">
+              <div style={{ minWidth: 0 }}>
+                <div className="hd"><span className={`kd ${a.bad ? 'bad' : ''}`}><i />{a.kind}</span><b>{a.name}</b></div>
+                <div className="ds">{a.desc}</div>
+              </div>
+              <button type="button" className="small" onClick={() => onOpen(a.player)}>換人</button>
+            </div>
+          ))}
         </div>
       )}
     </div>

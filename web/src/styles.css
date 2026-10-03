@@ -155,10 +155,6 @@ pre.mono { white-space: pre-wrap; font-size: 12px; margin: 0; }
 .bigpts .num { font-size: 34px; font-weight: 800; font-style: italic; line-height: 1; display: block; }
 .bigpts small { color: var(--muted); font-size: 12px; }
 
-.notice { border-radius: 14px; padding: 12px 14px; display: grid; gap: 8px; background: linear-gradient(180deg, rgb(216 178 90 / .12), rgb(216 178 90 / .04)); border: 1px solid rgb(216 178 90 / .35); }
-.notice-title { font-weight: 700; font-size: 13px; color: var(--gold-hi); letter-spacing: .04em; }
-.nrow { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; font-size: 13px; }
-.nrow .d { width: 8px; height: 8px; border-radius: 50%; }
 
 .prow { display: grid; grid-template-columns: 40px 48px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); width: 100%; background: none; border-radius: 0; border-left: 0; border-right: 0; border-bottom: 0; text-align: left; font-weight: 400; }
 .prow.problem { background: linear-gradient(90deg, rgb(255 107 107 / .10), transparent 60%); }
@@ -184,6 +180,38 @@ pre.mono { white-space: pre-wrap; font-size: 12px; margin: 0; }
 .slot-opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .slot-opts button { border-radius: 12px; padding: 10px 0; font-family: var(--font-num); font-weight: 800; font-size: 18px; }
 .slot-opts button small { display: block; font-family: var(--font-text); font-weight: 500; font-size: 11px; color: var(--muted); }
+/* ALERT 提醒列（隊伍首頁）：滿版紅色列＋跑馬燈，點擊展開 */
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+/* min-width: 0：不讓跑馬燈的 max-content 寬度撐開 .stack 的 grid 欄 */
+.alertbar { margin: 0 -16px; min-width: 0; }
+.ab-head { display: flex; align-items: center; gap: 10px; width: 100%; height: 40px; padding: 0 0 0 16px; border: 0; border-radius: 0; text-align: left; cursor: pointer; overflow: hidden; background: rgb(255 77 79 / .1); border-top: 1px solid rgb(255 77 79 / .2); border-bottom: 1px solid rgb(255 77 79 / .2); }
+.ab-tag { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 0 7px; border-radius: 4px; background: var(--live); color: var(--bg); font: 700 10.5px/18px var(--font-num); letter-spacing: .14em; }
+.ab-tag i { width: 5px; height: 5px; border-radius: 50%; background: var(--bg); animation: pulse 1.4s ease-in-out infinite; }
+.ab-mq { flex: 1; min-width: 0; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 14px, #000 88%, transparent); mask-image: linear-gradient(90deg, transparent, #000 14px, #000 88%, transparent); }
+.ab-track { display: flex; width: max-content; animation: marquee 30s linear infinite; }
+.ab-track .ai { padding-right: 30px; }
+.ab-still { display: none; }
+.ai { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; white-space: nowrap; }
+.ai .tag { font: 600 10.5px var(--font-mix); letter-spacing: .12em; color: var(--warn); }
+.ai .tag.bad { color: var(--bad); }
+.ab-n { flex: none; display: flex; align-items: center; gap: 4px; padding: 0 16px 0 4px; font: 600 12px var(--font-num); color: var(--bad); }
+.ab-n small { font-size: 11px; }
+@media (prefers-reduced-motion: reduce) {
+  .ab-track { display: none; }
+  .ab-still { display: block; }
+}
+.ab-list { background: rgb(14 16 20 / .92); border-bottom: 1px solid rgb(255 77 79 / .2); }
+.ab-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 16px; }
+.ab-row + .ab-row { border-top: 1px solid var(--line); }
+.ab-row .hd { display: flex; align-items: center; gap: 7px; }
+.ab-row .hd b { font-size: 13.5px; font-weight: 600; }
+.ab-row .kd { display: inline-flex; align-items: center; gap: 4px; padding: 0 7px 0 5px; border-radius: 999px; font-size: 10px; font-weight: 500; line-height: 16px; color: var(--warn); background: rgb(240 184 74 / .12); }
+.ab-row .kd.bad { color: var(--bad); background: rgb(255 107 107 / .12); }
+.ab-row .kd i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.ab-row .ds { margin-top: 3px; font-size: 12px; color: var(--muted); text-wrap: pretty; }
+.ab-row button { font-size: 12px; border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; background: transparent; }
+.ab-row button:hover { background: var(--surface-2); }
+
 .shead { display: flex; gap: 12px; align-items: center; }
 .shead .nm { display: flex; gap: 6px; align-items: center; min-width: 0; }
 .shead .nm b { font-size: 18px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
