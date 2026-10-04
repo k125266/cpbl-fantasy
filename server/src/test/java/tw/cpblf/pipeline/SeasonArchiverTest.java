@@ -106,6 +106,17 @@ class SeasonArchiverTest extends IntegrationTest {
     }
 
     @Test
+    void suggestedSeasonDatesComeFromArchivedGames() {
+        archiver.archive(new FakeSite(), 2026, "A", null);
+        var s = archive.suggestedSeason(2026, "A");
+        // 封存的比賽日期為 10/1、10/3、10/3、10/5；沒有第 180 號比賽，所以沒有半季分界
+        assertThat(s.get("opening")).isEqualTo(java.time.LocalDate.of(2026, 10, 1));
+        assertThat(s.get("seasonEnd")).isEqualTo(java.time.LocalDate.of(2026, 10, 5));
+        assertThat(s.get("half1End")).isNull();
+        assertThat(s.get("half2Start")).isNull();
+    }
+
+    @Test
     void archivedPagesRoundTripThroughJson() {
         archiver.archive(new FakeSite(), 2026, "A", null);
         var page = archive.games().stream().filter(p -> p.game().gameSno() == 1).findFirst().orElseThrow();

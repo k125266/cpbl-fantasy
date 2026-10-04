@@ -1,6 +1,9 @@
 package tw.cpblf.source;
 
+import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -59,6 +62,34 @@ public class SourceArchive {
     public List<SourcePlayer> players() {
         return jdbc.sql("select payload::text from source_archive where kind = 'player' order by key").query(String.class).list().stream()
                 .map(s -> Json.read(s, new TypeReference<SourcePlayer>() { })).toList();
+    }
+
+    /**
+     * 依封存建議的賽季日期：開幕日、上半季結束（第 180 號比賽的日期，6 隊各 60 場）、下半季開始（隔天）、季末。
+     * 封存是空的時，各值為 null。
+     */
+    public Map<String, LocalDate> suggestedSeason(int year, String kindCode) {
+        String prefix = year + "-" + kindCode + "-";
+        Map<String, Object> row = jdbc.sql("""
+                select min((payload -> 'game' ->> 'date')::date) as opening,
+                       max((payload -> 'game' ->> 'date')::date) as season_end,
+                       max(case when key = ? then (payload -> 'game' ->> 'date')::date end) as half1_end
+                from source_archive where kind = 'game' and key like ?
+                """).params(prefix + HALF1_LAST_SNO, prefix + "%").query().singleRow();
+        Map<String, LocalDate> out = new LinkedHashMap<>();
+        LocalDate half1End = toDate(row.get("half1_end"));
+        out.put("opening", toDate(row.get("opening")));
+        out.put("half1End", half1End);
+        out.put("half2Start", half1End == null ? null : half1End.plusDays(1));
+        out.put("seasonEnd", toDate(row.get("season_end")));
+        return out;
+    }
+
+    /** 中職一軍例行賽每半季 180 場（6 隊各 60 場）。 */
+    static final int HALF1_LAST_SNO = 180;
+
+    private static LocalDate toDate(Object o) {
+        return o == null ? null : o instanceof java.sql.Date d ? d.toLocalDate() : LocalDate.parse(o.toString());
     }
 
     public int count(String kind) {

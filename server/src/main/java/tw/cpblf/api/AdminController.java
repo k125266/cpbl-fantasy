@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.RestController;
 import tw.cpblf.auth.Auth;
 import tw.cpblf.common.ApiException;
 import tw.cpblf.config.AppClock;
+import tw.cpblf.config.AppProperties;
+import tw.cpblf.source.SourceArchive;
 import tw.cpblf.demo.DemoService;
 import tw.cpblf.pipeline.AlertService;
 import tw.cpblf.pipeline.JobRunner;
@@ -37,9 +39,13 @@ public class AdminController {
     private final MatchupService matchups;
     private final DemoService demo;
     private final AppClock clock;
+    private final AppProperties props;
+    private final SourceArchive archive;
 
     public AdminController(JdbcClient jdbc, JobRunner runner, AlertService alerts, Pipeline pipeline, SettlementJob settlement,
-                           MatchupService matchups, DemoService demo, AppClock clock) {
+                           MatchupService matchups, DemoService demo, AppClock clock, AppProperties props, SourceArchive archive) {
+        this.props = props;
+        this.archive = archive;
         this.jdbc = jdbc;
         this.runner = runner;
         this.alerts = alerts;
@@ -69,6 +75,20 @@ public class AdminController {
                        count(*) filter (where actual_play_date is not null) as makeups
                 from game
                 """).query().singleRow());
+        if (props.isReplay()) {
+            Map<String, Object> replay = new LinkedHashMap<>();
+            replay.put("archivedGames", archive.count("game"));
+            replay.put("archivedPlayers", archive.count("player"));
+            replay.put("suggested", archive.suggestedSeason(props.seasonYear(), props.kindCode()));
+            // 所有聯盟共用時鐘：列出各聯盟各半季的選秀狀態，快轉前確認
+            replay.put("leagues", jdbc.sql("""
+                    select l.id as league_id, l.name, h.half_no, h.start_date, coalesce(d.status, 'NONE') as draft_status
+                    from league l left join season_half h on h.league_id = l.id
+                    left join draft d on d.season_half_id = h.id
+                    order by l.id, h.half_no
+                    """).query().listOfRows());
+            out.put("replay", replay);
+        }
         return out;
     }
 

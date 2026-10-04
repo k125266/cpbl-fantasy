@@ -10,7 +10,16 @@ interface Status {
   jobs: { id: number; job_name: string; started_at: string; status: string; items_processed: number; revisions: number; anomalies: number; summary: string }[]
   alerts: { id: number; level: string; source: string; message: string; createdAt: string; acknowledged: boolean }[]
   games: Record<string, number>
+  /** 重播模式才有 */
+  replay?: {
+    archivedGames: number
+    archivedPlayers: number
+    suggested: { opening: string | null; half1End: string | null; half2Start: string | null; seasonEnd: string | null }
+    leagues: { league_id: number; name: string; half_no: number | null; start_date: string | null; draft_status: string }[]
+  }
 }
+
+const DRAFT_STATUS: Record<string, string> = { NONE: '未建立', SETUP: '準備中', KEEPERS: 'Keeper 選擇中', IN_PROGRESS: '選秀中', COMPLETED: '已完成' }
 
 const JOBS = ['schedule-poller', 'registration-sync', 'settlement', 'live-poller', 'roster-maintenance', 'waiver', 'trade-review',
   'matchup-progress', 'daily-summary', 'reconciliation']
@@ -50,9 +59,44 @@ export default function AdminPage() {
       <h1>系統管理</h1>
       <ErrorBox error={err || status.error} />
       {msg && <div className="alert info small">{msg}</div>}
+      {s?.replay && (
+        <div className="card">
+          <h2>重播 2026 球季</h2>
+          <p className="small">
+            已封存比賽 {s.replay.archivedGames} 場・球員 {s.replay.archivedPlayers} 人
+          </p>
+          <button className="primary" disabled={busy} onClick={() => run(() => api.post('/api/admin/jobs/season-archive/run'))}>
+            {s.replay.archivedGames > 0 ? '續抓／更新封存' : '封存整季'}
+          </button>
+          <p className="small muted">
+            從進階數據網站依序抓整季比賽與全部球員，請求間隔 1.5 秒，第一次約 25 分鐘，期間請勿關閉頁面。
+            已結束的比賽不會重抓，中斷後再按一次即可續抓。
+          </p>
+          {s.replay.suggested.opening && (
+            <>
+              <h2 style={{ marginTop: 14 }}>建議賽季日期</h2>
+              <p className="small">
+                開幕 {s.replay.suggested.opening}・上半季結束 {s.replay.suggested.half1End ?? '—'}・
+                下半季開始 {s.replay.suggested.half2Start ?? '—'}・季末 {s.replay.suggested.seasonEnd}
+              </p>
+              <p className="small muted">依封存的比賽推算（上半季為第 1～180 號比賽）。各聯盟管理員在「聯盟 → 產生賽程」填入。</p>
+            </>
+          )}
+          <h2 style={{ marginTop: 14 }}>各聯盟選秀</h2>
+          <ul className="list-plain small">
+            {s.replay.leagues.length === 0 && <li className="muted">還沒有聯盟</li>}
+            {s.replay.leagues.map((l, i) => (
+              <li key={i}>
+                {l.name}・{l.half_no ? `${l.half_no === 1 ? '上' : '下'}半季 ${l.start_date} 開始・選秀 ${DRAFT_STATUS[l.draft_status] ?? l.draft_status}` : '尚未產生賽程'}
+              </li>
+            ))}
+          </ul>
+          <p className="small muted">所有聯盟共用重播時鐘。快轉若會跨過某聯盟的半季開始日、而該半季選秀還沒完成，會被擋下。</p>
+        </div>
+      )}
       {s?.demoClock && (
         <div className="card">
-          <h2>Demo 時鐘</h2>
+          <h2>{s.replay ? '重播時鐘' : 'Demo 時鐘'}</h2>
           <p className="small">目前模擬時間：{s.now.slice(0, 16).replace('T', ' ')}</p>
           <div className="row">
             <input type="number" min={1} max={60} value={days} onChange={(e) => setDays(Number(e.target.value))} style={{ width: 70 }} />
