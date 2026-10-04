@@ -111,6 +111,8 @@ export interface League {
   id: number
   name: string
   seasonYear: number
+  /** 建立聯盟的回應會帶；一般讀取請用 LeagueDetail.inviteCode（只有管理員看得到） */
+  inviteCode?: string
   maxTeams: number
   foreignPlayerLimit: number
   positionMinGames: number
