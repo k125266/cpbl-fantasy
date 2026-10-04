@@ -28,7 +28,8 @@ public class PipelineScheduler {
     public PipelineScheduler(Pipeline pipeline, DraftService drafts, AppProperties props) {
         this.pipeline = pipeline;
         this.drafts = drafts;
-        this.demo = props.isDemo();
+        // demo 與重播模式：每日型工作由「快轉」驅動
+        this.demo = props.clockAdjustable();
     }
 
     // ---- 每日型（僅正式模式）----

@@ -13,7 +13,8 @@ public record AppProperties(
         String source,
         boolean schedulerEnabled,
         Crawler crawler,
-        Demo demo) {
+        Demo demo,
+        Replay replay) {
 
     /** 規則書 10.3：Live Poller 間隔不得低於 60 秒。 */
     public static final int MIN_LIVE_POLL_SECONDS = 60;
@@ -24,6 +25,16 @@ public record AppProperties(
 
     public boolean isDemo() {
         return "demo".equalsIgnoreCase(source);
+    }
+
+    /** E12：以封存的真實球季重播（ReplayDataSource）。 */
+    public boolean isReplay() {
+        return "replay".equalsIgnoreCase(source);
+    }
+
+    /** demo 與重播模式的時鐘可調整，每日型工作改由「快轉」驅動。 */
+    public boolean clockAdjustable() {
+        return isDemo() || isReplay();
     }
 
     /**
@@ -41,5 +52,9 @@ public record AppProperties(
     }
 
     public record Demo(OffsetDateTime startAt, long seed, boolean seedLeague) {
+    }
+
+    /** @param startAt 重播時鐘的起點（開幕前） */
+    public record Replay(OffsetDateTime startAt) {
     }
 }
