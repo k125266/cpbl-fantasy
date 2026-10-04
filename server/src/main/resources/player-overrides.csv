@@ -1,5 +1,6 @@
 # 球員資料人工修正（PlayerOverrides）：名單同步時優先於資料源的判斷，同步不會覆蓋。
 # 進階數據網站沒有國籍欄位，洋將由「原名」推斷；推斷不了或推斷錯的球員列在這裡。
+# 洋將看國籍：有中華民國國籍的外籍血統球員、歸化球員以本土身分登錄，不佔洋將名額（原名可能是全大寫姓氏，需列在這裡）。
 # 格式：cpbl_player_id,name,foreign,note（name 與 note 只供人閱讀）
 cpbl_player_id,name,foreign,note
 0000007801,飯村将太,true,原名 Shota Iimura（日籍，原名非全大寫）
@@ -9,4 +10,4 @@ cpbl_player_id,name,foreign,note
 0000007832,悍里歐,true,原名 Antonio Joseph Candelario（原名非全大寫）
 0000002661,陳鏞基,false,原名 Ma Yaw Ciru（原住民族族名）
 0000003211,王勝偉,false,原名 Haro Ngayaw（原住民族族名）
-0000006728,陳思仲,false,原名 John Peter CLARK（以本土身分登錄，待使用者確認）
+0000006728,陳思仲,false,原名 John Peter CLARK（外籍血統、以本土身分登錄，不佔洋將名額）
