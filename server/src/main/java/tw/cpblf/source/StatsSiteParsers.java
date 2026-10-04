@@ -313,7 +313,8 @@ public final class StatsSiteParsers {
     /**
      * 依原名判斷是否為外籍，無法判斷時回傳 null。2026-10 實際比對 517 人得到的規則：
      * <ul>
-     *   <li>有全大寫的姓氏（Mario SANCHEZ、SUZUKI Shunsuke）→ 外籍；例外：以本土身分登錄的外籍血統球員（John Peter CLARK）</li>
+     *   <li>有全大寫的姓氏（Mario SANCHEZ、SUZUKI Shunsuke、Tyler EPPLER/艾普勒）→ 外籍；
+     *       例外：以本土身分登錄的外籍血統球員（John Peter CLARK）</li>
      *   <li>含中文或全形標點（Namoh．Iyang（朱祥麟））、中文名的連字號拼音（Yu Cheng-Yi）、純中文 → 本土</li>
      *   <li>其他一般大小寫的英文名 → 無法判斷：外籍（Quinton Martinez、Shota Iimura）與原住民族族名（Ma Yaw Ciru、Haro Ngayaw）
      *       格式相同，交給人工修正檔（PlayerOverrides）</li>
@@ -324,13 +325,11 @@ public final class StatsSiteParsers {
         if (s.isEmpty()) {
             return null;
         }
-        if (CJK_OR_FULLWIDTH.matcher(s).find()) {
-            return false;
-        }
+        // 全大寫姓氏要先判斷：洋將的原名常接中文譯名（Tyler EPPLER/艾普勒/艾璞樂）
         if (UPPERCASE_SURNAME.matcher(s).find()) {
             return true;
         }
-        if (HYPHENATED_GIVEN_NAME.matcher(s).find()) {
+        if (CJK_OR_FULLWIDTH.matcher(s).find() || HYPHENATED_GIVEN_NAME.matcher(s).find()) {
             return false;
         }
         return null;

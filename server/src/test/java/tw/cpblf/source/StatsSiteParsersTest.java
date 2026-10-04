@@ -91,6 +91,9 @@ class StatsSiteParsersTest {
         assertThat(StatsSiteParsers.foreignByOriginalName("Mario SANCHEZ")).isTrue();
         assertThat(StatsSiteParsers.foreignByOriginalName("SUZUKI Shunsuke")).isTrue();
         assertThat(StatsSiteParsers.foreignByOriginalName("Jean-Pierre SMITH")).isTrue();
+        // 原名接中文譯名的洋將（2026-10 封存時發現被誤判為本土）
+        assertThat(StatsSiteParsers.foreignByOriginalName("Tyler EPPLER/艾普勒/艾璞樂")).isTrue();
+        assertThat(StatsSiteParsers.foreignByOriginalName("David BUCHANAN/布坎南")).isTrue();
         // 無法判斷：外籍與原住民族族名格式相同
         assertThat(StatsSiteParsers.foreignByOriginalName("Quinton Martinez")).isNull();
         assertThat(StatsSiteParsers.foreignByOriginalName("Shota Iimura")).isNull();

@@ -105,10 +105,19 @@ public class ReplayDataSource implements CpblDataSource {
         return new BoxScore(st, null, null, null, List.of(), List.of());
     }
 
+    /** 有原名時以目前的規則重新判斷洋將，判斷規則調整後不必重抓網站。 */
+    static SourcePlayer withCurrentForeignRule(SourcePlayer p) {
+        if (p.originalName() == null) {
+            return p;
+        }
+        return new SourcePlayer(p.cpblPlayerId(), p.name(), p.teamName(), p.listedPosition(),
+                StatsSiteParsers.foreignByOriginalName(p.originalName()), p.jerseyNumber(), p.originalName());
+    }
+
     /** 封存的球員都算已註冊；一軍依最近的一軍出賽推斷（只看已經發生的比賽，開季頭兩週除外）。 */
     @Override
     public RegistrationSnapshot fetchRegistration() {
-        List<SourcePlayer> players = archive.players();
+        List<SourcePlayer> players = archive.players().stream().map(ReplayDataSource::withCurrentForeignRule).toList();
         LocalDate today = clock.today();
         LocalDate opening = games().stream().map(p -> p.game().date()).min(LocalDate::compareTo).orElse(today);
         LocalDate from, to;
@@ -134,6 +143,7 @@ public class ReplayDataSource implements CpblDataSource {
 
     @Override
     public SourcePlayer fetchPlayerProfile(String cpblPlayerId) {
-        return archive.players().stream().filter(p -> p.cpblPlayerId().equals(cpblPlayerId)).findFirst().orElse(null);
+        return archive.players().stream().filter(p -> p.cpblPlayerId().equals(cpblPlayerId)).findFirst()
+                .map(ReplayDataSource::withCurrentForeignRule).orElse(null);
     }
 }
