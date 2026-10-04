@@ -160,7 +160,8 @@ function LeagueTopBar() {
       subtitle={`H2H 類別・${sub}`}
       left={isRoot ? undefined : <button type="button" className="round" aria-label="返回" onClick={() => navigate(-1)}>{ICONS.back}</button>}
       right={<button type="button" className="round" aria-label="通知" onClick={() => navigate('/notifications')}>{ICONS.bell}{unread > 0 && <span className="dot" />}</button>}
-      demo={system?.demo ? `Demo 模式・模擬賽季（虛構球員）・模擬時間 ${system.now.slice(5, 16).replace('T', ' ')}` : undefined}
+      demo={system?.demo ? `Demo 模式・模擬賽季（虛構球員）・模擬時間 ${system.now.slice(5, 16).replace('T', ' ')}`
+        : system?.source === 'replay' ? `重播模式・${system.seasonYear} 真實球季・重播時間 ${system.now.slice(5, 16).replace('T', ' ')}` : undefined}
     />
   )
 }

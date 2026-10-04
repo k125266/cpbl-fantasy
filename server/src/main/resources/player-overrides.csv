@@ -1,0 +1,17 @@
+# 球員資料人工修正（PlayerOverrides）：名單同步時優先於資料源的判斷，同步不會覆蓋。
+# 進階數據網站沒有國籍欄位，洋將由「原名」推斷；推斷不了或推斷錯的球員列在這裡。
+# 洋將看登錄身分，下列球員雖然原名可能是全大寫姓氏，但不佔洋將名額，需列在這裡：
+# - 有中華民國國籍的外籍血統球員、歸化球員：以本土身分登錄
+# - 羅力條款（2020-09）：一軍年資滿 9 年（每年一軍登錄逾 125 天，或投球局數達球隊出賽數 2/3），次球季起以本土身分登錄
+# 每季開季前請檢查是否有新達標的球員。
+# 格式：cpbl_player_id,name,foreign,note（name 與 note 只供人閱讀）
+cpbl_player_id,name,foreign,note
+0000007801,飯村将太,true,原名 Shota Iimura（日籍，原名非全大寫）
+0000007804,瑪帝斯,true,原名 Quinton Martinez（原名非全大寫）
+0000007805,山崎正義,true,原名 Yamazaki Seigi（日籍，原名非全大寫）
+0000007827,杰克,true,原名 Jack O'Loughlin（原名非全大寫）
+0000007832,悍里歐,true,原名 Antonio Joseph Candelario（原名非全大寫）
+0000002661,陳鏞基,false,原名 Ma Yaw Ciru（原住民族族名）
+0000003211,王勝偉,false,原名 Haro Ngayaw（原住民族族名）
+0000006728,陳思仲,false,原名 John Peter CLARK（外籍血統、以本土身分登錄，不佔洋將名額）
+0000000762,伍鐸,false,原名 Bryan WOODALL（羅力條款，2025 球季起以本土身分登錄）
