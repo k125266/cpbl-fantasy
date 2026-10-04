@@ -102,7 +102,8 @@ public class SeasonArchiver {
         }
         int added = 0;
         for (SourcePlayer p : players.values()) {
-            if (archive.hasPlayer(p.cpblPlayerId())) {
+            // 已有原名的不再抓；舊封存沒有原名的會補抓
+            if (archive.hasProfile(p.cpblPlayerId())) {
                 continue;
             }
             SourcePlayer profile = src.profile(p.cpblPlayerId());
@@ -126,6 +127,7 @@ public class SeasonArchiver {
                 base.teamName() != null ? base.teamName() : profile.teamName(),
                 profile.listedPosition() != null && !"UNKNOWN".equals(profile.listedPosition()) ? profile.listedPosition() : base.listedPosition(),
                 profile.foreign(),
-                profile.jerseyNumber() != null ? profile.jerseyNumber() : base.jerseyNumber());
+                profile.jerseyNumber() != null ? profile.jerseyNumber() : base.jerseyNumber(),
+                profile.originalName());
     }
 }

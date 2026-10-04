@@ -64,6 +64,7 @@ class StatsSiteParsersTest {
         assertThat(moya.teamName()).isEqualTo("台鋼雄鷹");
         assertThat(moya.listedPosition()).isEqualTo("IF");
         assertThat(moya.foreign()).isTrue();
+        assertThat(moya.originalName()).isEqualTo("Steven MOYA");
     }
 
     @Test
@@ -75,18 +76,27 @@ class StatsSiteParsersTest {
         assertThat(yin.foreign()).isFalse();
     }
 
-    /** 2026-10-04 實際同步 517 人時，原本「有英文字母就是洋將」的規則把原住民族球員誤判為洋將。 */
+    /**
+     * 2026-10 實際比對 517 人：「有英文字母」會把原住民族球員誤判為洋將，「全大寫姓氏」又會漏掉原名一般大小寫的新洋將。
+     * 兩者格式相同的名字無法自動判斷，回傳 null 交給人工修正檔。
+     */
     @Test
-    void indigenousRomanizedNamesAreNotForeign() {
-        assertThat(StatsSiteParsers.isForeignOriginalName("Ma Yaw Ciru")).isFalse();
-        assertThat(StatsSiteParsers.isForeignOriginalName("Haro Ngayaw")).isFalse();
-        assertThat(StatsSiteParsers.isForeignOriginalName("Namoh．Iyang（朱祥麟）")).isFalse();
-        assertThat(StatsSiteParsers.isForeignOriginalName("Masegesege ‧Abalrini/瑪仕革斯．俄霸律尼")).isFalse();
-        assertThat(StatsSiteParsers.isForeignOriginalName("Yu Cheng-Yi")).isFalse();
-        assertThat(StatsSiteParsers.isForeignOriginalName("尹柏淮")).isFalse();
-        assertThat(StatsSiteParsers.isForeignOriginalName("Mario SANCHEZ")).isTrue();
-        assertThat(StatsSiteParsers.isForeignOriginalName("SUZUKI Shunsuke")).isTrue();
-        assertThat(StatsSiteParsers.isForeignOriginalName("OTAKI Kouji")).isTrue();
+    void foreignFlagFromOriginalNameIsTriState() {
+        // 本土：中文、全形標點、連字號拼音
+        assertThat(StatsSiteParsers.foreignByOriginalName("Namoh．Iyang（朱祥麟）")).isFalse();
+        assertThat(StatsSiteParsers.foreignByOriginalName("Masegesege ‧Abalrini/瑪仕革斯．俄霸律尼")).isFalse();
+        assertThat(StatsSiteParsers.foreignByOriginalName("Yu Cheng-Yi")).isFalse();
+        assertThat(StatsSiteParsers.foreignByOriginalName("尹柏淮")).isFalse();
+        // 外籍：全大寫姓氏
+        assertThat(StatsSiteParsers.foreignByOriginalName("Mario SANCHEZ")).isTrue();
+        assertThat(StatsSiteParsers.foreignByOriginalName("SUZUKI Shunsuke")).isTrue();
+        assertThat(StatsSiteParsers.foreignByOriginalName("Jean-Pierre SMITH")).isTrue();
+        // 無法判斷：外籍與原住民族族名格式相同
+        assertThat(StatsSiteParsers.foreignByOriginalName("Quinton Martinez")).isNull();
+        assertThat(StatsSiteParsers.foreignByOriginalName("Shota Iimura")).isNull();
+        assertThat(StatsSiteParsers.foreignByOriginalName("Jack O'Loughlin")).isNull();
+        assertThat(StatsSiteParsers.foreignByOriginalName("Ma Yaw Ciru")).isNull();
+        assertThat(StatsSiteParsers.foreignByOriginalName("Haro Ngayaw")).isNull();
     }
 
     @Test

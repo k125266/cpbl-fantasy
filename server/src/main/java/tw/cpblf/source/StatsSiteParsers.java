@@ -102,8 +102,8 @@ public final class StatsSiteParsers {
         if (team.endsWith(MINORS_SUFFIX)) {
             team = team.substring(0, team.length() - MINORS_SUFFIX.length()).trim();
         }
-        Boolean foreign = originalName == null ? null : isForeignOriginalName(originalName);
-        return new SourcePlayer(cpblPlayerId, name, team, normalizePosition(position), foreign, jersey);
+        Boolean foreign = originalName == null ? null : foreignByOriginalName(originalName);
+        return new SourcePlayer(cpblPlayerId, name, team, normalizePosition(position), foreign, jersey, originalName);
     }
 
     // ------------------------------------------------------------------
@@ -305,13 +305,35 @@ public final class StatsSiteParsers {
     /** 全大寫的拉丁字母單字（姓氏），例：Steven MOYA 的 MOYA、OTAKI Kouji 的 OTAKI。 */
     private static final Pattern UPPERCASE_SURNAME = Pattern.compile("\\b[A-Z]{2,}\\b");
 
+    /** 中日文字、全形標點（例：Namoh．Iyang（朱祥麟）、瑪仕革斯．俄霸律尼）。 */
+    private static final Pattern CJK_OR_FULLWIDTH = Pattern.compile("[\\u3000-\\u9fff\\uff00-\\uffef‧]");
+    /** 台灣式拼音的連字號名字（例：Yu Cheng-Yi）。 */
+    private static final Pattern HYPHENATED_GIVEN_NAME = Pattern.compile("\\b[A-Z][a-z]+-[A-Z]?[a-z]+\\b");
+
     /**
-     * 外籍球員的原名以全大寫寫出姓氏（Mario SANCHEZ、SUZUKI Shunsuke）。
-     * 原住民族球員的原名是族名拼音（Ma Yaw Ciru、Namoh．Iyang），本土球員也可能是中文名拼音（Yu Cheng-Yi），
-     * 都沒有全大寫單字，所以不能只看「有沒有英文字母」。極少數例外（例：以本土身分登錄的外籍血統球員）需人工修正。
+     * 依原名判斷是否為外籍，無法判斷時回傳 null。2026-10 實際比對 517 人得到的規則：
+     * <ul>
+     *   <li>有全大寫的姓氏（Mario SANCHEZ、SUZUKI Shunsuke）→ 外籍；例外：以本土身分登錄的外籍血統球員（John Peter CLARK）</li>
+     *   <li>含中文或全形標點（Namoh．Iyang（朱祥麟））、中文名的連字號拼音（Yu Cheng-Yi）、純中文 → 本土</li>
+     *   <li>其他一般大小寫的英文名 → 無法判斷：外籍（Quinton Martinez、Shota Iimura）與原住民族族名（Ma Yaw Ciru、Haro Ngayaw）
+     *       格式相同，交給人工修正檔（PlayerOverrides）</li>
+     * </ul>
      */
-    static boolean isForeignOriginalName(String originalName) {
-        return UPPERCASE_SURNAME.matcher(originalName).find();
+    static Boolean foreignByOriginalName(String originalName) {
+        String s = originalName.trim();
+        if (s.isEmpty()) {
+            return null;
+        }
+        if (CJK_OR_FULLWIDTH.matcher(s).find()) {
+            return false;
+        }
+        if (UPPERCASE_SURNAME.matcher(s).find()) {
+            return true;
+        }
+        if (HYPHENATED_GIVEN_NAME.matcher(s).find()) {
+            return false;
+        }
+        return null;
     }
 
     /** 網站守位（投手、捕手、一壘手…左外野手）轉為登錄位置 P / C / IF / OF。 */

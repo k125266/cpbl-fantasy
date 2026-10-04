@@ -53,14 +53,25 @@ public final class SourceModels {
             List<PitcherLine> pitchers) {
     }
 
-    /** 60 人註冊名單中的一名球員。 */
+    /**
+     * 60 人註冊名單中的一名球員。
+     *
+     * @param foreign      是否為外籍；無法判斷時為 null（由人工修正檔決定，見 PlayerOverrides）
+     * @param originalName 原名（進階數據網站球員頁），洋將判斷與人工確認用；沒有時為 null
+     */
     public record SourcePlayer(
             String cpblPlayerId,
             String name,
             String teamName,
             String listedPosition,
             Boolean foreign,
-            String jerseyNumber) {
+            String jerseyNumber,
+            String originalName) {
+
+        public SourcePlayer(String cpblPlayerId, String name, String teamName, String listedPosition, Boolean foreign,
+                            String jerseyNumber) {
+            this(cpblPlayerId, name, teamName, listedPosition, foreign, jerseyNumber, null);
+        }
     }
 
     /** 某一時點的名單快照：60 人註冊名單 + 一軍登錄名單。 */

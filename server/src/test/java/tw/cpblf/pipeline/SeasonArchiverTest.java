@@ -59,7 +59,7 @@ class SeasonArchiverTest extends IntegrationTest {
 
         public SourcePlayer profile(String id) {
             profileCalls.add(id);
-            return new SourcePlayer(id, "個人頁姓名", "樂天桃猿", "IF", false, "99");
+            return new SourcePlayer(id, "個人頁姓名", "樂天桃猿", "IF", false, "99", "原名");
         }
     }
 

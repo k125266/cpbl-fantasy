@@ -54,6 +54,12 @@ public class SourceArchive {
                 .query(Integer.class).single() > 0;
     }
 
+    /** 已封存且有個人頁的原名（洋將判斷依據）；沒有的話封存時要重抓個人頁。 */
+    public boolean hasProfile(String cpblId) {
+        return jdbc.sql("select count(*) from source_archive where kind = 'player' and key = ? and payload ->> 'originalName' is not null")
+                .param(cpblId).query(Integer.class).single() > 0;
+    }
+
     public List<StatsSiteParsers.GamePage> games() {
         return jdbc.sql("select payload::text from source_archive where kind = 'game'").query(String.class).list().stream()
                 .map(s -> Json.read(s, new TypeReference<StatsSiteParsers.GamePage>() { })).toList();
