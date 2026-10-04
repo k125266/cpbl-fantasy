@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import tw.cpblf.config.AppProperties;
 import tw.cpblf.league.LeagueService;
 
 @RestController
@@ -21,14 +22,17 @@ public class AuthController {
 
     private final AuthService auth;
     private final LeagueService leagues;
+    private final AppProperties props;
 
-    public AuthController(AuthService auth, LeagueService leagues) {
+    public AuthController(AuthService auth, LeagueService leagues, AppProperties props) {
         this.auth = auth;
         this.leagues = leagues;
+        this.props = props;
     }
 
-    public record RegisterRequest(String username, String displayName, String password, String inviteCode, String teamName,
-                                  String teamAbbr) {
+    /** 設計稿四步流程最後一次送出：邀請碼（加入）或建盟碼＋聯盟名稱（建立），加上隊伍。 */
+    public record RegisterRequest(String username, String displayName, String password, String inviteCode, String createCode,
+                                  String leagueName, String teamName, String teamAbbr, String teamIcon, String teamColor) {
     }
 
     public record LoginRequest(String username, String password) {
@@ -36,8 +40,9 @@ public class AuthController {
 
     @PostMapping("/register")
     public CurrentUser register(@RequestBody RegisterRequest req, HttpServletResponse res) {
-        CurrentUser user = leagues.registerWithInvite(req.username(), req.displayName(), req.password(), req.inviteCode(),
-                req.teamName(), req.teamAbbr());
+        CurrentUser user = leagues.register(new LeagueService.Registration(req.username(), req.displayName(), req.password(),
+                req.inviteCode(), req.createCode(), req.leagueName(), props.seasonYear(),
+                new LeagueService.TeamIdentity(req.teamName(), req.teamAbbr(), req.teamIcon(), req.teamColor())));
         setCookie(res, auth.createSession(user.id()));
         return user;
     }
