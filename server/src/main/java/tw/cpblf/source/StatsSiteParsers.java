@@ -153,6 +153,10 @@ public final class StatsSiteParsers {
         }
         int lineStart = md.lastIndexOf('\n', start) + 1;
         List<String> lines = textLines(md.substring(lineStart));
+        // 不存在的編號：網站回 200，頁面寫「找不到賽事資料」
+        if (lines.size() > 1 && lines.get(1).contains("找不到賽事資料")) {
+            throw new SourceNotFoundException("比賽不存在：" + year + "-" + kindCode + "-" + sno);
+        }
         Matcher title = GAME_TITLE.matcher(lines.get(0));
         if (!title.matches()) {
             throw new SourceStructureException("比賽頁標題格式不符：" + lines.get(0));

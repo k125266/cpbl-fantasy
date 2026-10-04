@@ -213,6 +213,13 @@ class StatsSiteParsersTest {
         assertThat(StatsSiteParsers.parseSitemapGames(xml, 2026, "A")).containsExactly(14, 277);
     }
 
+    /** 不存在的編號回 200 與「找不到賽事資料」，要和結構錯誤分開（依序封存靠它判斷何時停止）。 */
+    @Test
+    void missingGameNumberIsNotFoundNotBrokenStructure() throws IOException {
+        assertThatThrownBy(() -> StatsSiteParsers.parseGame(fixture("game-2026-A-999-missing.md"), 2026, "A", 999))
+                .isInstanceOf(SourceNotFoundException.class);
+    }
+
     @Test
     void unexpectedPageStructureFailsLoudly() {
         assertThatThrownBy(() -> StatsSiteParsers.parsePlayerList("# 球員名鑑\n沒有結果"))
