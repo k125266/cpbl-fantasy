@@ -89,6 +89,7 @@ public class AdminController {
                 return Map.of("diffs", pipeline.reconcile());
             }
             case "registration-deadline" -> pipeline.registrationDeadlineSync();
+            case "season-archive" -> pipeline.archiveSeason();
             default -> throw ApiException.badRequest("未知 job：" + name);
         }
         return Map.of("ok", true);
