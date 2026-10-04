@@ -81,14 +81,16 @@ public class RegistrationSync {
             String firstTeam = snap.firstTeamIds().contains(sp.cpblPlayerId()) ? "ACTIVE" : "MINORS";
             if (k == null) {
                 SourcePlayer profile = sp.listedPosition() != null && sp.foreign() != null ? sp : source.fetchPlayerProfile(sp.cpblPlayerId());
-                String pos = profile == null || profile.listedPosition() == null ? "UNKNOWN" : profile.listedPosition();
+                // 個人頁查無時，守位與背號沿用名單上的資料
+                String pos = profile != null && profile.listedPosition() != null ? profile.listedPosition()
+                        : sp.listedPosition() != null ? sp.listedPosition() : "UNKNOWN";
+                String jersey = profile != null && profile.jerseyNumber() != null ? profile.jerseyNumber() : sp.jerseyNumber();
                 boolean foreign = profile != null && Boolean.TRUE.equals(profile.foreign());
                 long id = jdbc.sql("""
                         insert into player (cpbl_player_id, name, cpbl_team_code, is_foreign, listed_position,
                                             registration_status, first_team_status, first_team_changed_on, jersey_number)
                         values (?, ?, ?, ?, ?, 'REGISTERED', ?, ?, ?) returning id
-                        """).params(sp.cpblPlayerId(), sp.name(), teamCode, foreign, pos, firstTeam, today,
-                                profile == null ? null : profile.jerseyNumber())
+                        """).params(sp.cpblPlayerId(), sp.name(), teamCode, foreign, pos, firstTeam, today, jersey)
                         .query(Long.class).single();
                 log(id, "registration_status", null, "REGISTERED", today);
                 log(id, "first_team_status", null, firstTeam, today);
