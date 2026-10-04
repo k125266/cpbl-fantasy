@@ -32,7 +32,7 @@ export function Avatar({ team, number, size }: { team: string | null | undefined
   )
 }
 
-/** 等級頭像（設計稿 v6）：外圈金銀銅金屬框、內圈球隊色、中間背號。 */
+/** 等級頭像（設計稿 v6、球員卡 2c）：外圈依稀有度（傳奇全息、金、銀、銅）、內圈球隊色、中間背號。 */
 export function TierAvatar({ team, number, tier, size }: {
   team: string | null | undefined
   number: string | null | undefined
@@ -46,16 +46,20 @@ export function TierAvatar({ team, number, tier, size }: {
   )
 }
 
-export type Tier = 'gold' | 'silver' | 'bronze'
+/** 卡片稀有度（球員卡規範）：傳奇、金卡、稀有、一般。名稱避開市售球卡品牌用語。 */
+export type Tier = 'legend' | 'gold' | 'rare' | 'common'
 
-/** 卡框等級：依當季表現排名自動決定，純外觀。 */
+/** 稀有度依當季排名自動決定、會升降級，純外觀：1–3 傳奇、4–10 金卡、11–30 稀有、31 以後一般。 */
 export function tierOf(rank: number | null | undefined): Tier {
-  if (rank != null && rank > 0 && rank <= 30) return 'gold'
-  if (rank != null && rank > 0 && rank <= 80) return 'silver'
-  return 'bronze'
+  if (rank == null || rank <= 0) return 'common'
+  if (rank <= 3) return 'legend'
+  if (rank <= 10) return 'gold'
+  if (rank <= 30) return 'rare'
+  return 'common'
 }
 
-export const TIER_LABEL: Record<Tier, string> = { gold: 'GOLD', silver: 'SILVER', bronze: 'BRONZE' }
+export const TIER_LABEL: Record<Tier, string> = { legend: 'LEGEND', gold: 'GOLD', rare: 'RARE', common: 'COMMON' }
+export const TIER_ZH: Record<Tier, string> = { legend: '傳奇', gold: '金卡', rare: '稀有', common: '一般' }
 
 export function PlayerCard({ name, team, number, positions, line, tier, back }: {
   name: string
