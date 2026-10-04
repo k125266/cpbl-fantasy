@@ -322,6 +322,8 @@ pre.mono { white-space: pre-wrap; font-size: 12px; margin: 0; }
 
 /* 球員資料頁 */
 .dhero { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: center; }
+.dcard { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 8px; }
+.dcard > span { font-size: 12px; color: var(--muted); }
 .dname { font-weight: 900; font-size: 26px; line-height: 1.15; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .dsub { color: var(--muted); font-size: 13px; margin-top: 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
