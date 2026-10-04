@@ -6,15 +6,20 @@ import org.springframework.context.annotation.Configuration;
 import tw.cpblf.demo.SimulatedDataSource;
 import tw.cpblf.source.CpblDataSource;
 import tw.cpblf.source.CpblWebDataSource;
+import tw.cpblf.source.ReplayDataSource;
+import tw.cpblf.source.SourceArchive;
 import tw.cpblf.source.StatsSiteDataSource;
 
 @Configuration
 public class DataSourceConfig {
 
     @Bean
-    public CpblDataSource cpblDataSource(AppProperties props, AppClock clock) {
+    public CpblDataSource cpblDataSource(AppProperties props, AppClock clock, SourceArchive archive) {
         if (props.isDemo()) {
             return new SimulatedDataSource(clock, props.seasonYear(), props.demo().seed());
+        }
+        if (props.isReplay()) {
+            return new ReplayDataSource(archive, clock);
         }
         if ("stats".equalsIgnoreCase(props.source())) {
             return new StatsSiteDataSource(props);

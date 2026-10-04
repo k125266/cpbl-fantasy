@@ -25,13 +25,15 @@ public class AppClock {
 
     public AppClock(AppProperties props, JdbcClient jdbc) {
         this.zone = props.zoneId();
-        this.adjustable = props.isDemo();
+        this.adjustable = props.clockAdjustable();
         this.jdbc = jdbc;
         if (adjustable) {
             Long stored = jdbc.sql("select value from app_setting where key = ?")
                     .param(OFFSET_KEY).query(Long.class).optional().orElse(null);
             if (stored != null) {
                 offset = Duration.ofSeconds(stored);
+            } else if (props.isReplay() && props.replay() != null && props.replay().startAt() != null) {
+                setNow(props.replay().startAt().toInstant());
             } else if (props.demo() != null && props.demo().startAt() != null) {
                 setNow(props.demo().startAt().toInstant());
             }

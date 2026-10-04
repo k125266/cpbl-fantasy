@@ -81,6 +81,9 @@ public class PoliteHttpClient {
                 if (code >= 200 && code < 300) {
                     return res.body();
                 }
+                if (code == 404) {
+                    throw new SourceNotFoundException("HTTP 404 from " + req.uri());
+                }
                 if (code >= 400 && code < 500) {
                     throw new SourceStructureException("HTTP " + code + " from " + req.uri());
                 }

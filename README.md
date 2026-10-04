@@ -81,6 +81,25 @@ $env:CPBLF_SOURCE='stats'; $env:CPBLF_DB_URL='jdbc:postgresql://localhost:5432/c
 - `schedule-poller`：從 sitemap 取得近期比賽。
 - `settlement`：結算已結束的比賽。
 
+### 重播 2026 球季（replay 模式）
+
+用封存的真實 2026 球季重跑一季，讓朋友一起測試。時鐘由系統管理員手動快轉，所有聯盟同步推進。
+
+```powershell
+docker compose exec db psql -U cpblf -c "create database cpblf_replay"
+cd server
+$env:CPBLF_SOURCE='replay'; $env:CPBLF_DB_URL='jdbc:postgresql://localhost:5432/cpblf_replay'; $env:CPBLF_SCHEDULER_ENABLED='false'
+.\mvnw.cmd spring-boot:run
+```
+
+1. 第一位註冊的帳號是系統管理員。時鐘從 `CPBLF_REPLAY_START_AT` 開始，預設 2026-03-20。
+2. 「系統」頁 →「封存整季」。第一次約 25 分鐘，會抓整季比賽與全部球員；中斷後再按一次就能續抓。
+3. 執行 `registration-sync` 與 `schedule-poller`，把封存的球員與賽程匯入。
+4. 各聯盟管理員用「系統」頁顯示的**建議賽季日期**，在「聯盟 → 產生賽程」建立賽程，再邀請朋友加入。
+5. 各聯盟完成選秀後，系統管理員在「系統」頁快轉。快轉若會跨過某聯盟的半季開始日、而那個聯盟還沒選完，會被擋下。
+
+重播的近似處理（開賽時間固定、沒有延賽、一軍判定）見 `docs/m0-data-feasibility.md`。
+
 ## 測試
 
 ```bash
@@ -105,7 +124,8 @@ cd web && npm run typecheck
 
 | 環境變數 | 說明 | 預設 |
 |---|---|---|
-| `CPBLF_SOURCE` | `demo`、`stats`（中職進階數據網站）或 `web`（官網，目前被 CDN 擋） | `demo` |
+| `CPBLF_SOURCE` | `demo`、`stats`（中職進階數據網站）、`replay`（重播封存的球季）或 `web`（官網，目前被 CDN 擋） | `demo` |
+| `CPBLF_REPLAY_START_AT` | 重播時鐘起點 | 2026-03-20T10:00+08:00 |
 | `CPBLF_DB_URL` / `CPBLF_DB_USER` / `CPBLF_DB_PASSWORD` | 資料庫 | localhost/cpblf |
 | `CPBLF_SEASON_YEAR` | 賽季年度 | 2026 |
 | `CPBLF_USER_AGENT` | 爬蟲 User-Agent，**必填**，請包含聯絡方式 | — |

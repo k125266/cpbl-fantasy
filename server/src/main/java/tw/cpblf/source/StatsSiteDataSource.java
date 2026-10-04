@@ -66,6 +66,11 @@ public class StatsSiteDataSource implements CpblDataSource {
         return StatsSiteParsers.parseGame(markdown("/schedule/" + year + "-" + kindCode + "-" + sno), year, kindCode, sno);
     }
 
+    /** 單場比賽頁（賽程資訊＋box score）。編號不存在時丟 {@link SourceNotFoundException}。整季封存用。 */
+    public StatsSiteParsers.GamePage fetchGamePage(int year, String kindCode, int sno) {
+        return gamePage(year, kindCode, sno);
+    }
+
     /** 翻完球員列表（/players?page=N）。球隊名以「二軍」結尾者不在一軍名單中。 */
     @Override
     public RegistrationSnapshot fetchRegistration() {

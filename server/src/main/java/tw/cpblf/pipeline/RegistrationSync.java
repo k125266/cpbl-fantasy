@@ -35,16 +35,19 @@ public class RegistrationSync {
     private final AppClock clock;
     private final TeamResolver teams;
     private final AlertService alerts;
+    private final PlayerOverrides overrides;
 
-    public RegistrationSync(CpblDataSource source, JdbcClient jdbc, AppClock clock, TeamResolver teams, AlertService alerts) {
+    public RegistrationSync(CpblDataSource source, JdbcClient jdbc, AppClock clock, TeamResolver teams, AlertService alerts,
+                            PlayerOverrides overrides) {
         this.source = source;
         this.jdbc = jdbc;
         this.clock = clock;
         this.teams = teams;
         this.alerts = alerts;
+        this.overrides = overrides;
     }
 
-    record Known(long id, String cpblId, String name, String team, String registration, String firstTeam) {
+    record Known(long id, String cpblId, String name, String team, String registration, String firstTeam, boolean foreign) {
     }
 
     public record SyncResult(int added, int promoted, int demoted, int delisted, int renamed) {
@@ -58,10 +61,11 @@ public class RegistrationSync {
         RegistrationSnapshot snap = source.fetchRegistration();
         LocalDate today = clock.today();
         Map<String, Known> known = new HashMap<>();
-        jdbc.sql("select id, cpbl_player_id, name, cpbl_team_code, registration_status, first_team_status from player")
+        jdbc.sql("select id, cpbl_player_id, name, cpbl_team_code, registration_status, first_team_status, is_foreign from player")
                 .query((rs, n) -> new Known(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5),
-                        rs.getString(6)))
+                        rs.getString(6), rs.getBoolean(7)))
                 .list().forEach(k -> known.put(k.cpblId(), k));
+        List<String> undecided = new java.util.ArrayList<>();
 
         Map<String, SourcePlayer> registered = new HashMap<>();
         snap.registered().forEach(p -> registered.put(p.cpblPlayerId(), p));
@@ -85,7 +89,14 @@ public class RegistrationSync {
                 String pos = profile != null && profile.listedPosition() != null ? profile.listedPosition()
                         : sp.listedPosition() != null ? sp.listedPosition() : "UNKNOWN";
                 String jersey = profile != null && profile.jerseyNumber() != null ? profile.jerseyNumber() : sp.jerseyNumber();
-                boolean foreign = profile != null && Boolean.TRUE.equals(profile.foreign());
+                // 人工修正優先；資料源無法判斷又沒有修正的，先當本土並告警
+                Boolean auto = profile == null ? null : profile.foreign();
+                Boolean manual = overrides.foreign(sp.cpblPlayerId());
+                if (manual == null && auto == null) {
+                    undecided.add(sp.name() + "（" + sp.cpblPlayerId()
+                            + (profile != null && profile.originalName() != null ? "，原名 " + profile.originalName() : "") + "）");
+                }
+                boolean foreign = manual != null ? manual : Boolean.TRUE.equals(auto);
                 long id = jdbc.sql("""
                         insert into player (cpbl_player_id, name, cpbl_team_code, is_foreign, listed_position,
                                             registration_status, first_team_status, first_team_changed_on, jersey_number)
@@ -106,6 +117,11 @@ public class RegistrationSync {
             if (sp.jerseyNumber() != null) {
                 jdbc.sql("update player set jersey_number = ? where id = ? and jersey_number is distinct from ?")
                         .params(sp.jerseyNumber(), k.id(), sp.jerseyNumber()).update();
+            }
+            Boolean manual = overrides.foreign(k.cpblId());
+            if (manual != null && manual != k.foreign()) {
+                jdbc.sql("update player set is_foreign = ?, updated_at = now() where id = ?").params(manual, k.id()).update();
+                log(k.id(), "is_foreign", String.valueOf(k.foreign()), String.valueOf(manual), today);
             }
             if (teamCode != null && !teamCode.equals(k.team())) {
                 jdbc.sql("update player set cpbl_team_code = ?, updated_at = now() where id = ?").params(teamCode, k.id()).update();
@@ -138,6 +154,11 @@ public class RegistrationSync {
                 log(k.id(), "registration_status", "REGISTERED", "DELISTED", today);
                 delisted++;
             }
+        }
+        if (!undecided.isEmpty()) {
+            ctx.anomaly();
+            alerts.raise(AlertService.Level.WARN, JOB, "無法判斷是否為洋將（暫以本土處理），請確認後加入 player-overrides.csv："
+                    + String.join("、", undecided));
         }
         SyncResult result = new SyncResult(added, promoted, demoted, delisted, renamed);
         ctx.items(result.total());

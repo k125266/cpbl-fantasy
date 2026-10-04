@@ -43,12 +43,14 @@ public class Pipeline {
     private final AppClock clock;
     private final AppProperties props;
     private final WeeklyMvpService weeklyMvp;
+    private final SeasonArchiver archiver;
 
     public Pipeline(JobRunner runner, SchedulePoller schedule, RegistrationSync registration, SettlementJob settlement,
                     LivePoller live, MatchupService matchups, RosterService roster, WaiverService waivers, TradeService trades,
                     LeagueService leagues, AlertService alerts, CpblDataSource source, BoxScoreMapper mapper, JdbcClient jdbc,
-                    AppClock clock, AppProperties props, WeeklyMvpService weeklyMvp) {
+                    AppClock clock, AppProperties props, WeeklyMvpService weeklyMvp, SeasonArchiver archiver) {
         this.weeklyMvp = weeklyMvp;
+        this.archiver = archiver;
         this.runner = runner;
         this.schedule = schedule;
         this.registration = registration;
@@ -73,6 +75,11 @@ public class Pipeline {
 
     public void syncRegistration() {
         runner.run(RegistrationSync.JOB, registration::sync);
+    }
+
+    /** E12：封存整季比賽與球員（一次性，約 25 分鐘）。 */
+    public void archiveSeason() {
+        runner.run(SeasonArchiver.JOB, archiver::run);
     }
 
     public void settle() {
