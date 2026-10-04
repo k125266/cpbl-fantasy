@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useApp } from '../App'
-import { api, type PlayerDetail } from '../api'
-import { Avatar, ErrorBox, FeedRow, fmtDate, Loading, TeamChip, tierOf, toast, useLoad, weekday } from '../components'
+import { api, type CardData, type PlayerDetail } from '../api'
+import { CollectCard } from '../CollectCard'
+import { Avatar, ErrorBox, FeedRow, fmtDate, Loading, TeamChip, TIER_LABEL, TIER_ZH, tierOf, toast, useLoad, weekday } from '../components'
 import { cpblTeam } from '../teams'
 import { AcquireSheet } from './PlayersPage'
 
@@ -15,6 +16,8 @@ export default function PlayerDetailPage() {
   const { leagueId, league, reloadLeague } = useApp()
   const navigate = useNavigate()
   const { data, error, loading, reload } = useLoad(() => api.get<PlayerDetail>(`/api/players/${playerId}?leagueId=${leagueId}`), [playerId, leagueId])
+  // 收藏卡的履歷與印章以聯盟為單位；沒有聯盟時退回等級頭像
+  const card = useLoad(() => leagueId ? api.get<CardData>(`/api/leagues/${leagueId}/players/${playerId}/card`) : Promise.resolve(null), [playerId, leagueId])
   const [range, setRange] = useState<'season' | '14d' | '7d'>('season')
   const [acquire, setAcquire] = useState(false)
   if (loading && !data) return <Loading />
@@ -51,8 +54,13 @@ export default function PlayerDetailPage() {
 
   return (
     <div className="stack">
+      {/* 球員卡規範 2c：完整卡固定在詳情頁頂端，下面接數據 */}
+      <div className="dcard">
+        {card.data
+          ? <><CollectCard card={card.data} size={240} /><span>點卡片翻面看履歷與印章</span></>
+          : <div className={`tier-ring tier-${tier}`}><Avatar team={p.team} number={p.jerseyNumber} size="lg" /></div>}
+      </div>
       <div className="dhero">
-        <div className={`tier-ring tier-${tier}`}><Avatar team={p.team} number={p.jerseyNumber} size="lg" /></div>
         <div style={{ minWidth: 0 }}>
           <div className="dname">
             {p.name}
@@ -64,7 +72,7 @@ export default function PlayerDetailPage() {
             <span>{(data.eligible ?? []).join(',')}</span>
             {p.foreign && <span>洋將</span>}
           </div>
-          <div className="dsub"><span className={`pc-tier tier-${tier}`}>{tier.toUpperCase()}</span>{data.rank && <span>聯盟排名第 {data.rank}</span>}</div>
+          <div className="dsub"><span className={`pc-tier tier-${tier}`}>{TIER_LABEL[tier]}・{TIER_ZH[tier]}</span>{data.rank && <span>聯盟排名第 {data.rank}</span>}</div>
           {status && status.code !== 'ACTIVE' && <div className="dsub amber">{status.text}</div>}
         </div>
       </div>

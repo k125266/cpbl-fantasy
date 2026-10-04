@@ -360,7 +360,7 @@ function LineRow({ seat, onOpen, onEmpty }: { seat: Seat; onOpen: (p: RosterPlay
   const x = lineInfo(p)
   const pend = pendText(p)
   return (
-    <button type="button" className={`lrow ${x.tier === 'gold' ? 'gold' : ''}`} onClick={() => onOpen(p)}>
+    <button type="button" className={`lrow ${x.tier === 'gold' || x.tier === 'legend' ? 'gold' : ''}`} onClick={() => onOpen(p)}>
       <div className="slotc">{seat.slot}</div>
       <TierAvatar team={p.cpblTeam} number={p.jerseyNumber} tier={x.tier} />
       <div style={{ minWidth: 0 }}>

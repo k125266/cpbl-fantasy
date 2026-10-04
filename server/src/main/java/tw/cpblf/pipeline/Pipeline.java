@@ -9,6 +9,7 @@ import java.util.Set;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
+import tw.cpblf.card.WeeklyMvpService;
 import tw.cpblf.common.Json;
 import tw.cpblf.config.AppClock;
 import tw.cpblf.config.AppProperties;
@@ -41,11 +42,13 @@ public class Pipeline {
     private final JdbcClient jdbc;
     private final AppClock clock;
     private final AppProperties props;
+    private final WeeklyMvpService weeklyMvp;
 
     public Pipeline(JobRunner runner, SchedulePoller schedule, RegistrationSync registration, SettlementJob settlement,
                     LivePoller live, MatchupService matchups, RosterService roster, WaiverService waivers, TradeService trades,
                     LeagueService leagues, AlertService alerts, CpblDataSource source, BoxScoreMapper mapper, JdbcClient jdbc,
-                    AppClock clock, AppProperties props) {
+                    AppClock clock, AppProperties props, WeeklyMvpService weeklyMvp) {
+        this.weeklyMvp = weeklyMvp;
         this.runner = runner;
         this.schedule = schedule;
         this.registration = registration;
@@ -98,6 +101,7 @@ public class Pipeline {
                 League league = leagues.get(id);
                 int released = roster.releaseDelisted(league);
                 roster.resolveAllNaReturns(league);
+                weeklyMvp.refresh(id);
                 ctx.items(released);
                 if (released > 0) {
                     ctx.note("聯盟 " + id + " 自動釋出註銷球員 " + released + " 名");

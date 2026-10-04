@@ -25,6 +25,9 @@
   --metal-gold: linear-gradient(135deg, var(--gold-hi) 0%, var(--gold) 42%, var(--gold-lo) 100%);
   --metal-silver: linear-gradient(135deg, var(--silver-hi) 0%, var(--silver) 45%, var(--silver-lo) 100%);
   --metal-bronze: linear-gradient(135deg, #f0bf96 0%, var(--bronze) 45%, #6e3f22 100%);
+  /* 傳奇卡全息框（球員卡規範 1a）：金、薄荷、薰衣草、粉紅循環 */
+  --legend: #f6e1a2;
+  --metal-legend: linear-gradient(125deg, #f6e1a2 0%, #a8e6d6 18%, #c3b4ff 36%, #ffbfd3 54%, #f6e1a2 72%, #a8e6d6 90%, #c3b4ff 100%);
   --font-num: "Barlow Condensed", "Arial Narrow", sans-serif;
   --font-text: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
   /* 數字與中文混排（例：M01・左鄰） */
@@ -140,9 +143,10 @@ pre.mono { white-space: pre-wrap; font-size: 12px; margin: 0; }
 .av.lg b { font-size: 32px; }
 .tier-ring { width: 84px; height: 84px; border-radius: 50%; padding: 3px; background: var(--tier); flex: 0 0 auto; }
 
+.tier-legend { --tier: var(--metal-legend); --tier-ink: var(--legend); }
 .tier-gold { --tier: var(--metal-gold); --tier-ink: var(--gold-hi); }
-.tier-silver { --tier: var(--metal-silver); --tier-ink: var(--silver-hi); }
-.tier-bronze { --tier: var(--metal-bronze); --tier-ink: #f0bf96; }
+.tier-rare { --tier: var(--metal-silver); --tier-ink: var(--silver-hi); }
+.tier-common { --tier: var(--metal-bronze); --tier-ink: #f0bf96; }
 
 /* ---------- 球員文字（共用） ---------- */
 .pn { font-weight: 900; font-size: 16px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
@@ -215,8 +219,9 @@ pre.mono { white-space: pre-wrap; font-size: 12px; margin: 0; }
 .shead .nm { display: flex; gap: 6px; align-items: center; min-width: 0; }
 .shead .nm b { font-size: 18px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .shead .rk { margin-top: 3px; font: 700 11px var(--font-mix); letter-spacing: .12em; color: var(--bronze); }
+.shead .rk.legend { color: var(--legend); }
 .shead .rk.gold { color: var(--gold); }
-.shead .rk.silver { color: var(--silver); }
+.shead .rk.rare { color: var(--silver); }
 .shead .el { margin-top: 2px; font-size: 12px; color: var(--muted); }
 .stoday { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .stoday .meta { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 12px; color: var(--muted); }
@@ -317,6 +322,8 @@ pre.mono { white-space: pre-wrap; font-size: 12px; margin: 0; }
 
 /* 球員資料頁 */
 .dhero { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: center; }
+.dcard { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 8px; }
+.dcard > span { font-size: 12px; color: var(--muted); }
 .dname { font-weight: 900; font-size: 26px; line-height: 1.15; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .dsub { color: var(--muted); font-size: 13px; margin-top: 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
@@ -519,9 +526,10 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 /* 小球員卡：本期關鍵卡、卡冊、王牌對決（金屬框 + 格紋背號，可翻面） */
 .cards3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .mcard { position: relative; display: block; width: 100%; aspect-ratio: 5 / 7; padding: 0; border: 0; border-radius: 8px; background: none; perspective: 800px; color: var(--text); text-align: center; font-weight: 400; cursor: pointer; }
+.mcard.legend { --metal: var(--metal-legend); --ink: var(--legend); }
 .mcard.gold { --metal: var(--metal-gold); --ink: var(--gold); }
-.mcard.silver { --metal: var(--metal-silver); --ink: var(--silver); }
-.mcard.bronze { --metal: var(--metal-bronze); --ink: var(--bronze); }
+.mcard.rare { --metal: var(--metal-silver); --ink: var(--silver); }
+.mcard.common { --metal: var(--metal-bronze); --ink: var(--bronze); }
 .mcard-in { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform .6s cubic-bezier(.2,.7,.2,1); }
 .mcard.flipped .mcard-in { transform: rotateY(180deg); }
 .mcard-face { position: absolute; inset: 0; border-radius: 8px; padding: 1px; background: var(--metal); backface-visibility: hidden; -webkit-backface-visibility: hidden; }
@@ -570,9 +578,10 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 
 /* 等級頭像：外圈金銀銅、內圈球隊色 */
 .tav { flex: none; width: 48px; height: 48px; box-sizing: border-box; border-radius: 50%; padding: 1px; background: var(--metal); }
+.tav.legend { --metal: var(--metal-legend); }
 .tav.gold { --metal: var(--metal-gold); }
-.tav.silver { --metal: var(--metal-silver); }
-.tav.bronze { --metal: var(--metal-bronze); }
+.tav.rare { --metal: var(--metal-silver); }
+.tav.common { --metal: var(--metal-bronze); }
 .tav > div { width: 100%; height: 100%; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--bg); box-shadow: inset 0 0 0 2.5px var(--tc); background: var(--bg); display: flex; align-items: center; justify-content: center; font: 700 19px var(--font-num); color: var(--text); }
 .tav.sm { width: 34px; height: 34px; opacity: .6; }
 .tav.sm > div { border-width: 1.5px; box-shadow: inset 0 0 0 2px var(--tc); font: 600 13px var(--font-num); }
@@ -650,6 +659,61 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 .pchips a { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); font: 600 12px var(--font-mix); letter-spacing: .06em; color: var(--muted); text-decoration: none; }
 .pchips a[aria-current="page"] { color: var(--gold-hi); border-color: rgb(216 178 90 / .55); }
 .pchips a.pending { opacity: .45; }
+
+/* ---------- 收藏卡（CollectCard.dc.html）：240×336 基準，依 size 等比縮放 ---------- */
+.cc { position: relative; flex: none; font-family: var(--font-text); color: var(--text); font-variant-numeric: tabular-nums; }
+.cc-scale { position: absolute; left: 0; top: 0; width: 240px; height: 336px; transform-origin: 0 0; }
+.cc-persp { width: 240px; height: 336px; perspective: 900px; touch-action: pan-y; }
+.cc-rot { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; }
+.cc-face { position: absolute; inset: 0; box-sizing: border-box; border-radius: 14px; backface-visibility: hidden; -webkit-backface-visibility: hidden; transition: visibility 0s linear .2s, box-shadow .3s; }
+.cc-back { transform: rotateY(180deg); }
+.cc-in { position: relative; width: 100%; height: 100%; border-radius: 10px; overflow: hidden; }
+.cc-in-back { background: #14161b; }
+.cc-dots { position: absolute; inset: 0; background: repeating-radial-gradient(circle at 50% 36%, var(--gl) 0 1px, transparent 1px 6px); }
+.cc-hatch { position: absolute; inset: 0; background: repeating-linear-gradient(45deg, var(--gl) 0 1px, transparent 1px 7px), repeating-linear-gradient(-45deg, var(--gl) 0 1px, transparent 1px 7px); }
+.cc-rose { position: absolute; left: 12px; top: 22px; width: 206px; height: 206px; }
+.cc-inset { position: absolute; inset: 7px; border: 1px solid var(--inset); border-radius: 6px; }
+.cc-body { position: relative; height: 100%; box-sizing: border-box; padding: 15px 17px 14px; display: flex; flex-direction: column; }
+.cc-body-back { padding: 14px 16px 13px; }
+.cc-top { display: flex; justify-content: space-between; gap: 8px; white-space: nowrap; font: 600 10px var(--font-num); letter-spacing: .2em; color: var(--ink); }
+.cc-body-back .cc-top { letter-spacing: .14em; }
+.cc-season { color: var(--muted); }
+.cc-numwrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+.cc-num { display: inline-block; font: 800 128px/1 var(--font-num); letter-spacing: -.02em; padding: 0 4px; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; }
+.cc-team { display: flex; align-items: center; gap: 6px; }
+.cc-team span { font-size: 10.5px; font-weight: 500; border-radius: 3px; padding: 0 5px; line-height: 17px; }
+.cc-team b { font: 600 12px var(--font-num); letter-spacing: .08em; color: var(--silver); }
+.cc-name { font-size: 24px; font-weight: 900; margin-top: 5px; letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--cline); }
+.cc-tier { display: flex; align-items: center; gap: 6px; }
+.cc-dia { font-size: 8px; letter-spacing: 2px; color: var(--line-2); }
+.cc-dia i { font-style: normal; color: var(--ink); }
+.cc-tier b { font: 700 11px var(--font-num); letter-spacing: .22em; color: var(--ink); }
+.cc-line { font: 600 11px var(--font-num); letter-spacing: .06em; color: var(--muted); white-space: nowrap; }
+.cc-holo { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: color-dodge; transition: opacity .3s; }
+.cc-glare { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: screen; }
+.cc-bname { display: flex; align-items: baseline; gap: 6px; margin-top: 8px; }
+.cc-bname b { font-size: 16px; font-weight: 900; white-space: nowrap; }
+.cc-bname em { font: 700 14px var(--font-num); font-style: normal; color: var(--muted); }
+.cc-bname i { font: 600 11px var(--font-num); font-style: normal; color: var(--silver); }
+.cc-sp { flex: 1; }
+.cc-chip { font-size: 9.5px; font-weight: 500; border-radius: 3px; padding: 0 4px; line-height: 15px; }
+.cc-stats { display: flex; margin-top: 8px; border-radius: 5px; background: rgb(33 37 45 / .85); padding: 6px 2px; }
+.cc-stats div { flex: 1; text-align: center; }
+.cc-stats small { display: block; font: 600 8.5px var(--font-num); letter-spacing: .08em; color: var(--muted); }
+.cc-stats b { display: block; font: 700 15px/1.15 var(--font-num); }
+.cc-sec { font: 600 9px var(--font-mix); letter-spacing: .2em; color: var(--silver-lo); margin-top: 11px; }
+.cc-hist { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+.cc-hist > div { display: grid; grid-template-columns: 30px 6px minmax(0, 1fr); gap: 6px; align-items: center; font-size: 11px; color: var(--silver); }
+.cc-hist .d { font: 600 10.5px var(--font-num); color: var(--muted); }
+.cc-hist i { width: 6px; height: 6px; border-radius: 50%; }
+.cc-hist .l { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-none { font-size: 11px; color: var(--silver-lo); }
+.cc-stamps { display: flex; justify-content: space-between; margin-top: 7px; }
+.cc-stamps > div { width: 44px; height: 44px; box-sizing: border-box; border-radius: 50%; border: 1.5px dashed; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+.cc-stamps span { font-size: 10px; font-weight: 700; white-space: nowrap; }
+.cc-stamps small { font: 600 8px var(--font-num); letter-spacing: .06em; }
+.cc-legal { font-size: 8px; line-height: 1.5; color: #5a616d; text-wrap: pretty; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

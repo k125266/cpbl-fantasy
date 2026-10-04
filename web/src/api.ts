@@ -385,6 +385,26 @@ export interface EligibilityProgress {
   reliefs: number
 }
 
+/** 收藏卡（GET /leagues/:id/players/:pid/card）：卡面數據、本聯盟的卡片履歷與成就印章 */
+export interface CardData {
+  playerId: number
+  name: string
+  jerseyNumber: string | null
+  cpblTeam: string
+  pos: string
+  pitcher: boolean
+  rank: number | null
+  totalRanked: number
+  /** 紋路種子（球員 ID） */
+  seed: number
+  line: string
+  stats: { k: string; v: string }[]
+  /** tone：team 取得或轉隊（teamId 上隊伍色）、gold MVP 與高光、muted 釋出 */
+  hist: { date: string; label: string; tone: 'team' | 'gold' | 'muted'; teamId: number | null }[]
+  /** date 為首次達成日，未達成為 null */
+  stamps: { label: string; date: string | null }[]
+}
+
 export interface PlayerDetail {
   player: { id: number; name: string; team: string; foreign: boolean; listedPosition: string; jerseyNumber: string | null }
   today: string
