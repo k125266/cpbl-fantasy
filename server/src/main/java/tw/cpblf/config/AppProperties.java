@@ -48,7 +48,9 @@ public record AppProperties(
             int livePollIntervalSeconds,
             long minRequestIntervalMs,
             int maxRetries,
-            long initialBackoffMs) {
+            long initialBackoffMs,
+            /** 是否擷取進行中的賽況細節（目前打者與投手、打席結果代碼）；收到權利人要求時關閉（docs/rulebook-amendments.md） */
+            boolean liveDetailEnabled) {
     }
 
     public record Demo(OffsetDateTime startAt, long seed, boolean seedLeague) {

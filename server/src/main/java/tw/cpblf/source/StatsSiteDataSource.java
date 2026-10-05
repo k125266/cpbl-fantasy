@@ -28,6 +28,7 @@ public class StatsSiteDataSource implements CpblDataSource {
 
     private final String baseUrl;
     private final PoliteHttpClient http;
+    private final boolean liveDetail;
 
     public StatsSiteDataSource(AppProperties props) {
         this(props, new PoliteHttpClient(props.crawler()));
@@ -36,6 +37,7 @@ public class StatsSiteDataSource implements CpblDataSource {
     StatsSiteDataSource(AppProperties props, PoliteHttpClient http) {
         this.baseUrl = props.crawler().statsBaseUrl();
         this.http = http;
+        this.liveDetail = props.crawler().liveDetailEnabled();
     }
 
     @Override
@@ -68,7 +70,8 @@ public class StatsSiteDataSource implements CpblDataSource {
     }
 
     private StatsSiteParsers.GamePage gamePage(int year, String kindCode, int sno) {
-        return StatsSiteParsers.parseGame(markdown("/schedule/" + year + "-" + kindCode + "-" + sno), year, kindCode, sno);
+        return StatsSiteParsers.parseGame(markdown("/schedule/" + year + "-" + kindCode + "-" + sno), year, kindCode, sno,
+                liveDetail);
     }
 
     /** 單場比賽頁（賽程資訊＋box score）。編號不存在時丟 {@link SourceNotFoundException}。整季封存用。 */

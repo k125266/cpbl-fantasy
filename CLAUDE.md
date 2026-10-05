@@ -40,7 +40,7 @@ Demo 模式用模擬賽季（虛構球員）；「聯盟 → 系統管理」可�
 ## 不可違反的規則（規則書第 10 節）
 
 - 不得加入任何金錢元素或相關欄位（收費、獎品、可兌換點數、下注、廣告）；FAAB 欄位一律 `faab_*`
-- 官網只擷取統計欄位（`CpblParsers` 白名單）；不擷取新聞、文字轉播、圖片；第三方新聞只能標題＋連結（見 `docs/rulebook-amendments.md`）
+- 只擷取統計欄位與比賽狀態（`CpblParsers`、`StatsSiteParsers` 白名單）；不擷取新聞、圖片、文字轉播的敘述內容。逐打席結果代碼只能經 `PlayResultCodes` 白名單，並可用 `cpblf.crawler.live-detail-enabled` 停用；第三方新聞只能標題＋連結（見 `docs/rulebook-amendments.md`）
 - 不使用球員照片、球隊 logo；球隊用自訂色塊（`web/src/teams.ts`），球員用背號
 - 爬蟲：可識別的 User-Agent、Live Poller ≥ 60 秒、非比賽時段不輪詢、遇速率限制停止
 - 系統文字不得推測傷況或出現「傷兵」字樣
