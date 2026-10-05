@@ -401,6 +401,87 @@ export interface EligibilityProgress {
   reliefs: number
 }
 
+/** 逐局比分；未進行的局為 null，Rhe 為得分、安打、失誤 */
+export interface LineScore {
+  away: (number | null)[]
+  home: (number | null)[]
+  awayRhe: (number | null)[]
+  homeRhe: (number | null)[]
+}
+
+/** 即時頁（GET /api/live）的一場比賽 */
+export interface LiveGame {
+  id: number
+  sno: number
+  status: 'SCHEDULED' | 'IN_PROGRESS' | 'FINAL' | 'POSTPONED' | 'SUSPENDED' | 'CANCELLED'
+  statsFinal: boolean
+  scheduledDate: string
+  playDate: string
+  startTime: string | null
+  homeTeam: string
+  awayTeam: string
+  /** 進行中為即時比分，結束後為最終比分 */
+  homeScore: number | null
+  awayScore: number | null
+  inning: string | null
+  fetchedAt: string | null
+  lineScore: LineScore | null
+  /** 目前打者、投手（player id），進行中才有 */
+  batterId: number | null
+  pitcherId: number | null
+  pitchCount: number | null
+  /** 目前打者本場結果代碼 */
+  batterResults: string[] | null
+  /** 本半局打席；正在打擊的 result 為 null */
+  halfInning: { jerseyNumber: string; name: string; result: string | null }[] | null
+  /** 進階數據網站的這場比賽（來源標示）；模擬賽季為 null */
+  sourceUrl: string | null
+}
+
+/** 一位球員在一場比賽的數據（依 box score 順序） */
+export interface LiveLine {
+  gameId: number
+  playerId: number
+  name: string
+  jerseyNumber: string | null
+  cpblTeam: string
+  listedPosition: string
+  home: boolean
+  batted: boolean
+  pitched: boolean
+  /** 棒次 1～9，替補沿用被替換者的棒次 */
+  lineupSlot: number | null
+  sub: boolean
+  seq: number
+  pa: number; ab: number; h: number; r: number; hr: number; bb: number
+  outs: number; pH: number; pBb: number; pEr: number; pK: number; w: number; sv: number
+  /** true 為結算後的正式數據 */
+  settled: boolean
+  changedAt: string | null
+  fantasyTeamId: number | null
+  rosterSlot: SlotName | null
+}
+
+export interface LiveStarter {
+  playerId: number
+  name: string
+  jerseyNumber: string | null
+  cpblTeam: string
+  listedPosition: string
+  fantasyTeamId: number
+  rosterSlot: SlotName
+}
+
+export interface LiveView {
+  notice: string
+  today: string
+  myTeamId: number | null
+  opponentTeamId: number | null
+  games: LiveGame[]
+  lines: LiveLine[]
+  starters: LiveStarter[]
+}
+
 /** 收藏卡（GET /leagues/:id/players/:pid/card）：卡面數據、本聯盟的卡片履歷與成就印章 */
 export interface CardData {
   playerId: number
