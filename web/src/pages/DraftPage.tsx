@@ -50,9 +50,12 @@ export default function DraftPage() {
           <div className="row">
             <select value={halfNo} onChange={(e) => setHalfNo(Number(e.target.value))} aria-label="半季">
               <option value={1}>上半季</option>
-              <option value={2}>下半季（含 keeper）</option>
+              <option value={2}>下半季補強選秀（含 keeper）</option>
             </select>
-            <button type="button" onClick={() => call(() => api.post(`/api/leagues/${leagueId}/drafts`, { halfNo }))}>建立選秀（隨機順序）</button>
+            <button type="button" onClick={() => call(() => api.post(`/api/leagues/${leagueId}/drafts`, { halfNo }))}>建立選秀</button>
+            {active && (active.status === 'SETUP' || active.status === 'KEEPERS') && !active.revealedAt && (
+              <button type="button" onClick={() => call(() => api.post(`/api/leagues/${leagueId}/drafts/${active.id}/reveal`))}>揭曉順位</button>
+            )}
             {active && (active.status === 'SETUP' || active.status === 'KEEPERS') && (
               <button type="button" className="primary" onClick={() => call(() => api.post(`/api/leagues/${leagueId}/drafts/${active.id}/start`))}>開始選秀</button>
             )}
@@ -191,7 +194,7 @@ function KeeperPicker({ draft, onChange }: { draft: DraftView; onChange: () => v
   const roster = useLoad(() => api.get<RosterResponse>(`/api/leagues/${leagueId}/teams/${league?.myTeamId}/roster`), [leagueId])
   const [chosen, setChosen] = useState<number[]>(draft.myKeepers.map((k) => k.playerId))
   const [err, setErr] = useState<unknown>(null)
-  const limit = league?.league.keeperLimit ?? 5
+  const limit = league?.league.keeperLimit ?? 15
   const save = async () => {
     setErr(null)
     try {
@@ -204,7 +207,7 @@ function KeeperPicker({ draft, onChange }: { draft: DraftView; onChange: () => v
   return (
     <div className="card">
       <h2>選擇 keeper（至多 {limit} 人）</h2>
-      <p className="ps">Keeper 佔用的輪次 = 上次被選中的輪次 − 2（非選秀取得者視為最後一輪）。</p>
+      <p className="ps">Keeper 不佔選秀輪次；沒保留的球員回到球員池。截止時間為選秀前 10 分鐘，順位揭曉時公開各隊 keeper。</p>
       <ErrorBox error={err} />
       {(roster.data?.players || []).map((p) => (
         <label key={p.playerId} className="row" style={{ marginBottom: 6 }}>
@@ -214,7 +217,7 @@ function KeeperPicker({ draft, onChange }: { draft: DraftView; onChange: () => v
         </label>
       ))}
       <button type="button" className="primary" onClick={save}>儲存 keeper</button>
-      {draft.myKeepers.length > 0 && <p className="ps">目前 keeper：{draft.myKeepers.map((k) => `${k.name}（第 ${k.round} 輪）`).join('、')}</p>}
+      {draft.myKeepers.length > 0 && <p className="ps">目前 keeper：{draft.myKeepers.map((k) => k.name).join('、')}</p>}
     </div>
   )
 }

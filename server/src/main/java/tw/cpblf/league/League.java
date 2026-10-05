@@ -30,7 +30,7 @@ public record League(
         int tradeReviewHours,
         int matchupLockHours,
         int keeperLimit,
-        int keeperRoundOffset,
+        int secondHalfRounds,
         int draftRounds,
         int draftPickSeconds,
         boolean refundFaabOnDelist,
@@ -50,7 +50,7 @@ public record League(
                 rs.getInt("minors_return_days"), rs.getInt("foreign_minors_return_days"),
                 rs.getInt("hitter_idle_game_days"), rs.getInt("pitcher_idle_days"),
                 rs.getInt("waiver_days"), rs.getInt("waiver_process_hour"), rs.getInt("trade_review_hours"),
-                rs.getInt("matchup_lock_hours"), rs.getInt("keeper_limit"), rs.getInt("keeper_round_offset"),
+                rs.getInt("matchup_lock_hours"), rs.getInt("keeper_limit"), rs.getInt("second_half_rounds"),
                 rs.getInt("draft_rounds"), rs.getInt("draft_pick_seconds"), rs.getBoolean("refund_faab_on_delist"),
                 championTeamId, rs.getString("champion_note"));
     }

@@ -1,5 +1,6 @@
 package tw.cpblf.api;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -43,13 +44,24 @@ public class DraftController {
         return drafts.view(draftId, leagues.teamOf(leagueId, u.id()).orElse(null));
     }
 
-    public record Create(int halfNo, List<Long> order) {
+    /** @param scheduledAt 選秀時間（keeper 在前 10 分鐘截止）；可不填 */
+    public record Create(int halfNo, List<Long> order, OffsetDateTime scheduledAt) {
     }
 
     @PostMapping
     public Map<String, Object> create(@PathVariable long leagueId, @RequestBody Create req) {
         leagues.requireCommissioner(leagueId, Auth.require());
-        return Map.of("id", drafts.create(leagueId, req.halfNo(), req.order()));
+        return Map.of("id", drafts.create(leagueId, req.halfNo(), req.order(),
+                req.scheduledAt() == null ? null : req.scheduledAt().toInstant()));
+    }
+
+    /** 揭曉順位並公開各隊 keeper（聯盟管理員）。 */
+    @PostMapping("/{draftId}/reveal")
+    public Map<String, Boolean> reveal(@PathVariable long leagueId, @PathVariable long draftId) {
+        leagues.requireCommissioner(leagueId, Auth.require());
+        check(leagueId, draftId);
+        drafts.reveal(draftId);
+        return Map.of("ok", true);
     }
 
     public record Keepers(List<Long> playerIds) {

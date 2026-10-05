@@ -8,7 +8,6 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -64,27 +63,48 @@ public class DraftService {
         this.notifications = notifications;
     }
 
+    /** Keeper 在選秀時間前這麼久截止（同時是順位揭曉的時間點）。 */
+    public static final Duration KEEPER_LOCK_BEFORE = Duration.ofMinutes(10);
+
     record DraftRow(long id, long leagueId, long halfId, int halfNo, LocalDate halfStart, String status, int rounds,
-                    int pickSeconds, int currentPickNo, Instant deadline) {
+                    int pickSeconds, int currentPickNo, Instant deadline, boolean snake, Instant scheduledAt,
+                    Instant revealedAt) {
+
+        /** keeper 截止時間：選秀時間前 10 分鐘；沒有設定選秀時間時為 null（揭曉時才鎖定）。 */
+        Instant keeperDeadline() {
+            return scheduledAt == null ? null : scheduledAt.minus(KEEPER_LOCK_BEFORE);
+        }
+    }
+
+    private static Instant instant(java.sql.Timestamp t) {
+        return t == null ? null : t.toInstant();
     }
 
     private DraftRow draft(long draftId) {
         return jdbc.sql("""
                 select d.id, d.league_id, d.season_half_id, h.half_no, h.start_date, d.status, d.rounds, d.pick_seconds,
-                       d.current_pick_no, d.current_pick_deadline
+                       d.current_pick_no, d.current_pick_deadline, d.snake, d.scheduled_at, d.revealed_at
                 from draft d join season_half h on h.id = d.season_half_id where d.id = ?
                 """).param(draftId).query((rs, n) -> new DraftRow(rs.getLong(1), rs.getLong(2), rs.getLong(3), rs.getInt(4),
                 rs.getObject(5, LocalDate.class), rs.getString(6), rs.getInt(7), rs.getInt(8), rs.getInt(9),
-                rs.getTimestamp(10) == null ? null : rs.getTimestamp(10).toInstant()))
+                instant(rs.getTimestamp(10)), rs.getBoolean(11), instant(rs.getTimestamp(12)), instant(rs.getTimestamp(13))))
                 .optional().orElseThrow(() -> ApiException.notFound("選秀不存在"));
     }
 
     // ------------------------------------------------------------------
-    // 建立、keeper、開始
+    // 建立、keeper、揭曉、開始（E14：docs/rulebook-amendments.md「選秀與 keeper」）
     // ------------------------------------------------------------------
 
-    @Transactional
     public long create(long leagueId, int halfNo, List<Long> order) {
+        return create(leagueId, halfNo, order, null);
+    }
+
+    /**
+     * 上半季：蛇形 draft_rounds 輪，順位在揭曉時隨機抽出（或使用指定順序）。
+     * 下半季：補強選秀，每輪同一順序 second_half_rounds 輪，順位在揭曉時依上半季戰績由差到好；建立後進入 keeper 選擇期。
+     */
+    @Transactional
+    public long create(long leagueId, int halfNo, List<Long> order, Instant scheduledAt) {
         League league = leagues.get(leagueId);
         lock.lock(leagueId);
         SeasonService.Half half = season.halves(leagueId).stream().filter(h -> h.halfNo() == halfNo).findFirst()
@@ -105,33 +125,36 @@ public class DraftService {
         if (teams.size() < 2) {
             throw ApiException.badRequest("至少需要 2 隊");
         }
-        if (league.draftRounds() > league.rosterSize() + league.slotsNa()) {
-            throw ApiException.badRequest("選秀輪數超過名單容量");
+        boolean second = halfNo == 2;
+        int rounds = second ? league.secondHalfRounds() : league.draftRounds();
+        boolean keepers = second && league.keeperLimit() > 0;
+        if ((keepers ? league.keeperLimit() : 0) + rounds > league.rosterSize() + league.slotsNa()) {
+            throw ApiException.badRequest("選秀輪數（加上 keeper）超過名單容量");
         }
-        List<Long> o;
-        if (order != null && !order.isEmpty()) {
-            if (!new HashSet<>(order).equals(new HashSet<>(teams)) || order.size() != teams.size()) {
-                throw ApiException.badRequest("選秀順序需包含所有隊伍各一次");
-            }
-            o = order;
-        } else {
-            o = new ArrayList<>(teams);
-            Collections.shuffle(o, new Random(clock.now().toEpochMilli()));
+        if (order != null && !order.isEmpty()
+                && (!new HashSet<>(order).equals(new HashSet<>(teams)) || order.size() != teams.size())) {
+            throw ApiException.badRequest("選秀順序需包含所有隊伍各一次");
         }
-        boolean keepers = halfNo == 2 && league.keeperLimit() > 0;
         long id = jdbc.sql("""
-                insert into draft (league_id, season_half_id, status, rounds, pick_seconds) values (?, ?, ?, ?, ?) returning id
-                """).params(leagueId, half.id(), keepers ? "KEEPERS" : "SETUP", league.draftRounds(), league.draftPickSeconds())
-                .query(Long.class).single();
-        for (int i = 0; i < o.size(); i++) {
-            jdbc.sql("insert into draft_slot (draft_id, team_id, draft_position) values (?, ?, ?)").params(id, o.get(i), i + 1).update();
+                insert into draft (league_id, season_half_id, status, rounds, pick_seconds, snake, scheduled_at)
+                values (?, ?, ?, ?, ?, ?, ?) returning id
+                """).params(leagueId, half.id(), keepers ? "KEEPERS" : "SETUP", rounds, league.draftPickSeconds(), !second,
+                scheduledAt == null ? null : Timestamp.from(scheduledAt)).query(Long.class).single();
+        // 指定順序（管理員手動）先存起來；揭曉前不公開
+        if (order != null && !order.isEmpty()) {
+            for (int i = 0; i < order.size(); i++) {
+                jdbc.sql("insert into draft_slot (draft_id, team_id, draft_position) values (?, ?, ?)").params(id, order.get(i), i + 1).update();
+            }
         }
-        notifications.notifyLeague(leagueId, (halfNo == 1 ? "上" : "下") + "半季選秀已建立"
-                + (keepers ? "，請於選秀開始前選定至多 " + league.keeperLimit() + " 名 keeper" : ""));
+        String when = scheduledAt == null ? "" : "（" + scheduledAt.atZone(clock.zone()).toLocalDateTime().toString().replace('T', ' ') + "）";
+        notifications.notifyLeague(leagueId, second
+                ? "下半季補強選秀已建立" + when + "，" + rounds + " 輪"
+                + (keepers ? "；請在選秀前 10 分鐘以前選定至多 " + league.keeperLimit() + " 名 keeper" : "")
+                : "上半季選秀已建立" + when + "，蛇形 " + rounds + " 輪；順位在選秀前抽籤");
         return id;
     }
 
-    public record KeeperView(long playerId, String name, int round) {
+    public record KeeperView(long playerId, String name) {
     }
 
     @Transactional
@@ -139,8 +162,11 @@ public class DraftService {
         DraftRow d = draft(draftId);
         League league = leagues.get(d.leagueId());
         lock.lock(d.leagueId());
-        if (!"KEEPERS".equals(d.status())) {
+        if (!"KEEPERS".equals(d.status()) || d.revealedAt() != null) {
             throw ApiException.conflict("目前不是 keeper 選擇期");
+        }
+        if (d.keeperDeadline() != null && !clock.now().isBefore(d.keeperDeadline())) {
+            throw ApiException.conflict("keeper 已截止（選秀前 10 分鐘）");
         }
         if (playerIds.size() > league.keeperLimit()) {
             throw ApiException.badRequest("keeper 至多 " + league.keeperLimit() + " 人");
@@ -159,38 +185,54 @@ public class DraftService {
             throw ApiException.badRequest("keeper 洋將超過上限");
         }
         jdbc.sql("delete from keeper_selection where draft_id = ? and team_id = ?").params(draftId, teamId).update();
-
-        // Keeper 佔用輪次 = 上次被選中輪次 − offset；非選秀取得者視為最後一輪。同隊衝突時往前一輪找，再往後找。
-        Long prevDraft = jdbc.sql("""
-                select d.id from draft d join season_half h on h.id = d.season_half_id
-                where d.league_id = ? and h.half_no < ? and d.status = 'COMPLETED' order by h.half_no desc limit 1
-                """).params(d.leagueId(), d.halfNo()).query(Long.class).optional().orElse(null);
-        List<long[]> wanted = new ArrayList<>();
-        for (Long p : playerIds) {
-            Integer last = prevDraft == null ? null : jdbc.sql("""
-                    select round from draft_pick where draft_id = ? and player_id = ?
-                    """).params(prevDraft, p).query(Integer.class).optional().orElse(null);
-            int base = last == null ? d.rounds() : last;
-            wanted.add(new long[]{p, Math.max(1, base - league.keeperRoundOffset())});
-        }
-        wanted.sort(Comparator.comparingLong(w -> w[1]));
-        Set<Integer> used = new HashSet<>();
+        // Keeper 不佔輪次；揭曉前只有自己看得到
         List<KeeperView> out = new ArrayList<>();
-        for (long[] w : wanted) {
-            int r = (int) w[1];
-            int chosen = -1;
-            for (int x = r; x >= 1 && chosen < 0; x--) {
-                if (!used.contains(x)) chosen = x;
-            }
-            for (int x = r + 1; x <= d.rounds() && chosen < 0; x++) {
-                if (!used.contains(x)) chosen = x;
-            }
-            used.add(chosen);
-            jdbc.sql("insert into keeper_selection (draft_id, team_id, player_id, round) values (?, ?, ?, ?)")
-                    .params(draftId, teamId, w[0], chosen).update();
-            out.add(new KeeperView(w[0], roster.playerName(w[0]), chosen));
+        for (Long p : playerIds) {
+            jdbc.sql("insert into keeper_selection (draft_id, team_id, player_id) values (?, ?, ?)").params(draftId, teamId, p).update();
+            out.add(new KeeperView(p, roster.playerName(p)));
         }
         return out;
+    }
+
+    /**
+     * 揭曉順位（同時鎖定並公開 keeper）。上半季隨機抽籤（或管理員指定的順序），下半季依上半季戰績由差到好。
+     * 各裝置依 revealed_at 同步播放揭曉動畫。
+     */
+    @Transactional
+    public void reveal(long draftId) {
+        DraftRow d = draft(draftId);
+        lock.lock(d.leagueId());
+        if (d.revealedAt() != null) {
+            throw ApiException.conflict("順位已揭曉");
+        }
+        if (!"SETUP".equals(d.status()) && !"KEEPERS".equals(d.status())) {
+            throw ApiException.conflict("選秀已開始");
+        }
+        revealInternal(d);
+    }
+
+    private void revealInternal(DraftRow d) {
+        List<Long> preset = jdbc.sql("select team_id from draft_slot where draft_id = ? order by draft_position").param(d.id())
+                .query(Long.class).list();
+        if (preset.isEmpty()) {
+            List<Long> order;
+            if (d.halfNo() == 2) {
+                // 上半季戰績由差到好（戰績表名次倒序；同名次沿用戰績表的排序）
+                List<SeasonService.StandingRow> st = new ArrayList<>(season.standings(d.leagueId(), 1));
+                Collections.reverse(st);
+                order = new ArrayList<>(st.stream().map(SeasonService.StandingRow::teamId).toList());
+            } else {
+                order = new ArrayList<>(jdbc.sql("select id from fantasy_team where league_id = ? order by id").param(d.leagueId())
+                        .query(Long.class).list());
+                Collections.shuffle(order, new Random(clock.now().toEpochMilli()));
+            }
+            for (int i = 0; i < order.size(); i++) {
+                jdbc.sql("insert into draft_slot (draft_id, team_id, draft_position) values (?, ?, ?)").params(d.id(), order.get(i), i + 1).update();
+            }
+        }
+        Instant now = clock.now();
+        jdbc.sql("update draft set revealed_at = ?, status = 'SETUP' where id = ?").params(Timestamp.from(now), d.id()).update();
+        notifications.notifyLeague(d.leagueId(), (d.halfNo() == 2 ? "補強選秀順位揭曉，各隊 keeper 已公開" : "選秀順位抽籤揭曉"));
     }
 
     @Transactional
@@ -200,29 +242,23 @@ public class DraftService {
         if (!"SETUP".equals(d.status()) && !"KEEPERS".equals(d.status())) {
             throw ApiException.conflict("選秀已開始");
         }
+        if (d.revealedAt() == null) {
+            revealInternal(d);
+        }
         List<Long> order = jdbc.sql("select team_id from draft_slot where draft_id = ? order by draft_position").param(draftId)
                 .query(Long.class).list();
         int n = order.size();
         int pickNo = 1;
-        Map<String, Integer> pickOf = new HashMap<>();
         for (int r = 1; r <= d.rounds(); r++) {
             for (int i = 0; i < n; i++) {
-                long team = r % 2 == 1 ? order.get(i) : order.get(n - 1 - i);
+                // 蛇形：雙數輪反向；補強選秀每輪同一順序
+                long team = !d.snake() || r % 2 == 1 ? order.get(i) : order.get(n - 1 - i);
                 jdbc.sql("insert into draft_pick (draft_id, pick_no, round, team_id) values (?, ?, ?, ?)")
                         .params(draftId, pickNo, r, team).update();
-                pickOf.put(team + ":" + r, pickNo);
                 pickNo++;
             }
         }
         Instant now = clock.now();
-        jdbc.sql("select team_id, player_id, round from keeper_selection where draft_id = ?").param(draftId)
-                .query((rs, x) -> {
-                    int pn = pickOf.get(rs.getLong(1) + ":" + rs.getInt(3));
-                    jdbc.sql("""
-                            update draft_pick set player_id = ?, is_keeper = true, picked_at = ? where draft_id = ? and pick_no = ?
-                            """).params(rs.getLong(2), Timestamp.from(now), draftId, pn).update();
-                    return null;
-                }).list();
         jdbc.sql("update draft set status = 'IN_PROGRESS', started_at = ? where id = ?").params(Timestamp.from(now), draftId).update();
         trades.cancelOpen(d.leagueId(), "選秀開始，未完成交易取消");
         advance(draftId);
@@ -307,11 +343,23 @@ public class DraftService {
                 .query(Long.class).single();
     }
 
+    /** 可選球員：一軍登錄、尚未被選、也不是任何一隊的 keeper。 */
     private List<Long> available(DraftRow d) {
         return new ArrayList<>(jdbc.sql("""
                 select id from player where registration_status = 'REGISTERED' and first_team_status = 'ACTIVE'
                   and id not in (select player_id from draft_pick where draft_id = ? and player_id is not null)
-                """).param(d.id()).query(Long.class).list());
+                  and id not in (select player_id from keeper_selection where draft_id = ?)
+                """).params(d.id(), d.id()).query(Long.class).list());
+    }
+
+    /** 這隊已確定的球員：keeper（不佔輪次）＋已選的人。 */
+    private List<Long> teamPlayers(DraftRow d, long teamId) {
+        List<Long> out = new ArrayList<>(jdbc.sql("select player_id from keeper_selection where draft_id = ? and team_id = ?")
+                .params(d.id(), teamId).query(Long.class).list());
+        out.addAll(jdbc.sql("""
+                select player_id from draft_pick where draft_id = ? and team_id = ? and player_id is not null order by pick_no
+                """).params(d.id(), teamId).query(Long.class).list());
+        return out;
     }
 
     /** 回傳錯誤訊息，或 null 表示可選。 */
@@ -330,18 +378,28 @@ public class DraftService {
         if (taken > 0) {
             return "該球員已被選走";
         }
-        List<Long> mine = new ArrayList<>(jdbc.sql("""
-                select player_id from draft_pick where draft_id = ? and team_id = ? and player_id is not null order by pick_no
-                """).params(d.id(), teamId).query(Long.class).list());
+        int kept = jdbc.sql("select count(*) from keeper_selection where draft_id = ? and player_id = ?").params(d.id(), playerId)
+                .query(Integer.class).single();
+        if (kept > 0) {
+            return "該球員是 keeper";
+        }
+        // keeper 也算進洋將上限與先發缺位，但不佔輪次
+        List<Long> mine = teamPlayers(d, teamId);
         mine.add(playerId);
         int foreign = jdbc.sql("select count(*) from player where id in (:ids) and is_foreign").param("ids", mine)
                 .query(Integer.class).single();
         if (foreign > league.foreignPlayerLimit()) {
             return "洋將已達上限（" + league.foreignPlayerLimit() + " 人）";
         }
+        // 補強選秀（非蛇形）不要求用剩下的輪次補滿先發：空位選秀後從自由球員補（E14）
+        if (!d.snake()) {
+            return null;
+        }
         int totalPicks = jdbc.sql("select count(*) from draft_pick where draft_id = ? and team_id = ?").params(d.id(), teamId)
                 .query(Integer.class).single();
-        int remaining = totalPicks - mine.size();
+        int picked = jdbc.sql("select count(*) from draft_pick where draft_id = ? and team_id = ? and player_id is not null")
+                .params(d.id(), teamId).query(Integer.class).single();
+        int remaining = totalPicks - picked - 1;
         LocalDate date = eligibilityDate(d);
         Map<Long, Set<Slot>> el = eligibility.eligibility(league, mine, date);
         List<SlotAssigner.Candidate> cands = mine.stream().map(id -> new SlotAssigner.Candidate(id, el.get(id))).toList();
@@ -383,11 +441,16 @@ public class DraftService {
                 .params(league.faabBudgetPerHalf(), d.leagueId()).update();
 
         for (Long t : teams) {
+            // 名單 = keeper（不佔輪次）＋ 選秀；空位選秀後從自由球員補
             List<long[]> picks = jdbc.sql("""
-                    select dp.player_id, case when p.first_team_status = 'MINORS' then 1 else 0 end
-                    from draft_pick dp join player p on p.id = dp.player_id
-                    where dp.draft_id = ? and dp.team_id = ? order by dp.pick_no
-                    """).params(d.id(), t).query((rs, n) -> new long[]{rs.getLong(1), rs.getLong(2)}).list();
+                    select x.player_id, case when p.first_team_status = 'MINORS' then 1 else 0 end, x.keeper
+                    from (select player_id, 0 as ord, true as keeper from keeper_selection where draft_id = :d and team_id = :t
+                          union all
+                          select player_id, pick_no, false from draft_pick where draft_id = :d and team_id = :t and player_id is not null) x
+                    join player p on p.id = x.player_id
+                    order by x.ord
+                    """).param("d", d.id()).param("t", t)
+                    .query((rs, n) -> new long[]{rs.getLong(1), rs.getLong(2), rs.getBoolean(3) ? 1 : 0}).list();
             List<Long> ids = picks.stream().map(p -> p[0]).toList();
             Map<Long, Set<Slot>> el = eligibility.eligibility(league, ids, eff);
             List<SlotAssigner.Candidate> cands = picks.stream().filter(p -> p[1] == 0)
@@ -402,9 +465,7 @@ public class DraftService {
                         na++;
                     }
                 }
-                boolean keeper = jdbc.sql("select is_keeper from draft_pick where draft_id = ? and player_id = ?")
-                        .params(d.id(), p[0]).query(Boolean.class).single();
-                roster.addInternal(t, p[0], slot, eff, keeper ? "KEEPER" : "DRAFT", 0);
+                roster.addInternal(t, p[0], slot, eff, p[2] == 1 ? "KEEPER" : "DRAFT", 0);
             }
         }
         jdbc.sql("update draft set status = 'COMPLETED', completed_at = ?, current_pick_deadline = null where id = ?")
@@ -420,9 +481,23 @@ public class DraftService {
                            String playerTeam, boolean keeper, boolean auto) {
     }
 
+    /** 一隊公開的 keeper（揭曉後才有）。 */
+    public record TeamKeepers(long teamId, List<KeeperView> players) {
+    }
+
+    /**
+     * @param order          順位；揭曉前為空（保密）
+     * @param scheduledAt    選秀時間；沒有設定為 null
+     * @param keeperDeadline keeper 截止（選秀前 10 分鐘）
+     * @param revealedAt     順位揭曉時間，各裝置依此同步播放揭曉動畫
+     * @param snake          蛇形（上半季）；補強選秀每輪同一順序
+     * @param myKeepers      自己的 keeper（任何時候都看得到）
+     * @param keepers        各隊 keeper，揭曉後才公開
+     */
     public record DraftView(long id, int halfNo, String status, int rounds, int pickSeconds, int currentPickNo,
                             Long currentTeamId, OffsetDateTime deadline, long secondsLeft, List<Long> order,
-                            List<PickView> picks, List<KeeperView> myKeepers) {
+                            List<PickView> picks, List<KeeperView> myKeepers, OffsetDateTime scheduledAt,
+                            OffsetDateTime keeperDeadline, OffsetDateTime revealedAt, boolean snake, List<TeamKeepers> keepers) {
     }
 
     public List<DraftView> list(long leagueId, Long viewerTeamId) {
@@ -438,8 +513,9 @@ public class DraftService {
 
     public DraftView view(long draftId, Long viewerTeamId) {
         DraftRow d = draft(draftId);
-        List<Long> order = jdbc.sql("select team_id from draft_slot where draft_id = ? order by draft_position").param(draftId)
-                .query(Long.class).list();
+        boolean revealed = d.revealedAt() != null;
+        List<Long> order = !revealed ? List.of() : jdbc.sql("select team_id from draft_slot where draft_id = ? order by draft_position")
+                .param(draftId).query(Long.class).list();
         List<PickView> picks = jdbc.sql("""
                 select dp.pick_no, dp.round, dp.team_id, t.name, dp.player_id, p.name, p.cpbl_team_code, dp.is_keeper, dp.is_auto
                 from draft_pick dp join fantasy_team t on t.id = dp.team_id left join player p on p.id = dp.player_id
@@ -450,13 +526,30 @@ public class DraftService {
         }).list();
         Long current = "IN_PROGRESS".equals(d.status()) ? currentTeam(d) : null;
         long secondsLeft = d.deadline() == null ? 0 : Math.max(0, Duration.between(clock.now(), d.deadline()).toSeconds());
-        List<KeeperView> keepers = viewerTeamId == null ? List.of() : jdbc.sql("""
-                select k.player_id, p.name, k.round from keeper_selection k join player p on p.id = k.player_id
-                where k.draft_id = ? and k.team_id = ? order by k.round
-                """).params(draftId, viewerTeamId).query((rs, n) -> new KeeperView(rs.getLong(1), rs.getString(2), rs.getInt(3))).list();
+        List<KeeperView> mine = viewerTeamId == null ? List.of() : jdbc.sql("""
+                select k.player_id, p.name from keeper_selection k join player p on p.id = k.player_id
+                where k.draft_id = ? and k.team_id = ? order by p.name
+                """).params(draftId, viewerTeamId).query((rs, n) -> new KeeperView(rs.getLong(1), rs.getString(2))).list();
+        // 各隊 keeper 只在揭曉後公開
+        List<TeamKeepers> all = new ArrayList<>();
+        if (revealed) {
+            Map<Long, List<KeeperView>> byTeam = new java.util.LinkedHashMap<>();
+            order.forEach(t -> byTeam.put(t, new ArrayList<>()));
+            jdbc.sql("""
+                    select k.team_id, k.player_id, p.name from keeper_selection k join player p on p.id = k.player_id
+                    where k.draft_id = ? order by p.name
+                    """).param(draftId).query(rs -> {
+                byTeam.computeIfAbsent(rs.getLong(1), x -> new ArrayList<>()).add(new KeeperView(rs.getLong(2), rs.getString(3)));
+            });
+            byTeam.forEach((t, ks) -> all.add(new TeamKeepers(t, ks)));
+        }
         return new DraftView(d.id(), d.halfNo(), d.status(), d.rounds(), d.pickSeconds(), d.currentPickNo(), current,
-                d.deadline() == null ? null : d.deadline().atZone(clock.zone()).toOffsetDateTime(), secondsLeft, order, picks,
-                keepers);
+                odt(d.deadline()), secondsLeft, order, picks, mine, odt(d.scheduledAt()), odt(d.keeperDeadline()),
+                odt(d.revealedAt()), d.snake(), all);
+    }
+
+    private OffsetDateTime odt(Instant i) {
+        return i == null ? null : i.atZone(clock.zone()).toOffsetDateTime();
     }
 
     public Long leagueOf(long draftId) {
