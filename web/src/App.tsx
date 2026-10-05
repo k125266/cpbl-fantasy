@@ -40,6 +40,8 @@ export default function App() {
   const [memberships, setMemberships] = useState<Membership[] | null>(null)
   const [league, setLeague] = useState<LeagueDetail | null>(null)
   const navigate = useNavigate()
+  // 即時比分在寬螢幕是左右兩欄（設計稿 1b），外框放寬
+  const liveWide = useLocation().pathname === '/live'
 
   const reloadSystem = useCallback(() => {
     api.get<SystemInfo>('/api/system').then(setSystem).catch(() => setSystem(null))
@@ -113,7 +115,7 @@ export default function App() {
 
   return (
     <AppContext.Provider value={{ user, system, leagueId, league, reloadLeague, reloadSystem, logout }}>
-      <div className="app">
+      <div className={`app${liveWide ? ' app-live' : ''}`}>
         <LeagueTopBar />
         {!league ? <Loading /> : (
           <Routes>

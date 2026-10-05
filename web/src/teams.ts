@@ -7,21 +7,23 @@
 export interface CpblTeamStyle {
   code: string
   short: string
+  /** 球隊全名（比賽卡用） */
+  name: string
   bg: string
   fg: string
 }
 
 export const CPBL_TEAMS: Record<string, CpblTeamStyle> = {
-  BRO: { code: 'BRO', short: '兄弟', bg: '#d9a400', fg: '#1a1a1a' },
-  UNI: { code: 'UNI', short: '統一', bg: '#e8742a', fg: '#ffffff' },
-  RAK: { code: 'RAK', short: '樂天', bg: '#8a1f3d', fg: '#ffffff' },
-  FUB: { code: 'FUB', short: '富邦', bg: '#1f4fa3', fg: '#ffffff' },
-  WEI: { code: 'WEI', short: '味全', bg: '#c8323b', fg: '#ffffff' },
-  TSG: { code: 'TSG', short: '台鋼', bg: '#1b7a6e', fg: '#ffffff' },
+  BRO: { code: 'BRO', short: '兄弟', name: '中信兄弟', bg: '#d9a400', fg: '#1a1a1a' },
+  UNI: { code: 'UNI', short: '統一', name: '統一7-ELEVEn獅', bg: '#e8742a', fg: '#ffffff' },
+  RAK: { code: 'RAK', short: '樂天', name: '樂天桃猿', bg: '#8a1f3d', fg: '#ffffff' },
+  FUB: { code: 'FUB', short: '富邦', name: '富邦悍將', bg: '#1f4fa3', fg: '#ffffff' },
+  WEI: { code: 'WEI', short: '味全', name: '味全龍', bg: '#c8323b', fg: '#ffffff' },
+  TSG: { code: 'TSG', short: '台鋼', name: '台鋼雄鷹', bg: '#1b7a6e', fg: '#ffffff' },
 }
 
 export function cpblTeam(code: string | null | undefined): CpblTeamStyle {
-  return (code && CPBL_TEAMS[code]) || { code: code || '?', short: code || '?', bg: '#777', fg: '#fff' }
+  return (code && CPBL_TEAMS[code]) || { code: code || '?', short: code || '?', name: code || '?', bg: '#777', fg: '#fff' }
 }
 
 /**
