@@ -50,4 +50,5 @@ Demo 模式用模擬賽季（虛構球員）；「聯盟 → 系統管理」可�
 
 - 計分相關修改必須維持：比率類別先加總再相除、結算可重複執行結果一致、交易不改變歷史比分（都有測試）
 - 名單是 effective-dated（`valid_from` 含、`valid_to` 不含）；鎖定球員的異動自次日生效
-- 待辦清單：`docs/engineering-backlog.md`（E1–E12）
+- 待辦清單：`docs/engineering-backlog.md`（E1–E17）
+- 套用 Claude Design 設計稿前，先看 `docs/decisions.md`「介面與設計稿」：裡面是使用者決定的刻意偏離（例：即時比分網頁版字級），不要被設計稿數值覆蓋
