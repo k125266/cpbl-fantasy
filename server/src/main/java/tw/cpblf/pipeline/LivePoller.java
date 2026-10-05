@@ -138,7 +138,7 @@ public class LivePoller {
             if (id != null) lineup.putIfAbsent(id, b);
         }
         jdbc.sql("delete from live_game_stat where game_id = ?").param(g.id()).update();
-        // rows 依 box score 出現順序（打者依打序、再來投手依登板順序），存成 box_order 供即時頁排序
+        // rows 依 box score 出現順序（打者依打序、再來投手依登板順序），存成 box_seq 供即時頁排序
         int order = 0;
         for (Map.Entry<Long, StatRow> e : rows.entrySet()) {
             StatRow s = e.getValue();
@@ -147,7 +147,7 @@ public class LivePoller {
             BatterLine b = lineup.get(e.getKey());
             jdbc.sql("""
                     insert into live_game_stat (game_id, player_id, team_code, batted, pa, ab, r, h, hr, rbi, sb, bb,
-                                                pitched, started, outs, p_h, p_bb, p_er, p_k, sv, hld, w, fetched_at, box_order,
+                                                pitched, started, outs, p_h, p_bb, p_er, p_k, sv, hld, w, fetched_at, box_seq,
                                                 lineup_slot, is_sub, changed_at)
                     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """).params(g.id(), e.getKey(), s.teamCode(), s.batted(), s.pa(), s.ab(), s.r(), s.h(), s.hr(), s.rbi(), s.sb(),

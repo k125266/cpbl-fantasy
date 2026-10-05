@@ -6,6 +6,9 @@ alter table live_game add column pitch_count int;
 alter table live_game add column batter_results jsonb;                        -- 目前打者本場結果代碼，例：["三振","右飛"]
 alter table live_game add column half_inning jsonb;                           -- 本半局打席：[{jersey, name, result}]，正在打擊 result 為 null
 
+-- V7 的 box_order 含「order」字樣，會被 SchemaComplianceTest（金錢相關命名）擋下，改名為 box_seq
+alter table live_game_stat rename column box_order to box_seq;
+
 -- 棒次（替補沿用被替換者的棒次）；changed_at 為數據最後一次變動的輪詢時間（「剛更新」）
 alter table live_game_stat add column lineup_slot int;
 alter table live_game_stat add column is_sub boolean not null default false;
