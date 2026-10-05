@@ -842,7 +842,7 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 .lv-row .tok span { font: 600 13.5px/20px var(--font-mix); padding: 0 4px; white-space: nowrap; color: var(--text); }
 .lv .mid { color: var(--silver); }
 .lv .gold { color: var(--gold-hi); }
-.lv .dim { color: var(--dim); }
+.lv .dim { color: var(--silver-lo); }
 .lv-empty { padding: 12px 14px; border-top: 1px solid #1d2027; font-size: 12px; color: var(--silver-lo); }
 .lv-empty.box { border: 1px solid #1d2027; border-radius: 12px; padding: 18px 14px; font-size: 12.5px; line-height: 1.7; color: var(--muted); }
 .lv-off { border-radius: 12px; background: rgb(21 23 28 / .6); border: 1px solid #1d2027; overflow: hidden; }
@@ -915,6 +915,36 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .lv-grid .slot { font-size: 13px; }
   .lv-pfoot { padding: 0 18px 10px; border-top: 1px solid #1d2027; }
   .lv-pfoot .lv-note { margin-top: 10px; }
+  /* 網頁版可讀性：設計稿的 1440 畫布數值在實際螢幕上偏小偏灰，整體放大一級、提亮次要文字 */
+  .lv-head .upd { font-size: 13px; }
+  .lv-sum span { font-size: 12.5px; color: var(--silver); }
+  .lv-mine { font-size: 12px; color: var(--muted); }
+  .lv-label > span:first-child, .lv-label-t { font-size: 11.5px; }
+  .lv-label .muted { font-size: 12px; color: var(--muted); }
+  .lv-ghead { grid-template-columns: minmax(0, 1fr) 96px; }
+  .lv .state .sub { white-space: nowrap; }
+  .lv-team .nm { font-size: 15px; }
+  .lv-team.trail { color: var(--silver); }
+  .lv .state .sub { font-size: 12px; }
+  .lv-card .cnt { font-size: 12.5px; color: var(--silver); }
+  .lv-big b { font-size: 17px; color: var(--silver); }
+  .lv-big .sc { color: var(--silver); }
+  .lv-big .muted { font-size: 12.5px; color: var(--muted); }
+  .lv-big .mid .sub { font-size: 12.5px; }
+  .lv-wside b { font-size: 15px; }
+  .lv-wside span { font-size: 13px; color: var(--muted); }
+  .lv-wside span:last-child { color: var(--silver); }
+  .lv-grid { min-height: 44px; }
+  .lv-grid.head { min-height: 30px; font-size: 11.5px; color: var(--muted); }
+  .lv-grid .who .n { font-size: 15px; }
+  .lv-grid .who .pos { font-size: 12.5px; color: var(--muted); }
+  .lv-grid .r { font-size: 16px; }
+  .lv-grid .ftn { font-size: 13.5px; color: var(--silver); }
+  .lv-grid .pos { font-size: 14px; color: var(--silver); }
+  .lv-grid .slot { font-size: 14px; color: var(--silver); }
+  .lv .tag { font-size: 10.5px; line-height: 16px; }
+  .lv-half { font-size: 13px; }
+  .lv-note { font-size: 12px; color: var(--muted); }
 }
 
 /* ---------- 收藏卡（CollectCard.dc.html）：240×336 基準，依 size 等比縮放 ---------- */
