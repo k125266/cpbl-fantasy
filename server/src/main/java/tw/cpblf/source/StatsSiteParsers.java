@@ -135,6 +135,8 @@ public final class StatsSiteParsers {
     private static final Pattern GAME_TITLE = Pattern.compile("^# (.+?) vs (.+?) 賽事詳情$");
     private static final Pattern GAME_DATE = Pattern.compile("^(\\d{4})/(\\d{1,2})/(\\d{1,2})");
     private static final Pattern SCORE = Pattern.compile("\\d{1,2}");
+    /** 進行中的局數，例：八下、十一上 */
+    private static final Pattern INNING = Pattern.compile("[一二三四五六七八九十]{1,3}[上下]");
     private static final Pattern BATTER = Pattern.compile("^(\\d+\\.)?\\[(.+?)\\]\\(/players/(\\d{10})\\)$");
     private static final Pattern PITCHER = Pattern.compile("^\\|?\\s*\\[(.+?)\\]\\(/players/(\\d{10})\\)\\s*\\|(.*)$");
     private static final Pattern CARD_PLAYER = Pattern.compile("\\]\\(/players/(\\d{10})\\)");
@@ -166,6 +168,7 @@ public final class StatsSiteParsers {
 
         Integer awayScore = null, homeScore = null;
         String statusText = null;
+        String inning = null;
         java.time.LocalDate date = null;
         String winId = null, saveId = null, pendingCard = null;
         int i = 1;
@@ -178,6 +181,10 @@ public final class StatsSiteParsers {
                     && SCORE.matcher(lines.get(i - 1)).matches() && SCORE.matcher(lines.get(i + 1)).matches()) {
                 awayScore = Integer.parseInt(lines.get(i - 1));
                 homeScore = Integer.parseInt(lines.get(i + 1));
+                // 進行中：比分下一行是局數（例：八下、十一上）
+                if (i + 2 < lines.size() && INNING.matcher(lines.get(i + 2)).matches()) {
+                    inning = lines.get(i + 2);
+                }
             } else if (KIND_LABELS.contains(l) && statusText == null && i + 1 < lines.size()) {
                 statusText = lines.get(i + 1);
             } else if (date == null && GAME_DATE.matcher(l).find()) {
@@ -257,7 +264,7 @@ public final class StatsSiteParsers {
         boolean hasScore = status == GameStatus.FINAL || status == GameStatus.IN_PROGRESS || status == GameStatus.SUSPENDED;
         SourceGame game = new SourceGame(year, kindCode, sno, date, null, home, away, status,
                 status == GameStatus.FINAL ? homeScore : null, status == GameStatus.FINAL ? awayScore : null);
-        BoxScore box = new BoxScore(status, status == GameStatus.IN_PROGRESS ? statusText : null,
+        BoxScore box = new BoxScore(status, status == GameStatus.IN_PROGRESS ? (inning != null ? inning : statusText) : null,
                 hasScore ? homeScore : null, hasScore ? awayScore : null, List.copyOf(batters.values()), pitchers);
         return new GamePage(game, box);
     }

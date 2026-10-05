@@ -103,12 +103,18 @@ public class LivePoller {
                     away_score = excluded.away_score, fetched_at = excluded.fetched_at
                 """).params(g.id(), box.inningText(), box.homeScore(), box.awayScore(), ts).update();
         jdbc.sql("delete from live_game_stat where game_id = ?").param(g.id()).update();
-        rows.forEach((pid, s) -> jdbc.sql("""
-                insert into live_game_stat (game_id, player_id, team_code, batted, pa, ab, r, h, hr, rbi, sb, bb,
-                                            pitched, started, outs, p_h, p_bb, p_er, p_k, sv, hld, w, fetched_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """).params(g.id(), pid, s.teamCode(), s.batted(), s.pa(), s.ab(), s.r(), s.h(), s.hr(), s.rbi(), s.sb(), s.bb(),
-                s.pitched(), s.started(), s.outs(), s.pH(), s.pBb(), s.pEr(), s.pK(), s.sv(), s.hld(), s.w(), ts).update());
+        // rows 依 box score 出現順序（打者依打序、再來投手依登板順序），存成 box_order 供即時頁排序
+        int order = 0;
+        for (Map.Entry<Long, StatRow> e : rows.entrySet()) {
+            StatRow s = e.getValue();
+            jdbc.sql("""
+                    insert into live_game_stat (game_id, player_id, team_code, batted, pa, ab, r, h, hr, rbi, sb, bb,
+                                                pitched, started, outs, p_h, p_bb, p_er, p_k, sv, hld, w, fetched_at, box_order)
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """).params(g.id(), e.getKey(), s.teamCode(), s.batted(), s.pa(), s.ab(), s.r(), s.h(), s.hr(), s.rbi(), s.sb(),
+                    s.bb(), s.pitched(), s.started(), s.outs(), s.pH(), s.pBb(), s.pEr(), s.pK(), s.sv(), s.hld(), s.w(), ts,
+                    order++).update();
+        }
     }
 
     public int intervalSeconds() {
