@@ -45,14 +45,19 @@ public class StatsSiteDataSource implements CpblDataSource {
 
     /**
      * 比賽網址取自網站提供的 sitemap（只含近期與即將進行的比賽，符合 llms.txt「網址由 sitemap 取得」的要求），
-     * 再逐場讀比賽頁。開賽時間頁面上沒有，startTime 為 null（待實測後補）。
+     * 再逐場讀比賽頁。比賽頁沒有開賽時間，另讀一次賽程列表頁（/schedule）取得尚未開打比賽的時間；
+     * 列表上沒有的（進行中、已結束）startTime 為 null，由 SchedulePoller 沿用已知值或預設時間。
      */
     @Override
     public List<SourceGame> fetchSchedule(int year, String kindCode) {
         String sitemap = http.get(baseUrl + "/sitemap.xml");
+        Map<String, java.time.Instant> times = StatsSiteParsers.parseScheduleTimes(markdown("/schedule"));
         List<SourceGame> out = new java.util.ArrayList<>();
         for (int sno : StatsSiteParsers.parseSitemapGames(sitemap, year, kindCode)) {
-            out.add(gamePage(year, kindCode, sno).game());
+            SourceGame g = gamePage(year, kindCode, sno).game();
+            java.time.Instant start = times.get(year + "-" + kindCode + "-" + sno);
+            out.add(new SourceGame(g.year(), g.kindCode(), g.gameSno(), g.date(), start, g.homeTeamName(), g.awayTeamName(),
+                    g.status(), g.homeScore(), g.awayScore()));
         }
         return out;
     }

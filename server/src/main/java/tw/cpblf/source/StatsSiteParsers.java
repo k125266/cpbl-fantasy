@@ -291,6 +291,56 @@ public final class StatsSiteParsers {
         return new GamePage(game, box);
     }
 
+    private static final Pattern LIST_DATE = Pattern.compile("^(\\d{1,2})月(\\d{1,2})日,星期.$");
+    private static final Pattern LIST_GAME = Pattern.compile("^GAME\\d+(.*)$");
+    private static final Pattern LIST_TIME = Pattern.compile("^(\\d{2}):(\\d{2})$");
+    private static final Pattern LIST_LINK = Pattern.compile("^\\[成績看板\\]\\(/schedule/(\\d{4})-([A-Z])-(\\d+)[ )]");
+
+    /**
+     * 賽程列表頁（/schedule）上尚未開打的比賽的開賽時間，key 為「年-類別-編號」。
+     * 列表依日期分組（「10月7日,星期三」），每場以「GAME274未開始」開頭、「[成績看板](/schedule/…)」結尾，
+     * 未開打的會顯示時間。網站顯示的日期時間比實際晚 8 小時，以 {@link GameTimes#fromSiteDisplay} 換算。
+     * 延賽的那一筆（原定日期）略過，以補賽日那筆為準。頁首的今日賽事區塊沒有日期標題，不採用。
+     */
+    public static java.util.Map<String, java.time.Instant> parseScheduleTimes(String md) {
+        java.util.Map<String, java.time.Instant> out = new java.util.HashMap<>();
+        Integer month = null, day = null;
+        String status = null;
+        java.time.LocalTime time = null;
+        for (String l : textLines(md)) {
+            Matcher d = LIST_DATE.matcher(l);
+            if (d.matches()) {
+                month = Integer.parseInt(d.group(1));
+                day = Integer.parseInt(d.group(2));
+                status = null;
+                time = null;
+                continue;
+            }
+            Matcher g = LIST_GAME.matcher(l);
+            if (g.matches()) {
+                status = g.group(1);
+                time = null;
+                continue;
+            }
+            Matcher t = LIST_TIME.matcher(l);
+            if (t.matches()) {
+                time = java.time.LocalTime.of(Integer.parseInt(t.group(1)), Integer.parseInt(t.group(2)));
+                continue;
+            }
+            Matcher k = LIST_LINK.matcher(l);
+            if (k.find()) {
+                if (month != null && day != null && time != null && status != null && !status.contains("延賽")) {
+                    int year = Integer.parseInt(k.group(1));
+                    String key = year + "-" + k.group(2) + "-" + k.group(3);
+                    GameTimes.fromSiteDisplay(java.time.LocalDate.of(year, month, day), time).ifPresent(at -> out.put(key, at));
+                }
+                status = null;
+                time = null;
+            }
+        }
+        return out;
+    }
+
     private static final Pattern PLAYER_LINK_END = Pattern.compile("^\\]\\(/players/(\\d{10})\\)$");
     private static final Pattern JERSEY_NAME = Pattern.compile("^#(\\d{1,3}) (.+)$");
     private static final Pattern PITCH_COUNT = Pattern.compile("^用球數 (\\d+)$");
