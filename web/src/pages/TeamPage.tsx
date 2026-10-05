@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useApp } from '../App'
-import { api, type Matchup, type RosterPlayer, type RosterResponse, type SlotName, type StandingRow } from '../api'
+import { api, type Matchup, type RosterPlayer, type RosterResponse, type SlotName, type StandingRow, type TeamView } from '../api'
 import { BottomSheet, ErrorBox, fmtDate, fmtTime, Loading, MatchTicket, MiniCard, TeamChip, TIER_LABEL, TierAvatar, tierOf, toast, useLoad } from '../components'
 import { fmtPts, myMatchups, periodDay, type MySide } from '../matchups'
 import { cpblTeam, fantasyTeamColor } from '../teams'
@@ -133,7 +133,7 @@ export default function TeamPage() {
   return (
     <div className="stack" style={{ paddingTop: 0 }}>
       <TeamHero teamId={id} name={data.teamName} abbr={team?.abbr ?? ''} owner={team?.owner ?? ''} mine={mine} halfNo={halfNo}
-        rows={halfRows} tickets={tickets} today={data.today} teamIds={(league?.teams ?? []).map((t) => t.id)} />
+        rows={halfRows} tickets={tickets} today={data.today} teams={league?.teams ?? []} />
 
       {mine && alerts.length > 0 && <AlertBar alerts={alerts} onOpen={setSheet} />}
 
@@ -157,7 +157,7 @@ export default function TeamPage() {
 }
 
 /** 隊伍頭部：名次與戰績、撕線下方本期兩張小票根與進度。 */
-function TeamHero({ teamId, name, abbr, owner, mine, halfNo, rows, tickets, today, teamIds }: {
+function TeamHero({ teamId, name, abbr, owner, mine, halfNo, rows, tickets, today, teams }: {
   teamId: number
   name: string
   abbr: string
@@ -167,7 +167,7 @@ function TeamHero({ teamId, name, abbr, owner, mine, halfNo, rows, tickets, toda
   rows: StandingRow[]
   tickets: MySide[]
   today: string
-  teamIds: number[]
+  teams: TeamView[]
 }) {
   const st = rows.find((r) => r.teamId === teamId)
   const half = halfNo === 2 ? '下' : '上'
@@ -211,7 +211,7 @@ function TeamHero({ teamId, name, abbr, owner, mine, halfNo, rows, tickets, toda
               {!allPending && <span className={`livepill ${live ? 'live' : ''}`}>{live ? 'LIVE' : 'FINAL'}</span>}
             </div>
             <div className={`th-tix ${tickets.length === 1 ? 'one' : ''}`}>
-              {tickets.map((v, i) => <MatchTicket key={v.m.id} v={v} no={i + 1} size="sm" color={fantasyTeamColor(v.oppId, teamIds)} />)}
+              {tickets.map((v, i) => <MatchTicket key={v.m.id} v={v} no={i + 1} size="sm" color={fantasyTeamColor(v.oppId, teams)} />)}
             </div>
             <div className="mh-tot">
               <span>{allPending ? '本期尚未開始' : `本期 ${w} 勝 ${l} 敗${t ? ` ${t} 和` : ''}`} · 類別合計 <b>{fmtPts(tickets.reduce((a, x) => a + x.me, 0))}</b> : {fmtPts(tickets.reduce((a, x) => a + x.op, 0))}</span>

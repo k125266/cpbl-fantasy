@@ -70,6 +70,20 @@ export interface TeamView {
   owner: string
   faabBudget: number
   lineupLockReason: string | null
+  /** 動物頭像名稱（teamIdentity.TEAM_ICONS）；舊資料為 null */
+  icon: string | null
+  /** 代表色 #rrggbb；舊資料為 null（依順序配色） */
+  color: string | null
+}
+
+/** 邀請碼預覽（公開，註冊前） */
+export interface InvitePreview {
+  leagueName: string
+  commissioner: string
+  teamCount: number
+  maxTeams: number
+  seasonStarted: boolean
+  teams: { name: string; icon: string | null; color: string | null }[]
 }
 
 export interface Half {
@@ -97,6 +111,8 @@ export interface League {
   id: number
   name: string
   seasonYear: number
+  /** 建立聯盟的回應會帶；一般讀取請用 LeagueDetail.inviteCode（只有管理員看得到） */
+  inviteCode?: string
   maxTeams: number
   foreignPlayerLimit: number
   positionMinGames: number

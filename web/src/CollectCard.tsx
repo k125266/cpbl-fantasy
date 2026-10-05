@@ -127,9 +127,8 @@ export function CollectCard({ card, size = 240, face = 'front', flippable }: {
   const tiltY = hov ? (x - .5) * 18 : 0, tiltX = hov ? (.5 - y) * 14 : 0
   const hp = `${(x * 100).toFixed(1)}% ${(y * 100).toFixed(1)}%`
   const no = String(card.rank ?? 0).padStart(3, '0')
-  const teamIds = (league?.teams ?? []).map((tm) => tm.id)
   const histColor = (h: CardData['hist'][number]) =>
-    h.tone === 'gold' ? '#f6e1a2' : h.tone === 'muted' ? '#6c7584' : h.teamId != null ? fantasyTeamColor(h.teamId, teamIds) : '#7b8cff'
+    h.tone === 'gold' ? '#f6e1a2' : h.tone === 'muted' ? '#6c7584' : h.teamId != null ? fantasyTeamColor(h.teamId, league?.teams ?? []) : '#7b8cff'
 
   const move = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect()

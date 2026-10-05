@@ -65,23 +65,32 @@ public class LeagueController {
         return leagues.memberships(Auth.require().id());
     }
 
-    public record CreateLeague(String name, Integer seasonYear, String teamName, String teamAbbr) {
+    /** 已登入、還沒有聯盟時建立聯盟；系統管理員以外需要建盟碼。 */
+    public record CreateLeague(String name, Integer seasonYear, String createCode, String teamName, String teamAbbr, String teamIcon,
+                               String teamColor) {
     }
 
     @PostMapping("/leagues")
     public League create(@RequestBody CreateLeague req) {
         CurrentUser u = Auth.require();
-        return leagues.create(u, req.name(), req.seasonYear() == null ? props.seasonYear() : req.seasonYear(), req.teamName(),
-                req.teamAbbr());
+        return leagues.create(u, req.name(), req.seasonYear() == null ? props.seasonYear() : req.seasonYear(),
+                new LeagueService.TeamIdentity(req.teamName(), req.teamAbbr(), req.teamIcon(), req.teamColor()), req.createCode());
     }
 
-    public record Join(String inviteCode, String teamName, String teamAbbr) {
+    public record Join(String inviteCode, String teamName, String teamAbbr, String teamIcon, String teamColor) {
     }
 
     @PostMapping("/leagues/join")
     public Map<String, Boolean> join(@RequestBody Join req) {
-        leagues.joinWithInvite(Auth.require(), req.inviteCode(), req.teamName(), req.teamAbbr());
+        leagues.joinWithInvite(Auth.require(), req.inviteCode(),
+                new LeagueService.TeamIdentity(req.teamName(), req.teamAbbr(), req.teamIcon(), req.teamColor()));
         return Map.of("ok", true);
+    }
+
+    /** 公開（註冊前）：邀請碼預覽，只回聯盟名稱、管理員、隊數與已加入隊伍的隊名／頭像／色。 */
+    @GetMapping("/invites/{code}")
+    public LeagueService.InvitePreview invite(@PathVariable String code) {
+        return leagues.invitePreview(code);
     }
 
     @GetMapping("/leagues/{id}")
@@ -117,13 +126,14 @@ public class LeagueController {
         return Map.of("periods", season.periods(id));
     }
 
-    public record Rename(String name, String abbr) {
+    /** 頭像與色可省略（不變）。 */
+    public record Rename(String name, String abbr, String icon, String color) {
     }
 
     @PatchMapping("/leagues/{id}/teams/me")
     public Map<String, Boolean> rename(@PathVariable long id, @RequestBody Rename req) {
         long team = leagues.requireTeam(id, Auth.require());
-        leagues.renameTeam(team, req.name(), req.abbr());
+        leagues.updateTeam(id, team, new LeagueService.TeamIdentity(req.name(), req.abbr(), req.icon(), req.color()));
         return Map.of("ok", true);
     }
 

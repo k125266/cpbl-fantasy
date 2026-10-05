@@ -20,6 +20,7 @@ import tw.cpblf.config.AppClock;
 import tw.cpblf.config.AppProperties;
 import tw.cpblf.source.SourceArchive;
 import tw.cpblf.demo.DemoService;
+import tw.cpblf.league.LeagueService;
 import tw.cpblf.pipeline.AlertService;
 import tw.cpblf.pipeline.JobRunner;
 import tw.cpblf.pipeline.Pipeline;
@@ -41,9 +42,12 @@ public class AdminController {
     private final AppClock clock;
     private final AppProperties props;
     private final SourceArchive archive;
+    private final LeagueService leagues;
 
     public AdminController(JdbcClient jdbc, JobRunner runner, AlertService alerts, Pipeline pipeline, SettlementJob settlement,
-                           MatchupService matchups, DemoService demo, AppClock clock, AppProperties props, SourceArchive archive) {
+                           MatchupService matchups, DemoService demo, AppClock clock, AppProperties props, SourceArchive archive,
+                           LeagueService leagues) {
+        this.leagues = leagues;
         this.props = props;
         this.archive = archive;
         this.jdbc = jdbc;
@@ -90,6 +94,26 @@ public class AdminController {
             out.put("replay", replay);
         }
         return out;
+    }
+
+    // ---- 建盟碼：系統管理員發給各聯盟管理員（封閉註冊，docs/decisions.md「身分與隱私」）----
+
+    @GetMapping("/create-codes")
+    public List<LeagueService.CreateCode> createCodes() {
+        Auth.requireAdmin();
+        return leagues.createCodes();
+    }
+
+    @PostMapping("/create-codes")
+    public Map<String, String> issueCreateCode() {
+        return Map.of("code", leagues.issueCreateCode(Auth.requireAdmin()));
+    }
+
+    @PostMapping("/create-codes/{code}/revoke")
+    public Map<String, Boolean> revokeCreateCode(@PathVariable String code) {
+        Auth.requireAdmin();
+        leagues.revokeCreateCode(code);
+        return Map.of("ok", true);
     }
 
     @PostMapping("/jobs/{name}/run")

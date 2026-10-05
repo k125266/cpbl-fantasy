@@ -19,6 +19,16 @@ interface Status {
   }
 }
 
+/** 一次性建盟碼（GET /api/admin/create-codes） */
+interface CreateCode {
+  code: string
+  createdAt: string
+  usedBy: string | null
+  usedAt: string | null
+  leagueName: string | null
+  revokedAt: string | null
+}
+
 const DRAFT_STATUS: Record<string, string> = { NONE: '未建立', SETUP: '準備中', KEEPERS: 'Keeper 選擇中', IN_PROGRESS: '選秀中', COMPLETED: '已完成' }
 
 const JOBS = ['schedule-poller', 'registration-sync', 'settlement', 'live-poller', 'roster-maintenance', 'waiver', 'trade-review',
@@ -33,6 +43,17 @@ export default function AdminPage() {
   const [days, setDays] = useState(1)
   const [clock, setClock] = useState('')
   const [busy, setBusy] = useState(false)
+  const codes = useLoad(() => api.get<CreateCode[]>('/api/admin/create-codes'), [])
+  const [copied, setCopied] = useState<string | null>(null)
+
+  const copyCode = (code: string) => {
+    try {
+      navigator.clipboard?.writeText(code)
+    } catch {
+      // 剪貼簿不可用時只顯示
+    }
+    setCopied(code)
+  }
 
   const run = async (fn: () => Promise<unknown>) => {
     setErr(null)
@@ -94,6 +115,31 @@ export default function AdminPage() {
           <p className="small muted">所有聯盟共用重播時鐘。快轉若會跨過某聯盟的半季開始日、而該半季選秀還沒完成，會被擋下。</p>
         </div>
       )}
+      <div className="card">
+        <h2>建盟碼</h2>
+        <p className="small muted">
+          封閉註冊：一般使用者要有系統管理員發的建盟碼才能建立聯盟，每個碼只能用一次。建立後會拿到該聯盟的邀請碼，再傳給朋友加入。
+        </p>
+        <button className="primary" disabled={busy} onClick={() => run(() => api.post('/api/admin/create-codes').finally(codes.reload))}>產生建盟碼</button>
+        <ul className="list-plain small" style={{ marginTop: 10 }}>
+          {codes.data?.length === 0 && <li className="muted">還沒有建盟碼</li>}
+          {(codes.data || []).map((c) => (
+            <li key={c.code} className="row" style={{ alignItems: 'center' }}>
+              <span className="mono" style={{ opacity: c.usedAt || c.revokedAt ? 0.5 : 1 }}>{c.code}</span>
+              {c.revokedAt ? <span className="badge">已撤銷</span>
+                : c.usedAt ? <span className="badge">已用・{c.usedBy}・{c.leagueName ?? '—'}</span>
+                : <span className="badge warn">未使用</span>}
+              <span className="muted">{fmtDateTime(c.createdAt)}</span>
+              {!c.usedAt && !c.revokedAt && (
+                <>
+                  <button className="small" onClick={() => copyCode(c.code)}>{copied === c.code ? '已複製' : '複製'}</button>
+                  <button className="small" disabled={busy} onClick={() => run(() => api.post(`/api/admin/create-codes/${c.code}/revoke`).finally(codes.reload))}>撤銷</button>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
       {s?.demoClock && (
         <div className="card">
           <h2>{s.replay ? '重播時鐘' : 'Demo 時鐘'}</h2>

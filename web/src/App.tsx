@@ -2,7 +2,6 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { api, type LeagueDetail, type Membership, type Notification, type SystemInfo, type User } from './api'
 import { Footer, ICONS, Loading } from './components'
-import LoginPage from './pages/LoginPage'
 import TeamPage from './pages/TeamPage'
 import MatchupPage from './pages/MatchupPage'
 import PlayersPage from './pages/PlayersPage'
@@ -15,7 +14,7 @@ import LeaguePage from './pages/LeaguePage'
 import AdminPage from './pages/AdminPage'
 import PrivacyPage from './pages/PrivacyPage'
 import NotificationsPage from './pages/NotificationsPage'
-import NoLeaguePage from './pages/NoLeaguePage'
+import OnboardingPage from './pages/OnboardingPage'
 
 interface Ctx {
   user: User
@@ -81,13 +80,10 @@ export default function App() {
 
   if (user === null) {
     return (
-      <div className="app">
-        <Routes>
-          <Route path="/privacy" element={<PrivacyPage />} />
-          <Route path="*" element={<LoginPage onLogin={(u) => setUser(u)} />} />
-        </Routes>
-        <Footer />
-      </div>
+      <Routes>
+        <Route path="/privacy" element={<div className="app"><PrivacyPage /><Footer /></div>} />
+        <Route path="*" element={<OnboardingPage user={null} onEnter={setUser} onLogout={() => undefined} />} />
+      </Routes>
     )
   }
 
@@ -96,17 +92,21 @@ export default function App() {
   }
 
   if (leagueId == null) {
+    // OnboardingPage 登出時已呼叫過 API，這裡只清狀態
+    const signedOut = () => {
+      setUser(null)
+      setMemberships(null)
+    }
     return (
       <AppContext.Provider value={{ user, system, leagueId: 0, league: null, reloadLeague, reloadSystem, logout }}>
-        <div className="app">
-          <TopBar title="CPBL Fantasy" subtitle={user.displayName} />
-          <Routes>
-            <Route path="/privacy" element={<PrivacyPage />} />
-            <Route path="/admin" element={user.admin ? <AdminPage /> : <Navigate to="/" />} />
-            <Route path="*" element={<NoLeaguePage onJoined={() => api.get<Membership[]>('/api/me/leagues').then(setMemberships)} />} />
-          </Routes>
-          <Footer />
-        </div>
+        <Routes>
+          <Route path="/privacy" element={<div className="app"><PrivacyPage /><Footer /></div>} />
+          <Route path="/admin" element={user.admin
+            ? <div className="app"><TopBar title="CPBL Fantasy" subtitle={user.displayName} /><AdminPage /><Footer /></div>
+            : <Navigate to="/" />} />
+          <Route path="*" element={<OnboardingPage user={user}
+            onEnter={() => api.get<Membership[]>('/api/me/leagues').then(setMemberships)} onLogout={signedOut} />} />
+        </Routes>
       </AppContext.Provider>
     )
   }
