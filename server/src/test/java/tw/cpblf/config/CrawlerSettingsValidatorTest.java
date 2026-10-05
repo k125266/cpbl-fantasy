@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 class CrawlerSettingsValidatorTest {
 
     static AppProperties.Crawler crawler(String ua, int liveSeconds) {
-        return new AppProperties.Crawler(ua, "https://www.cpbl.com.tw", "https://stats.cpbl.com.tw", liveSeconds, 1500, 3, 2000);
+        return new AppProperties.Crawler(ua, "https://www.cpbl.com.tw", "https://stats.cpbl.com.tw", liveSeconds, 1500, 3, 2000, true);
     }
 
     @Test

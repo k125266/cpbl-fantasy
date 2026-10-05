@@ -59,9 +59,15 @@ class CpblParsersTest {
         // 結果物件的序列化內容不含任何非白名單資訊
         String serialized = Json.write(box);
         assertThat(serialized).doesNotContain("文字轉播", "新聞", "photo");
-        // record 欄位就是落地的上限
+        // record 欄位就是落地的上限（lineupSlot、sub 為棒次與替補，2026-10 即時比分加入）
         assertThat(Arrays.stream(SourceModels.BatterLine.class.getRecordComponents()).map(c -> c.getName()))
-                .containsExactly("cpblPlayerId", "name", "home", "positions", "pa", "ab", "r", "h", "hr", "rbi", "sb", "bb");
+                .containsExactly("cpblPlayerId", "name", "home", "positions", "pa", "ab", "r", "h", "hr", "rbi", "sb", "bb",
+                        "lineupSlot", "sub");
+        // 賽況細節同樣以 record 欄位為上限：比賽狀態與結果代碼，沒有任何敘述文字欄位
+        assertThat(Arrays.stream(SourceModels.GameDetail.class.getRecordComponents()).map(c -> c.getName()))
+                .containsExactly("lineScore", "batterId", "pitcherId", "pitchCount", "batterResults", "halfInning");
+        assertThat(Arrays.stream(SourceModels.PlateAppearance.class.getRecordComponents()).map(c -> c.getName()))
+                .containsExactly("jerseyNumber", "name", "result");
     }
 
     @Test

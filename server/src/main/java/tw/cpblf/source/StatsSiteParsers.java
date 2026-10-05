@@ -7,8 +7,11 @@ import java.util.regex.Pattern;
 
 import tw.cpblf.source.SourceModels.BatterLine;
 import tw.cpblf.source.SourceModels.BoxScore;
+import tw.cpblf.source.SourceModels.GameDetail;
 import tw.cpblf.source.SourceModels.GameStatus;
+import tw.cpblf.source.SourceModels.LineScore;
 import tw.cpblf.source.SourceModels.PitcherLine;
+import tw.cpblf.source.SourceModels.PlateAppearance;
 import tw.cpblf.source.SourceModels.SourceGame;
 import tw.cpblf.source.SourceModels.SourcePlayer;
 
@@ -135,6 +138,8 @@ public final class StatsSiteParsers {
     private static final Pattern GAME_TITLE = Pattern.compile("^# (.+?) vs (.+?) 賽事詳情$");
     private static final Pattern GAME_DATE = Pattern.compile("^(\\d{4})/(\\d{1,2})/(\\d{1,2})");
     private static final Pattern SCORE = Pattern.compile("\\d{1,2}");
+    /** 進行中的局數，例：八下、十一上 */
+    private static final Pattern INNING = Pattern.compile("[一二三四五六七八九十]{1,3}[上下]");
     private static final Pattern BATTER = Pattern.compile("^(\\d+\\.)?\\[(.+?)\\]\\(/players/(\\d{10})\\)$");
     private static final Pattern PITCHER = Pattern.compile("^\\|?\\s*\\[(.+?)\\]\\(/players/(\\d{10})\\)\\s*\\|(.*)$");
     private static final Pattern CARD_PLAYER = Pattern.compile("\\]\\(/players/(\\d{10})\\)");
@@ -147,6 +152,14 @@ public final class StatsSiteParsers {
      * 勝投、救援成功取自頁首卡片。
      */
     public static GamePage parseGame(String md, int year, String kindCode, int sno) {
+        return parseGame(md, year, kindCode, sno, true);
+    }
+
+    /**
+     * @param liveDetail 是否解析進行中的賽況細節（目前打者與投手、打席結果代碼、本半局序列）；
+     *                   停用開關 {@code cpblf.crawler.live-detail-enabled}。逐局比分屬於統計，一律解析。
+     */
+    public static GamePage parseGame(String md, int year, String kindCode, int sno, boolean liveDetail) {
         int start = md.indexOf("賽事詳情");
         if (start < 0) {
             throw new SourceStructureException("比賽頁缺少「賽事詳情」標題：" + year + "-" + kindCode + "-" + sno);
@@ -166,6 +179,7 @@ public final class StatsSiteParsers {
 
         Integer awayScore = null, homeScore = null;
         String statusText = null;
+        String inning = null;
         java.time.LocalDate date = null;
         String winId = null, saveId = null, pendingCard = null;
         int i = 1;
@@ -178,6 +192,10 @@ public final class StatsSiteParsers {
                     && SCORE.matcher(lines.get(i - 1)).matches() && SCORE.matcher(lines.get(i + 1)).matches()) {
                 awayScore = Integer.parseInt(lines.get(i - 1));
                 homeScore = Integer.parseInt(lines.get(i + 1));
+                // 進行中：比分下一行是局數（例：八下、十一上）
+                if (i + 2 < lines.size() && INNING.matcher(lines.get(i + 2)).matches()) {
+                    inning = lines.get(i + 2);
+                }
             } else if (KIND_LABELS.contains(l) && statusText == null && i + 1 < lines.size()) {
                 statusText = lines.get(i + 1);
             } else if (date == null && GAME_DATE.matcher(l).find()) {
@@ -199,6 +217,8 @@ public final class StatsSiteParsers {
             throw new SourceStructureException("比賽頁缺少日期或狀態：" + year + "-" + kindCode + "-" + sno);
         }
         GameStatus status = gameStatus(statusText);
+        // 標題到打者表之間：逐局比分、比賽畫面、打席落點圖
+        List<String> header = lines.subList(1, i);
 
         java.util.Map<String, BatterLine> batters = new java.util.LinkedHashMap<>();
         List<PitcherLine> pitchers = new ArrayList<>();
@@ -206,11 +226,15 @@ public final class StatsSiteParsers {
         boolean inBatting = false;
         boolean battingHome = false, pitchingHome = false, firstPitcher = false;
         String[] pendingBatter = null;
+        // 打者表依打序列出，有「N.」的是該棒先發，沒有的是接在後面的替補
+        Integer slot = null;
+        boolean pendingSub = false;
         for (; i < lines.size(); i++) {
             String l = lines.get(i);
             if (l.contains("打者") && l.contains("打席")) {
                 inBatting = true;
                 battingHome = batTables++ == 1;
+                slot = null;
                 continue;
             }
             if (l.contains("投手") && l.contains("局數")) {
@@ -226,11 +250,15 @@ public final class StatsSiteParsers {
                 Matcher b = BATTER.matcher(l);
                 if (b.matches()) {
                     pendingBatter = new String[]{b.group(3), cleanName(b.group(2))};
+                    pendingSub = b.group(1) == null;
+                    if (!pendingSub) {
+                        slot = Integer.parseInt(b.group(1).substring(0, b.group(1).length() - 1));
+                    }
                 } else if (pendingBatter != null && l.startsWith("|")) {
                     int[] c = cells(l, 7);
                     // 打席、打數、安打、三振、保送、全壘打、得分
                     BatterLine line = new BatterLine(pendingBatter[0], pendingBatter[1], battingHome, "",
-                            c[0], c[1], c[6], c[2], c[5], 0, 0, c[4]);
+                            c[0], c[1], c[6], c[2], c[5], 0, 0, c[4], slot, pendingSub);
                     batters.merge(line.cpblPlayerId(), line, StatsSiteParsers::mergeBatter);
                     pendingBatter = null;
                 }
@@ -257,9 +285,189 @@ public final class StatsSiteParsers {
         boolean hasScore = status == GameStatus.FINAL || status == GameStatus.IN_PROGRESS || status == GameStatus.SUSPENDED;
         SourceGame game = new SourceGame(year, kindCode, sno, date, null, home, away, status,
                 status == GameStatus.FINAL ? homeScore : null, status == GameStatus.FINAL ? awayScore : null);
-        BoxScore box = new BoxScore(status, status == GameStatus.IN_PROGRESS ? statusText : null,
-                hasScore ? homeScore : null, hasScore ? awayScore : null, List.copyOf(batters.values()), pitchers);
+        BoxScore box = new BoxScore(status, status == GameStatus.IN_PROGRESS ? (inning != null ? inning : statusText) : null,
+                hasScore ? homeScore : null, hasScore ? awayScore : null, List.copyOf(batters.values()), pitchers,
+                detail(header, liveDetail && status == GameStatus.IN_PROGRESS));
         return new GamePage(game, box);
+    }
+
+    private static final Pattern LIST_DATE = Pattern.compile("^(\\d{1,2})月(\\d{1,2})日,星期.$");
+    private static final Pattern LIST_GAME = Pattern.compile("^GAME\\d+(.*)$");
+    private static final Pattern LIST_TIME = Pattern.compile("^(\\d{2}):(\\d{2})$");
+    private static final Pattern LIST_LINK = Pattern.compile("^\\[成績看板\\]\\(/schedule/(\\d{4})-([A-Z])-(\\d+)[ )]");
+
+    /**
+     * 賽程列表頁（/schedule）上尚未開打的比賽的開賽時間，key 為「年-類別-編號」。
+     * 列表依日期分組（「10月7日,星期三」），每場以「GAME274未開始」開頭、「[成績看板](/schedule/…)」結尾，
+     * 未開打的會顯示時間。網站顯示的日期時間比實際晚 8 小時，以 {@link GameTimes#fromSiteDisplay} 換算。
+     * 延賽的那一筆（原定日期）略過，以補賽日那筆為準。頁首的今日賽事區塊沒有日期標題，不採用。
+     */
+    public static java.util.Map<String, java.time.Instant> parseScheduleTimes(String md) {
+        java.util.Map<String, java.time.Instant> out = new java.util.HashMap<>();
+        Integer month = null, day = null;
+        String status = null;
+        java.time.LocalTime time = null;
+        for (String l : textLines(md)) {
+            Matcher d = LIST_DATE.matcher(l);
+            if (d.matches()) {
+                month = Integer.parseInt(d.group(1));
+                day = Integer.parseInt(d.group(2));
+                status = null;
+                time = null;
+                continue;
+            }
+            Matcher g = LIST_GAME.matcher(l);
+            if (g.matches()) {
+                status = g.group(1);
+                time = null;
+                continue;
+            }
+            Matcher t = LIST_TIME.matcher(l);
+            if (t.matches()) {
+                time = java.time.LocalTime.of(Integer.parseInt(t.group(1)), Integer.parseInt(t.group(2)));
+                continue;
+            }
+            Matcher k = LIST_LINK.matcher(l);
+            if (k.find()) {
+                if (month != null && day != null && time != null && status != null && !status.contains("延賽")) {
+                    int year = Integer.parseInt(k.group(1));
+                    String key = year + "-" + k.group(2) + "-" + k.group(3);
+                    GameTimes.fromSiteDisplay(java.time.LocalDate.of(year, month, day), time).ifPresent(at -> out.put(key, at));
+                }
+                status = null;
+                time = null;
+            }
+        }
+        return out;
+    }
+
+    private static final Pattern PLAYER_LINK_END = Pattern.compile("^\\]\\(/players/(\\d{10})\\)$");
+    private static final Pattern JERSEY_NAME = Pattern.compile("^#(\\d{1,3}) (.+)$");
+    private static final Pattern PITCH_COUNT = Pattern.compile("^用球數 (\\d+)$");
+
+    /** 逐局比分＋（進行中且啟用時）目前打者與投手、打席結果、本半局序列。都沒有時回傳 null。 */
+    private static GameDetail detail(List<String> header, boolean live) {
+        LineScore ls = lineScore(header);
+        String batterId = null, pitcherId = null;
+        Integer pitchCount = null;
+        List<String> batterResults = List.of();
+        List<PlateAppearance> half = List.of();
+        if (live) {
+            int screen = header.indexOf("比賽畫面");
+            int plot = indexOfPrefix(header, "## 打席落點圖");
+            if (screen >= 0) {
+                // 比賽畫面：先是打者連結（姓名、本場結果），再是投手連結（姓名、用球數）
+                int blockStart = screen + 1;
+                for (int k = blockStart; k < (plot >= 0 ? plot : header.size()); k++) {
+                    Matcher end = PLAYER_LINK_END.matcher(header.get(k));
+                    if (!end.matches()) {
+                        continue;
+                    }
+                    List<String> block = header.subList(blockStart, k);
+                    Integer pc = null;
+                    for (String b : block) {
+                        Matcher m = PITCH_COUNT.matcher(b);
+                        if (m.matches()) pc = Integer.parseInt(m.group(1));
+                    }
+                    if (pc != null) {
+                        pitcherId = end.group(1);
+                        pitchCount = pc;
+                    } else if (batterId == null) {
+                        batterId = end.group(1);
+                        for (int n = 0; n + 1 < block.size(); n++) {
+                            if (JERSEY_NAME.matcher(block.get(n)).matches()) {
+                                batterResults = PlayResultCodes.split(block.get(n + 1)).orElse(List.of());
+                            }
+                        }
+                    }
+                    blockStart = k + 1;
+                }
+            }
+            if (plot >= 0) {
+                half = halfInning(header.subList(plot + 1, header.size()));
+            }
+        }
+        if (ls == null && batterId == null && pitcherId == null) {
+            return null;
+        }
+        return new GameDetail(ls, batterId, pitcherId, pitchCount, batterResults, half);
+    }
+
+    /** 打席落點圖：「#背號 姓名」的下一行是結果代碼，正在打擊為「對決中」；不在白名單的打席略過。 */
+    private static List<PlateAppearance> halfInning(List<String> lines) {
+        List<PlateAppearance> out = new ArrayList<>();
+        for (int k = 0; k + 1 < lines.size(); k++) {
+            Matcher m = JERSEY_NAME.matcher(lines.get(k));
+            if (!m.matches()) {
+                continue;
+            }
+            String next = lines.get(k + 1);
+            if ("對決中".equals(next)) {
+                out.add(new PlateAppearance(m.group(1), cleanName(m.group(2)), null));
+            } else if (PlayResultCodes.isCode(next)) {
+                out.add(new PlateAppearance(m.group(1), cleanName(m.group(2)), next.trim()));
+            }
+        }
+        return out;
+    }
+
+    /** 逐局比分表：表頭「| 1 | … | 9 | R | H | E |」，接著客隊、主隊各一列；空白格為尚未進行。 */
+    private static LineScore lineScore(List<String> header) {
+        int h = -1;
+        for (int k = 0; k < header.size(); k++) {
+            if (header.get(k).replace(" ", "").contains("|R|H|E|")) {
+                h = k;
+                break;
+            }
+        }
+        if (h < 0) {
+            return null;
+        }
+        List<String> heads = splitRow(header.get(h));
+        int innings = (int) heads.stream().filter(x -> x.matches("\\d+")).count();
+        List<List<Integer>> rows = new ArrayList<>();
+        for (int k = h + 1; k < header.size() && rows.size() < 2; k++) {
+            String l = header.get(k);
+            if (!l.startsWith("|") || l.replace(" ", "").startsWith("|---")) {
+                continue;
+            }
+            List<String> cells = splitRow(l);
+            if (cells.size() < innings + 3) {
+                continue;
+            }
+            List<Integer> row = new ArrayList<>();
+            for (int c = 0; c < innings + 3; c++) {
+                String v = cells.get(c);
+                row.add(v.matches("\\d+") ? Integer.valueOf(v) : null);
+            }
+            rows.add(row);
+        }
+        if (rows.size() < 2) {
+            return null;
+        }
+        List<Integer> a = rows.get(0), b = rows.get(1);
+        return new LineScore(java.util.Collections.unmodifiableList(a.subList(0, innings)),
+                java.util.Collections.unmodifiableList(b.subList(0, innings)),
+                java.util.Collections.unmodifiableList(a.subList(innings, innings + 3)),
+                java.util.Collections.unmodifiableList(b.subList(innings, innings + 3)));
+    }
+
+    private static List<String> splitRow(String row) {
+        String[] raw = row.trim().replaceFirst("^\\|", "").split("\\|", -1);
+        List<String> out = new ArrayList<>();
+        for (String r : raw) {
+            out.add(r.trim());
+        }
+        return out;
+    }
+
+    private static int indexOfPrefix(List<String> lines, String prefix) {
+        for (int k = 0; k < lines.size(); k++) {
+            if (lines.get(k).startsWith(prefix)) {
+                return k;
+            }
+        }
+        return -1;
     }
 
     /** 已知狀態文字；其餘（比賽中的局數等）視為進行中，原文保留為 inningText。進行中的實際文字待實測。 */
@@ -274,7 +482,7 @@ public final class StatsSiteParsers {
 
     private static BatterLine mergeBatter(BatterLine a, BatterLine b) {
         return new BatterLine(a.cpblPlayerId(), a.name(), a.home(), "", a.pa() + b.pa(), a.ab() + b.ab(), a.r() + b.r(),
-                a.h() + b.h(), a.hr() + b.hr(), 0, 0, a.bb() + b.bb());
+                a.h() + b.h(), a.hr() + b.hr(), 0, 0, a.bb() + b.bb(), a.lineupSlot(), a.sub());
     }
 
     /** 「| 5 | 4 | 0 | …」取前 n 個整數欄位。 */

@@ -1,6 +1,7 @@
 package tw.cpblf.pipeline;
 
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -11,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tw.cpblf.config.AppClock;
 import tw.cpblf.config.AppProperties;
 import tw.cpblf.source.CpblDataSource;
+import tw.cpblf.source.GameTimes;
 import tw.cpblf.source.SourceModels.GameStatus;
 import tw.cpblf.source.SourceModels.SourceGame;
 
@@ -60,24 +62,27 @@ public class SchedulePoller {
         }
     }
 
-    record Existing(long id, LocalDate scheduledDate, LocalDate actualPlayDate, String status, boolean finalSeen) {
+    record Existing(long id, LocalDate scheduledDate, LocalDate actualPlayDate, String status, boolean finalSeen,
+                    Instant startTime) {
     }
 
     void upsert(SourceGame g, String home, String away) {
-        GameStatus status = effectiveStatus(g);
+        Existing ex = jdbc.sql("""
+                select id, scheduled_date, actual_play_date, status, final_seen_at is not null, start_time
+                from game where season_year = ? and kind_code = ? and game_sno = ?
+                """).params(g.year(), g.kindCode(), g.gameSno())
+                .query((rs, n) -> new Existing(rs.getLong(1), rs.getObject(2, LocalDate.class),
+                        rs.getObject(3, LocalDate.class), rs.getString(4), rs.getBoolean(5),
+                        rs.getTimestamp(6) == null ? null : rs.getTimestamp(6).toInstant()))
+                .optional().orElse(null);
+        Instant startAt = startTime(g, ex);
+        GameStatus status = effectiveStatus(g, startAt);
         String result = null;
         if (status == GameStatus.FINAL && g.homeScore() != null && g.awayScore() != null) {
             int c = Integer.compare(g.homeScore(), g.awayScore());
             result = c > 0 ? "HOME_WIN" : c < 0 ? "AWAY_WIN" : "TIE";
         }
-        Timestamp start = g.startTime() == null ? null : Timestamp.from(g.startTime());
-        Existing ex = jdbc.sql("""
-                select id, scheduled_date, actual_play_date, status, final_seen_at is not null
-                from game where season_year = ? and kind_code = ? and game_sno = ?
-                """).params(g.year(), g.kindCode(), g.gameSno())
-                .query((rs, n) -> new Existing(rs.getLong(1), rs.getObject(2, LocalDate.class),
-                        rs.getObject(3, LocalDate.class), rs.getString(4), rs.getBoolean(5)))
-                .optional().orElse(null);
+        Timestamp start = startAt == null ? null : Timestamp.from(startAt);
         if (ex == null) {
             jdbc.sql("""
                     insert into game (season_year, kind_code, game_sno, scheduled_date, start_time, home_team_code, away_team_code,
@@ -103,9 +108,41 @@ public class SchedulePoller {
                 actual, start, status.name(), result, g.homeScore(), g.awayScore(), home, away).update();
     }
 
+    /**
+     * 即時輪詢看到比賽頁已顯示結束時呼叫：立即轉為 FINAL，不必等下一次賽程更新（實測最多晚 10 分鐘）。
+     * final_seen_at 只在第一次設定，結算的重算時程以它為準。
+     */
+    void markFinal(long gameId, int homeScore, int awayScore) {
+        int c = Integer.compare(homeScore, awayScore);
+        String result = c > 0 ? "HOME_WIN" : c < 0 ? "AWAY_WIN" : "TIE";
+        jdbc.sql("""
+                update game set status = 'FINAL', result = ?, home_score = ?, away_score = ?,
+                       final_seen_at = coalesce(final_seen_at, ?), updated_at = now()
+                where id = ? and status <> 'FINAL'
+                """).params(result, homeScore, awayScore, Timestamp.from(clock.now()), gameId).update();
+    }
+
+    /**
+     * 開賽時間：資料源有給就用；沒有時沿用已知的同一天時間（例：開打後賽程列表不再顯示時間），
+     * 改期或從未知道時，尚未結束的比賽用預設時間（平日 18:35、週末 17:05），讓即時輪詢能啟動。
+     */
+    Instant startTime(SourceGame g, Existing ex) {
+        if (g.startTime() != null) {
+            return g.startTime();
+        }
+        Instant known = ex == null ? null : ex.startTime();
+        if (known != null && known.atZone(clock.zone()).toLocalDate().equals(g.date())) {
+            return known;
+        }
+        if (g.status() == GameStatus.FINAL || g.status() == GameStatus.CANCELLED) {
+            return known;
+        }
+        return GameTimes.defaultStart(g.date());
+    }
+
     /** 官網賽程沒有「進行中」狀態；已過表定開賽時間且尚未結束者視為進行中。 */
-    private GameStatus effectiveStatus(SourceGame g) {
-        if (g.status() == GameStatus.SCHEDULED && g.startTime() != null && !clock.now().isBefore(g.startTime())) {
+    private GameStatus effectiveStatus(SourceGame g, Instant startTime) {
+        if (g.status() == GameStatus.SCHEDULED && startTime != null && !clock.now().isBefore(startTime)) {
             return GameStatus.IN_PROGRESS;
         }
         return g.status();

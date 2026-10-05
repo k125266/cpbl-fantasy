@@ -35,6 +35,8 @@ cpblf:
     min-request-interval-ms: 1500
     max-retries: 3
     initial-backoff-ms: 2000
+    # 進行中的賽況細節（目前打者與投手、打席結果代碼）。收到權利人要求時設為 false 立即停用（docs/rulebook-amendments.md）
+    live-detail-enabled: ${CPBLF_LIVE_DETAIL_ENABLED:true}
   demo:
     start-at: 2026-03-20T10:00:00+08:00
     seed: 20260328

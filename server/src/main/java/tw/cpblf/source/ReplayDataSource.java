@@ -1,10 +1,8 @@
 package tw.cpblf.source;
 
-import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -33,8 +31,6 @@ public class ReplayDataSource implements CpblDataSource {
 
     static final Duration GAME_LENGTH = Duration.ofMinutes(210);
     static final int ACTIVE_WINDOW_DAYS = 14;
-    static final LocalTime WEEKDAY_START = LocalTime.of(18, 35);
-    static final LocalTime WEEKEND_START = LocalTime.of(17, 5);
 
     private final SourceArchive archive;
     private final AppClock clock;
@@ -59,9 +55,7 @@ public class ReplayDataSource implements CpblDataSource {
     }
 
     Instant startTime(LocalDate date) {
-        DayOfWeek d = date.getDayOfWeek();
-        LocalTime t = d == DayOfWeek.SATURDAY || d == DayOfWeek.SUNDAY ? WEEKEND_START : WEEKDAY_START;
-        return date.atTime(t).atZone(clock.zone()).toInstant();
+        return GameTimes.defaultStart(date);
     }
 
     /** 依目前時鐘看到的狀態。 */
