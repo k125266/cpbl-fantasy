@@ -3,6 +3,8 @@ package tw.cpblf.pipeline;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -13,7 +15,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tw.cpblf.config.AppClock;
 import tw.cpblf.config.AppProperties;
 import tw.cpblf.source.CpblDataSource;
+import tw.cpblf.common.Json;
+import tw.cpblf.source.SourceModels.BatterLine;
 import tw.cpblf.source.SourceModels.BoxScore;
+import tw.cpblf.source.SourceModels.GameDetail;
+import tw.cpblf.source.SourceModels.GameStatus;
 
 /**
  * CPBLF-15：比賽進行中輪詢，只寫 live_game / live_game_stat，絕不觸碰 game_stat。
@@ -86,7 +92,13 @@ public class LivePoller {
                 continue;
             }
             Map<Long, StatRow> rows = mapper.map(box, g.home(), g.away());
-            tx.executeWithoutResult(s -> write(g, box, rows, now));
+            tx.executeWithoutResult(s -> {
+                write(g, box, rows, now);
+                // 頁面已顯示結束：立即轉為 FINAL（停止輪詢、讓結算開始），不必等下一次賽程更新
+                if (box.status() == GameStatus.FINAL && box.homeScore() != null && box.awayScore() != null) {
+                    schedulePoller.markFinal(g.id(), box.homeScore(), box.awayScore());
+                }
+            });
             ctx.item();
         }
     }
@@ -97,24 +109,70 @@ public class LivePoller {
 
     private void write(LiveGame g, BoxScore box, Map<Long, StatRow> rows, Instant now) {
         Timestamp ts = Timestamp.from(now);
+        GameDetail d = box.detail();
+        Map<String, Long> ids = playerIds(box);
         jdbc.sql("""
-                insert into live_game (game_id, inning_text, home_score, away_score, fetched_at) values (?, ?, ?, ?, ?)
+                insert into live_game (game_id, inning_text, home_score, away_score, fetched_at,
+                                       line_score, batter_player_id, pitcher_player_id, pitch_count, batter_results, half_inning)
+                values (?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::jsonb, ?::jsonb)
                 on conflict (game_id) do update set inning_text = excluded.inning_text, home_score = excluded.home_score,
-                    away_score = excluded.away_score, fetched_at = excluded.fetched_at
-                """).params(g.id(), box.inningText(), box.homeScore(), box.awayScore(), ts).update();
+                    away_score = excluded.away_score, fetched_at = excluded.fetched_at, line_score = excluded.line_score,
+                    batter_player_id = excluded.batter_player_id, pitcher_player_id = excluded.pitcher_player_id,
+                    pitch_count = excluded.pitch_count, batter_results = excluded.batter_results, half_inning = excluded.half_inning
+                """).params(g.id(), box.inningText(), box.homeScore(), box.awayScore(), ts,
+                d == null || d.lineScore() == null ? null : Json.write(d.lineScore()),
+                d == null ? null : ids.get(d.batterId()), d == null ? null : ids.get(d.pitcherId()),
+                d == null ? null : d.pitchCount(),
+                d == null ? null : Json.write(d.batterResults()), d == null ? null : Json.write(d.halfInning())).update();
+
+        // 和上一輪比較：數據有變的球員記下 changed_at（即時頁標「剛更新」）
+        Map<Long, StatRow> before = new HashMap<>();
+        Map<Long, Timestamp> changedBefore = new HashMap<>();
+        jdbc.sql("select *, '' as positions from live_game_stat where game_id = ?").param(g.id()).query(rs -> {
+            before.put(rs.getLong("player_id"), StatRow.fromResultSet(rs));
+            changedBefore.put(rs.getLong("player_id"), rs.getTimestamp("changed_at"));
+        });
+        Map<Long, BatterLine> lineup = new HashMap<>();
+        for (BatterLine b : box.batters()) {
+            Long id = ids.get(b.cpblPlayerId());
+            if (id != null) lineup.putIfAbsent(id, b);
+        }
         jdbc.sql("delete from live_game_stat where game_id = ?").param(g.id()).update();
         // rows 依 box score 出現順序（打者依打序、再來投手依登板順序），存成 box_order 供即時頁排序
         int order = 0;
         for (Map.Entry<Long, StatRow> e : rows.entrySet()) {
             StatRow s = e.getValue();
+            StatRow prev = before.get(e.getKey());
+            Timestamp changed = prev == null || !prev.values().equals(s.values()) ? ts : changedBefore.get(e.getKey());
+            BatterLine b = lineup.get(e.getKey());
             jdbc.sql("""
                     insert into live_game_stat (game_id, player_id, team_code, batted, pa, ab, r, h, hr, rbi, sb, bb,
-                                                pitched, started, outs, p_h, p_bb, p_er, p_k, sv, hld, w, fetched_at, box_order)
-                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                                pitched, started, outs, p_h, p_bb, p_er, p_k, sv, hld, w, fetched_at, box_order,
+                                                lineup_slot, is_sub, changed_at)
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """).params(g.id(), e.getKey(), s.teamCode(), s.batted(), s.pa(), s.ab(), s.r(), s.h(), s.hr(), s.rbi(), s.sb(),
                     s.bb(), s.pitched(), s.started(), s.outs(), s.pH(), s.pBb(), s.pEr(), s.pK(), s.sv(), s.hld(), s.w(), ts,
-                    order++).update();
+                    order++, b == null ? null : b.lineupSlot(), b != null && b.sub(), changed).update();
         }
+    }
+
+    /** box score 與目前打者、投手的官網球員 ID → 本系統 player.id。 */
+    private Map<String, Long> playerIds(BoxScore box) {
+        List<String> cpblIds = new ArrayList<>();
+        box.batters().forEach(b -> cpblIds.add(b.cpblPlayerId()));
+        if (box.detail() != null) {
+            if (box.detail().batterId() != null) cpblIds.add(box.detail().batterId());
+            if (box.detail().pitcherId() != null) cpblIds.add(box.detail().pitcherId());
+        }
+        Map<String, Long> out = new HashMap<>();
+        if (cpblIds.isEmpty()) {
+            return out;
+        }
+        jdbc.sql("select cpbl_player_id, id from player where cpbl_player_id in (:ids)").param("ids", cpblIds)
+                .query(rs -> {
+                    out.put(rs.getString(1), rs.getLong(2));
+                });
+        return out;
     }
 
     public int intervalSeconds() {

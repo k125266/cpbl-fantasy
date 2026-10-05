@@ -103,6 +103,20 @@ public class SchedulePoller {
                 actual, start, status.name(), result, g.homeScore(), g.awayScore(), home, away).update();
     }
 
+    /**
+     * 即時輪詢看到比賽頁已顯示結束時呼叫：立即轉為 FINAL，不必等下一次賽程更新（實測最多晚 10 分鐘）。
+     * final_seen_at 只在第一次設定，結算的重算時程以它為準。
+     */
+    void markFinal(long gameId, int homeScore, int awayScore) {
+        int c = Integer.compare(homeScore, awayScore);
+        String result = c > 0 ? "HOME_WIN" : c < 0 ? "AWAY_WIN" : "TIE";
+        jdbc.sql("""
+                update game set status = 'FINAL', result = ?, home_score = ?, away_score = ?,
+                       final_seen_at = coalesce(final_seen_at, ?), updated_at = now()
+                where id = ? and status <> 'FINAL'
+                """).params(result, homeScore, awayScore, Timestamp.from(clock.now()), gameId).update();
+    }
+
     /** 官網賽程沒有「進行中」狀態；已過表定開賽時間且尚未結束者視為進行中。 */
     private GameStatus effectiveStatus(SourceGame g) {
         if (g.status() == GameStatus.SCHEDULED && g.startTime() != null && !clock.now().isBefore(g.startTime())) {
