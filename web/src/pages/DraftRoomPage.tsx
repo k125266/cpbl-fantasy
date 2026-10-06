@@ -265,7 +265,40 @@ export function keyLine(p: BoardPlayer) {
 }
 
 const CHIPS: [string, string][] = [['NEED', '缺位'], ['ALL', '全部'], ['H', '打者'], ['P', '投手'], ['IF', 'IF'], ['OF', 'OF'], ['SP', 'SP'], ['RP', 'RP']]
-const LIMIT = 40
+/** 每頁人數（設計稿更新版：分頁取代「前 40 位」） */
+const PAGE = 25
+
+/** 頁碼：總頁數不超過格數就全列，否則用「…」省略（網頁 7 格、手機 5 格，同設計稿） */
+function pageSeq(total: number, cur: number, slots: 5 | 7): (number | '…')[] {
+  const rg = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => a + i)
+  if (total <= slots) return rg(1, total)
+  if (slots === 5) return cur <= 2 ? [1, 2, 3, '…', total] : cur >= total - 1 ? [1, '…', total - 2, total - 1, total] : [1, '…', cur, '…', total]
+  return cur <= 4 ? [1, 2, 3, 4, 5, '…', total] : cur >= total - 3 ? [1, '…', ...rg(total - 4, total)] : [1, '…', cur - 1, cur, cur + 1, '…', total]
+}
+
+function Pager({ total, page, onPage, wide }: { total: number; page: number; onPage: (n: number) => void; wide: boolean }) {
+  const pages = Math.max(1, Math.ceil(total / PAGE))
+  if (pages <= 1) return null
+  const from = (page - 1) * PAGE + 1, to = Math.min(total, page * PAGE)
+  const info = <span className="info">第 {from}–{to} 位・共 {total} 位</span>
+  return (
+    <div className={`dr-pager${wide ? ' w' : ''}`}>
+      {wide && info}
+      <div className="btns">
+        <button type="button" aria-label="上一頁" disabled={page <= 1} onClick={() => onPage(page - 1)}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="m15 5-7 7 7 7" /></svg>
+        </button>
+        {pageSeq(pages, page, wide ? 7 : 5).map((n, i) => n === '…'
+          ? <span key={`e${i}`} className="gap">…</span>
+          : <button key={n} type="button" aria-current={n === page ? 'page' : undefined} onClick={() => onPage(n)}>{n}</button>)}
+        <button type="button" aria-label="下一頁" disabled={page >= pages} onClick={() => onPage(page + 1)}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="m9 5 7 7-7 7" /></svg>
+        </button>
+      </div>
+      {!wide && info}
+    </div>
+  )
+}
 
 export function PlayerList({ draft, board, queue, myTurn, onPick, selId, onSelect }: {
   draft: DraftView
@@ -303,9 +336,22 @@ export function PlayerList({ draft, board, queue, myTurn, onPick, selId, onSelec
     return L
   }, [board, chip, q, sortBy])
 
-  const count = rows.length > LIMIT ? `前 ${LIMIT} / ${rows.length} 位` : `${rows.length} 位`
+  // 分頁：篩選、排序、搜尋改變時回第 1 頁；被選走使總數變少時不超過最後一頁
+  const [pageWant, setPageWant] = useState(1)
+  useEffect(() => setPageWant(1), [chip, q, sortBy])
+  const page = Math.min(pageWant, Math.max(1, Math.ceil(rows.length / PAGE)))
+  const top = useRef<HTMLDivElement>(null)
+  const goPage = (n: number) => {
+    setPageWant(n)
+    // 換頁後捲回列表頂端（手機扣掉黏在上方的分頁列）
+    const el = top.current
+    if (!el) return
+    const y = el.getBoundingClientRect().top + window.scrollY - (wide ? 12 : 64)
+    if (window.scrollY > y) window.scrollTo({ top: y })
+  }
+  const count = `${rows.length} 位`
   return (
-    <div className="dr-list">
+    <div className="dr-list" ref={top}>
       <div className="tools">
         <label className="search">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
@@ -332,7 +378,7 @@ export function PlayerList({ draft, board, queue, myTurn, onPick, selId, onSelec
           <span className="c">候選</span><span />
         </div>
       )}
-      {rows.slice(0, LIMIT).map((p) => {
+      {rows.slice((page - 1) * PAGE, page * PAGE).map((p) => {
         const t = cpblTeam(p.cpblTeam)
         const inQ = queue.ids.includes(p.playerId)
         const keys: Cat[] = !p.pitcher ? ['AVG', 'HR', 'R'] : isSp(p) ? ['ERA', 'K', 'QS'] : ['ERA', 'W+SV', 'K']
@@ -359,6 +405,7 @@ export function PlayerList({ draft, board, queue, myTurn, onPick, selId, onSelec
           </div>
         )
       })}
+      <Pager total={rows.length} page={page} onPage={goPage} wide={wide} />
       {board && rows.length === 0 && <div className="dr-empty">沒有符合的球員</div>}
       {!board && <div className="dr-empty">載入中…</div>}
       {draft.status !== 'IN_PROGRESS' && board && <p className="dr-hint">選秀開始後才能選人；現在可以先按 ☆ 排候選清單。</p>}
@@ -766,7 +813,8 @@ export default function DraftRoom({ draft, onChange }: { draft: DraftView; onCha
     }
   }
   const reveal = rv && <PickReveal key={rv.pick.pickNo} rv={rv} draft={draft} onClose={() => setRv(null)} />
-  const pickText = myTurn ? '選這位' : done ? '選秀已結束' : nextMe ? `還沒輪到你・再 ${nextMe.pickNo - draft.currentPickNo} 順位` : '你已選完'
+  const pickText = myTurn ? '選這位' : done ? '選秀已結束' : draft.status !== 'IN_PROGRESS' ? '選秀尚未開始'
+    : nextMe ? `還沒輪到你・再 ${nextMe.pickNo - draft.currentPickNo} 順位` : '你已選完'
   const panel = (p: BoardPlayer) => (
     <PlayerPanel p={p} basis={board.data?.basis ?? ''} inQ={queue.ids.includes(p.playerId)} onToggle={() => queue.toggle(p.playerId)}
       pickText={pickText} canPick={myTurn} onPick={() => pick(p)} />
