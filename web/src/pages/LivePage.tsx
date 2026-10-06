@@ -17,7 +17,7 @@ import { cpblTeam, fantasyTeamColor } from '../teams'
 
 type Mode = 'mine' | 'vs' | 'all' | 'full'
 const MODES: { k: Mode; t: string }[] = [
-  { k: 'mine', t: '我的隊' }, { k: 'vs', t: '對戰' }, { k: 'all', t: '全聯盟' }, { k: 'full', t: '全場' },
+  { k: 'full', t: '全場' }, { k: 'mine', t: '我的隊' }, { k: 'vs', t: '對戰' }, { k: 'all', t: '全聯盟' },
 ]
 const REFRESH = 60
 const PLAYING = (g: LiveGame) => g.status !== 'POSTPONED' && g.status !== 'CANCELLED'
@@ -105,7 +105,7 @@ export default function LivePage() {
   const [error, setError] = useState<unknown>(null)
   const [upd, setUpd] = useState('')
   const [sec, setSec] = useState(REFRESH)
-  const [mode, setMode] = useState<Mode>('mine')
+  const [mode, setMode] = useState<Mode>('full')
   const [selId, setSelId] = useState<number | null>(null)
 
   const load = useCallback(() => {
