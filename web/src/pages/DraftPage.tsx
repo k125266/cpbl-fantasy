@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useApp } from '../App'
-import { api, type DraftView, type PlayerRow, type RosterResponse } from '../api'
+import { api, type DraftView, type PlayerRow } from '../api'
 import { Avatar, celebrate, ErrorBox, Loading, PlayerCard, StatusBadge, TeamChip, tierOf, useLoad } from '../components'
 import { cpblTeam } from '../teams'
+import DraftOrderPage from './DraftOrderPage'
+import KeeperPage from './KeeperPage'
 import { cardBack, cardLine } from './PlayersPage'
 
 const DRAFT_STATUS: Record<string, string> = {
@@ -11,21 +13,28 @@ const DRAFT_STATUS: Record<string, string> = {
 }
 const C = 2 * Math.PI * 44
 
+/**
+ * 選秀入口：/draft/keepers（Keeper）、/draft/order（順位抽籤／揭曉）、/draft/room（選秀室）。
+ * /draft 依狀態自動決定：keeper 期 → Keeper；揭曉前後到開始前 → 順位；進行中、完成 → 選秀室。
+ */
 export default function DraftPage() {
   const { leagueId, league, reloadLeague } = useApp()
+  const { pathname } = useLocation()
   const drafts = useLoad(() => api.get<DraftView[]>(`/api/leagues/${leagueId}/drafts`), [leagueId])
   const [err, setErr] = useState<unknown>(null)
   const [halfNo, setHalfNo] = useState(1)
+  const [when, setWhen] = useState('')
   const active = (drafts.data || []).find((d) => d.status !== 'COMPLETED') ?? (drafts.data || []).slice(-1)[0]
   const live = active?.status === 'IN_PROGRESS'
+  const before = active?.status === 'SETUP' || active?.status === 'KEEPERS'
 
-  // v1 以 2 秒輪詢同步（SSE / WebSocket 列在工程待辦 E8）
+  // v1 以輪詢同步（SSE / WebSocket 列在工程待辦 E8）：進行中 2 秒；開始前 3 秒，讓揭曉動畫各裝置同步開始
   useEffect(() => {
-    if (!live) return
-    const t = setInterval(() => drafts.reload(), 2000)
+    if (!live && !before) return
+    const t = setInterval(() => drafts.reload(), live ? 2000 : 3000)
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live])
+  }, [live, before])
 
   const call = async (fn: () => Promise<unknown>) => {
     setErr(null)
@@ -39,11 +48,22 @@ export default function DraftPage() {
   }
 
   if (drafts.loading && !drafts.data) return <Loading />
+  const changed = () => { drafts.reload(); reloadLeague() }
+  const view = !active ? null
+    : pathname.startsWith('/draft/keepers') ? 'keepers'
+      : pathname.startsWith('/draft/order') ? 'order'
+        : pathname.startsWith('/draft/room') ? 'room'
+          : active.status === 'KEEPERS' && !active.revealedAt ? 'keepers'
+            : before ? 'order' : 'room'
   return (
     <div className="stack">
       <ErrorBox error={err || drafts.error} />
       {!active && <p className="muted">尚未建立選秀。</p>}
-      {active && <DraftRoom draft={active} onChange={() => { drafts.reload(); reloadLeague() }} />}
+      {active && view === 'keepers' && (active.halfNo === 2
+        ? <KeeperPage draft={active} onChange={changed} />
+        : <p className="muted">上半季沒有 keeper。</p>)}
+      {active && view === 'order' && <DraftOrderPage draft={active} onChange={changed} />}
+      {active && view === 'room' && <DraftRoom draft={active} onChange={changed} />}
       {league?.commissioner && (
         <div className="card">
           <h2>聯盟管理員</h2>
@@ -52,7 +72,9 @@ export default function DraftPage() {
               <option value={1}>上半季</option>
               <option value={2}>下半季補強選秀（含 keeper）</option>
             </select>
-            <button type="button" onClick={() => call(() => api.post(`/api/leagues/${leagueId}/drafts`, { halfNo }))}>建立選秀</button>
+            <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} aria-label="選秀時間" title="選秀時間（keeper 在前 10 分鐘截止）" />
+            <button type="button" onClick={() => call(() => api.post(`/api/leagues/${leagueId}/drafts`,
+              { halfNo, scheduledAt: when ? `${when}:00+08:00` : null }))}>建立選秀</button>
             {active && (active.status === 'SETUP' || active.status === 'KEEPERS') && !active.revealedAt && (
               <button type="button" onClick={() => call(() => api.post(`/api/leagues/${leagueId}/drafts/${active.id}/reveal`))}>揭曉順位</button>
             )}
@@ -103,7 +125,7 @@ function DraftRoom({ draft, onChange }: { draft: DraftView; onChange: () => void
           <p className="ps" style={{ marginBottom: 0 }}>Snake draft・{draft.rounds} 輪・每次 {draft.pickSeconds} 秒，逾時自動選取排名最高且符合洋將上限與位置需求的球員。</p>
         </div>
       )}
-      {draft.status === 'KEEPERS' && <KeeperPicker draft={draft} onChange={onChange} />}
+      {draft.status === 'KEEPERS' && !draft.revealedAt && <p className="muted">Keeper 選擇期：<Link to="/draft/keepers">前往選擇 Keeper</Link></p>}
       {draft.status === 'IN_PROGRESS' && <Available draft={draft} myTurn={myTurn} onPicked={onChange} />}
       {myPicks.length > 0 && (
         <div className="card flush">
@@ -189,35 +211,3 @@ function Available({ draft, myTurn, onPicked }: { draft: DraftView; myTurn: bool
   )
 }
 
-function KeeperPicker({ draft, onChange }: { draft: DraftView; onChange: () => void }) {
-  const { leagueId, league } = useApp()
-  const roster = useLoad(() => api.get<RosterResponse>(`/api/leagues/${leagueId}/teams/${league?.myTeamId}/roster`), [leagueId])
-  const [chosen, setChosen] = useState<number[]>(draft.myKeepers.map((k) => k.playerId))
-  const [err, setErr] = useState<unknown>(null)
-  const limit = league?.league.keeperLimit ?? 15
-  const save = async () => {
-    setErr(null)
-    try {
-      await api.post(`/api/leagues/${leagueId}/drafts/${draft.id}/keepers`, { playerIds: chosen })
-      onChange()
-    } catch (e) {
-      setErr(e)
-    }
-  }
-  return (
-    <div className="card">
-      <h2>選擇 keeper（至多 {limit} 人）</h2>
-      <p className="ps">Keeper 不佔選秀輪次；沒保留的球員回到球員池。截止時間為選秀前 10 分鐘，順位揭曉時公開各隊 keeper。</p>
-      <ErrorBox error={err} />
-      {(roster.data?.players || []).map((p) => (
-        <label key={p.playerId} className="row" style={{ marginBottom: 6 }}>
-          <input type="checkbox" checked={chosen.includes(p.playerId)} disabled={!chosen.includes(p.playerId) && chosen.length >= limit}
-            onChange={() => setChosen(chosen.includes(p.playerId) ? chosen.filter((x) => x !== p.playerId) : [...chosen, p.playerId])} />
-          <TeamChip code={p.cpblTeam} /> {p.name} <StatusBadge status={p.status} />
-        </label>
-      ))}
-      <button type="button" className="primary" onClick={save}>儲存 keeper</button>
-      {draft.myKeepers.length > 0 && <p className="ps">目前 keeper：{draft.myKeepers.map((k) => k.name).join('、')}</p>}
-    </div>
-  )
-}

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type LiveGame, type LiveLine, type LiveStarter, type LiveView, type TeamView } from '../api'
 import { ErrorBox, fmtTime, Loading } from '../components'
+import { useWide } from '../hooks'
 import { TeamIcon } from '../teamIdentity'
 import { cpblTeam, fantasyTeamColor } from '../teams'
 
@@ -22,18 +23,6 @@ const REFRESH = 60
 const PLAYING = (g: LiveGame) => g.status !== 'POSTPONED' && g.status !== 'CANCELLED'
 const BAT_HEADS = ['PA', 'AB', 'H', 'R', 'HR', 'BB']
 const PIT_HEADS = ['IP', 'H', 'BB', 'ER', 'K', '勝/救']
-
-function useWide() {
-  const q = '(min-width: 1024px)'
-  const [wide, setWide] = useState(() => window.matchMedia(q).matches)
-  useEffect(() => {
-    const m = window.matchMedia(q)
-    const f = () => setWide(m.matches)
-    m.addEventListener('change', f)
-    return () => m.removeEventListener('change', f)
-  }, [])
-  return wide
-}
 
 function clock(d: Date) {
   const p = (n: number) => String(n).padStart(2, '0')
