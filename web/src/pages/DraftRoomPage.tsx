@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import confetti from 'canvas-confetti'
 import { useApp } from '../App'
 import { api, type BoardPlayer, type DraftBoard, type DraftPick, type DraftStats, type DraftView } from '../api'
-import { Link } from 'react-router-dom'
-import { BottomSheet, celebrate, ErrorBox, TIER_LABEL, tierOf, useLoad } from '../components'
+import { BottomSheet, ErrorBox, TIER_LABEL, tierOf, useLoad } from '../components'
 import { useServerNow, useWide } from '../hooks'
 import { cpblTeam, fantasyTeamColor } from '../teams'
 import { Medal } from './KeeperPage'
@@ -25,6 +26,46 @@ export function draftSlots(draft: DraftView): DraftPick[] {
 }
 
 const fmtClock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+
+// ------------------------------------------------------------------
+// 音效與震動（設計稿：可關閉，偏好只存在這台裝置）
+// ------------------------------------------------------------------
+
+const SOUND_KEY = 'cpblf.draft.sound'
+function soundOn() {
+  try { return localStorage.getItem(SOUND_KEY) !== 'off' } catch { return true }
+}
+let audio: AudioContext | null = null
+function unlockAudio() {
+  try {
+    audio = audio ?? new AudioContext()
+    if (audio.state === 'suspended') void audio.resume()
+  } catch { /* 不支援就略過 */ }
+}
+function beep(freqs: number[], dur: number, gap: number, type: OscillatorType, vol: number) {
+  if (!soundOn()) return
+  try {
+    unlockAudio()
+    const ctx = audio!
+    const t0 = ctx.currentTime + 0.02
+    freqs.forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain(), t = t0 + i * gap
+      o.type = type
+      o.frequency.value = f
+      g.gain.setValueAtTime(0, t)
+      g.gain.linearRampToValueAtTime(vol, t + 0.012)
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+      o.connect(g)
+      g.connect(ctx.destination)
+      o.start(t)
+      o.stop(t + dur + 0.03)
+    })
+  } catch { /* 不支援就略過 */ }
+}
+function buzz(p: number | number[]) {
+  try { if (soundOn() && navigator.vibrate) navigator.vibrate(p) } catch { /* 不支援就略過 */ }
+}
+const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /** 計時票根、標題、上一個選擇與接下來的順位橫條。 */
 export function RoomHeader({ draft, queueLen = 0, onReport }: { draft: DraftView; queueLen?: number; onReport?: () => void }) {
@@ -56,8 +97,45 @@ export function RoomHeader({ draft, queueLen = 0, onReport }: { draft: DraftView
   const idx = cur ? slots.indexOf(cur) : slots.length
   const strip = slots.slice(Math.max(0, idx - 3), Math.min(slots.length, idx + (wide ? 8 : 7)))
 
+  // 輪到你：橫幅、三連音、震動；最後 5 秒每秒嗶一聲
+  const [sound, setSound] = useState(soundOn)
+  const [banner, setBanner] = useState(false)
+  const wasMine = useRef(mine)
+  const lastTick = useRef(0)
+  useEffect(() => {
+    document.addEventListener('pointerdown', unlockAudio)
+    return () => document.removeEventListener('pointerdown', unlockAudio)
+  }, [])
+  useEffect(() => {
+    if (mine && !wasMine.current) {
+      buzz([140, 70, 140])
+      beep([784, 1047, 1319], 0.26, 0.12, 'triangle', 0.2)
+      setBanner(true)
+      const t = setTimeout(() => setBanner(false), 2800)
+      wasMine.current = mine
+      return () => clearTimeout(t)
+    }
+    wasMine.current = mine
+  }, [mine])
+  useEffect(() => {
+    if (mine && rem <= 5 && rem > 0 && rem !== lastTick.current) {
+      lastTick.current = rem
+      beep([1480], 0.06, 0.1, 'square', 0.045)
+      buzz(30)
+    }
+  }, [mine, rem])
+  const toggleSound = () => {
+    const on = !sound
+    try { localStorage.setItem(SOUND_KEY, on ? 'on' : 'off') } catch { /* 無法儲存就只在這次有效 */ }
+    setSound(on)
+    if (on) beep([880], 0.1, 0.1, 'triangle', 0.14)
+  }
+
   return (
     <div className="dr-head">
+      <div className={`dr-banner${banner ? ' on' : ''}`} aria-live="polite">
+        <div><i /><b>輪到你了</b><span>PICK {label} · {draft.pickSeconds} 秒</span></div>
+      </div>
       <div className={`dr-ticket ${state}`}>
         <div className="in">
           <div className="top">
@@ -85,6 +163,12 @@ export function RoomHeader({ draft, queueLen = 0, onReport }: { draft: DraftView
         <div className="dr-title">
           <span className="eb">DRAFT ROOM</span><b>選秀室</b>
           <span className="meta">{system?.seasonYear} · {draft.snake ? 'SNAKE' : '每輪同順序'} · {n} TEAMS · {draft.rounds} ROUNDS</span>
+          <button type="button" className={`dr-sound${sound ? ' on' : ''}`} onClick={toggleSound} aria-pressed={sound}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+              <path d="M4 9v6h4l5 4V5L8 9z" /><path d={sound ? 'M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11' : 'M16 9l5 6M21 9l-5 6'} />
+            </svg>
+            音效 {sound ? '開' : '關'}
+          </button>
         </div>
         <div className="dr-last">
           <span className="eb">LAST PICK</span>
@@ -448,6 +532,69 @@ function Seg<T extends string>({ value, items, onChange }: { value: T; items: [T
 }
 
 // ------------------------------------------------------------------
+// 選中動畫：卡背（順位）→ 翻面（背號、名字、數據）→ 蓋章、彩帶
+// ------------------------------------------------------------------
+
+interface Reveal { pick: DraftPick; player?: BoardPlayer }
+
+function boom() {
+  if (reduced()) return
+  const colors = ['#f6e1a2', '#d8b25a', '#8d6a20', '#f3f5f8', '#c4cad4']
+  confetti({ particleCount: 90, angle: 60, spread: 55, startVelocity: 46, origin: { x: 0, y: 0.62 }, colors, zIndex: 80 })
+  confetti({ particleCount: 90, angle: 120, spread: 55, startVelocity: 46, origin: { x: 1, y: 0.62 }, colors, zIndex: 80 })
+  setTimeout(() => confetti({ particleCount: 110, spread: 100, startVelocity: 28, origin: { x: 0.5, y: 0.38 }, colors, zIndex: 80 }), 260)
+}
+
+function PickReveal({ rv, draft, onClose }: { rv: Reveal; draft: DraftView; onClose: () => void }) {
+  const { league, system } = useApp()
+  const [ph, setPh] = useState(0)
+  useEffect(() => {
+    const ts = [
+      setTimeout(() => setPh(1), 40),
+      setTimeout(() => setPh(2), 820),
+      setTimeout(() => { setPh(3); boom(); beep([523, 659, 784, 1047], 0.2, 0.08, 'triangle', 0.16); buzz([60, 40, 90]) }, 1450),
+    ]
+    return () => ts.forEach(clearTimeout)
+  }, [])
+  const n = draft.order.length || 1
+  const label = pickLabel(rv.pick.pickNo, n)
+  const p = rv.player
+  const t = cpblTeam(rv.pick.playerTeam)
+  const tier = tierOf(p?.rank)
+  const me = league?.teams.find((x) => x.id === rv.pick.teamId)
+  const stats = p ? (p.pitcher ? PIT : HIT).slice(0, 4).map((c) => `${fmtStat(c, statOf(p.stats, c))} ${c}`).join(' · ') : ''
+  return (
+    <div className={`dr-rv ph${ph}`} onClick={() => ph >= 3 && onClose()} role="dialog" aria-label={`選中 ${rv.pick.playerName}`}>
+      <div className="kick">{rv.pick.auto ? `時間到・自動選秀 · PICK ${label}` : `PICK ${label} · 第 ${rv.pick.pickNo} 順位`}</div>
+      <div className="card3d">
+        <div className="flip">
+          <div className="face back">
+            <div className="in">
+              <span className="a">CPBL FANTASY</span>
+              <span className="ov">{rv.pick.pickNo}</span>
+              <span className="b">{system?.seasonYear} DRAFT</span>
+            </div>
+          </div>
+          <div className={`face front t-${tier}`}>
+            <div className="in" style={{ background: `linear-gradient(165deg, ${t.bg}33 0%, ${t.bg}12 42%, transparent 72%), var(--surface)` }}>
+              <div className="r1"><span>{rv.pick.playerPosition ?? ''}</span><i style={{ background: t.bg, color: t.fg }}>{t.short}</i></div>
+              <div className="num"><b>{rv.pick.playerJersey ?? '–'}</b><span>{TIER_LABEL[tier]}</span></div>
+              <div className="nm">{rv.pick.playerName}</div>
+              <div className="ln">{p ? keyLine(p) : '—'}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="seal">
+        <div className="st"><i style={{ background: me ? fantasyTeamColor(me.id, league?.teams ?? []) : 'var(--gold)' }} /><b>{me?.name} 選中</b></div>
+        <div className="sub">第 {rv.pick.round} 輪・排名 {p?.rank ?? '–'}{stats ? `・${stats}` : ''}</div>
+        <div className="go">點任意處繼續</div>
+      </div>
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------
 // 選秀室
 // ------------------------------------------------------------------
 
@@ -472,17 +619,31 @@ export default function DraftRoom({ draft, onChange }: { draft: DraftView; onCha
   // 網頁版右欄預設顯示排名第一的可選球員（設計稿）；被選走就換下一位
   const selP = (sel != null ? byId.get(sel) : undefined) ?? (wide ? players[0] : undefined)
 
+  // 我的新選擇（自己選或時間到自動選）出現時播放選中動畫；剛進來時已有的不播。
+  // 選中後球員已不在可選名單，數據從上一份名單找
+  const [rv, setRv] = useState<Reveal | null>(null)
+  const newest = myPicks[0]
+  const seen = useRef(newest?.pickNo ?? 0)
+  const known = useRef(new Map<number, BoardPlayer>())
+  useEffect(() => { players.forEach((p) => known.current.set(p.playerId, p)) }, [players])
+  useEffect(() => {
+    if (!newest || newest.pickNo === seen.current || newest.playerId == null) return
+    seen.current = newest.pickNo
+    setRv({ pick: newest, player: known.current.get(newest.playerId) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newest?.pickNo])
+
   const pick = async (p: BoardPlayer) => {
     setErr(null)
     try {
       await api.post(`/api/leagues/${leagueId}/drafts/${draft.id}/pick`, { playerId: p.playerId })
       setSel(null)
-      celebrate()
       onChange()
     } catch (e) {
       setErr(e)
     }
   }
+  const reveal = rv && <PickReveal key={rv.pick.pickNo} rv={rv} draft={draft} onClose={() => setRv(null)} />
   const pickText = myTurn ? '選這位' : done ? '選秀已結束' : nextMe ? `還沒輪到你・再 ${nextMe.pickNo - draft.currentPickNo} 順位` : '你已選完'
   const panel = (p: BoardPlayer) => (
     <PlayerPanel p={p} basis={board.data?.basis ?? ''} inQ={queue.ids.includes(p.playerId)} onToggle={() => queue.toggle(p.playerId)}
@@ -515,6 +676,7 @@ export default function DraftRoom({ draft, onChange }: { draft: DraftView; onCha
             </div>
           </div>
         </div>
+        {reveal}
       </div>
     )
   }
@@ -536,6 +698,7 @@ export default function DraftRoom({ draft, onChange }: { draft: DraftView; onCha
       {sel != null && selP && (
         <BottomSheet label={selP.name} onClose={() => setSel(null)}>{panel(selP)}</BottomSheet>
       )}
+      {reveal}
     </div>
   )
 }
