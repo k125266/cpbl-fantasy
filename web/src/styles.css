@@ -979,7 +979,7 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 .kp-legend b.d { color: #b9c3ff; }
 .kp-note { margin: 10px 0 0; padding: 0 2px; font-size: 11px; line-height: 1.7; color: var(--silver-lo); }
 .kp-list { margin-top: 8px; border-radius: 12px; background: rgb(21 23 28 / .88); border: 1px solid var(--line); border-top-color: rgb(196 202 212 / .14); overflow: hidden; }
-.kp-row { display: grid; grid-template-columns: 22px 38px minmax(0, 1fr) auto; gap: 10px; align-items: center; width: 100%; min-height: 56px; box-sizing: border-box; padding: 6px 12px; border: 0; border-top: 1px solid #1d2027; border-radius: 0; background: transparent; text-align: left; font-weight: 400; color: var(--text); }
+.kp-row { display: grid; grid-template-columns: 22px 38px minmax(0, 1fr); gap: 10px; align-items: center; width: 100%; min-height: 56px; box-sizing: border-box; padding: 6px 12px; border: 0; border-top: 1px solid #1d2027; border-radius: 0; background: transparent; text-align: left; font-weight: 400; color: var(--text); }
 .kp-row:first-child { border-top: 0; }
 .kp-row.on, .kp-grid.on { background: rgb(238 240 244 / .035); box-shadow: inset 2px 0 0 var(--silver); }
 .kp-row.dim, .kp-grid.dim { opacity: .45; }
@@ -992,9 +992,7 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 .kp .rk { font: 600 12px var(--font-num); color: var(--muted); white-space: nowrap; }
 .kp .rk.top { color: var(--text); }
 .kp-row .l2 { margin-top: 2px; font-size: 11px; color: var(--silver-lo); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.kp .hint { font-size: 11.5px; white-space: nowrap; color: var(--muted); }
-.kp .hint.on { color: var(--text); }
-.kp .hint.risk { color: #f0b84a; }
+.kp-tag { flex: none; font-style: normal; font-size: 10.5px; line-height: 16px; padding: 0 5px; border-radius: 4px; color: var(--muted); border: 1px solid var(--line-2); }
 .kp-save { position: sticky; bottom: calc(92px + env(safe-area-inset-bottom, 0px)); z-index: 6; display: flex; align-items: center; gap: 12px; margin-top: 16px; padding: 8px 8px 8px 18px; background: rgb(24 27 33 / .85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--line); border-top-color: rgb(196 202 212 / .14); border-radius: 999px; box-shadow: 0 -8px 24px rgb(0 0 0 / .6); }
 .kp-save .t { flex: 1; min-width: 0; line-height: 1.3; display: flex; flex-direction: column; }
 .kp-save b { font: 700 17px var(--font-mix); }
@@ -1077,7 +1075,7 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .kp-thead { display: flex; align-items: center; gap: 12px; padding: 14px 18px 12px; }
   .kp-thead .muted { font-size: 12.5px; color: var(--muted); }
   .kp .sp { flex: 1; }
-  .kp-grid { display: grid; grid-template-columns: 24px minmax(0, 1fr) 72px 96px 130px 220px; gap: 12px; align-items: center; width: 100%; min-height: 52px; box-sizing: border-box; padding: 0 18px; border: 0; border-top: 1px solid #1d2027; border-radius: 0; background: transparent; text-align: left; font-weight: 400; color: var(--text); }
+  .kp-grid { display: grid; grid-template-columns: 24px minmax(0, 1fr) 72px 96px 130px; gap: 12px; align-items: center; width: 100%; min-height: 52px; box-sizing: border-box; padding: 0 18px; border: 0; border-top: 1px solid #1d2027; border-radius: 0; background: transparent; text-align: left; font-weight: 400; color: var(--text); }
   .kp-grid:hover:not(:disabled) { background: rgb(42 47 57 / .35); }
   .kp-grid.head { min-height: 32px; background: rgb(14 16 20 / .45); font: 600 11.5px var(--font-mix); letter-spacing: .1em; color: var(--muted); }
   .kp-grid .r { text-align: right; }
@@ -1088,7 +1086,6 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .kp-grid .pos { font: 500 14px var(--font-num); letter-spacing: .04em; color: var(--silver); }
   .kp-grid .rk { font-size: 16px; }
   .kp-grid .via { font-size: 13px; color: var(--silver); white-space: nowrap; }
-  .kp-grid .hint { font-size: 13px; }
   .kp-tfoot { padding: 10px 18px; border-top: 1px solid #1d2027; font-size: 12px; color: var(--muted); }
   .kp-side { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 16px; }
   .kp-side .kp-box { margin-top: 0; padding: 14px 16px; }

@@ -23,9 +23,6 @@ export interface KeeperCandidate {
   delisted: boolean
 }
 
-/** 上半季排名在此之前的球員，不保留的話很可能在補強選秀被選走（設計稿的估計） */
-export const KEEPER_RISK_RANK = 60
-
 const METAL: Record<string, string> = { legend: 'var(--metal-gold)', gold: 'var(--metal-gold)', rare: 'var(--metal-silver)', common: 'var(--metal-bronze)' }
 
 export function Medal({ rank, jersey, team, size }: { rank: number | null; jersey: string | null; team: string; size: number }) {
@@ -56,7 +53,10 @@ export default function KeeperPage({ draft, onChange }: { draft: DraftView; onCh
   const limit = league?.league.keeperLimit ?? 15
   const rounds = draft.rounds
   const rosterSize = league?.league.draftRounds ?? 20
-  const saved = useMemo(() => draft.myKeepers.map((k) => k.playerId), [draft.myKeepers])
+  // 選秀資料每 3 秒輪詢一次，每次都是新陣列；以內容判斷，伺服器上的 keeper 真的變了（例：另一台裝置儲存）
+  // 才重設，否則還沒儲存的勾選會被蓋掉
+  const savedKey = draft.myKeepers.map((k) => k.playerId).join(',')
+  const saved = useMemo(() => (savedKey ? savedKey.split(',').map(Number) : []), [savedKey])
   const [keep, setKeep] = useState<number[]>(saved)
   const [sort, setSort] = useState<'rank' | 'pos'>('rank')
   const [note, setNote] = useState<string | null>(null)
@@ -106,7 +106,9 @@ export default function KeeperPage({ draft, onChange }: { draft: DraftView; onCh
     : dirty ? (open > 0 ? `尚未儲存・少保留的 ${open} 個位置選秀後從自由球員補` : `尚未儲存・名單剛好 ${rosterSize} 人`)
       : '已儲存・截止前都能改')
   const saveTone = note ? 'warn' : locked ? 'muted' : dirty ? '' : 'ok'
-  const sub = draft.keeperDeadline ? `截止 ${fmtDeadline(draft.keeperDeadline)}・${remain((deadline ?? 0) - now)}` : '順位揭曉前都能改'
+  // 揭曉或選秀開始後也算截止（例：管理員提早揭曉），不再顯示倒數
+  const sub = locked ? `Keeper 已截止${draft.revealedAt ? '・順位已揭曉' : ''}`
+    : draft.keeperDeadline ? `截止 ${fmtDeadline(draft.keeperDeadline)}・${remain((deadline ?? 0) - now)}` : '順位揭曉前都能改'
 
   const slots = Array.from({ length: limit }, (_, i) => kept[i])
   const strip = Array.from({ length: rosterSize }, (_, i) => (i < n ? 'K' : i < n + rounds ? 'D' : ''))
@@ -142,10 +144,8 @@ export default function KeeperPage({ draft, onChange }: { draft: DraftView; onCh
       ))}
     </div>
   )
-  const hint = (c: KeeperCandidate, on: boolean) => c.delisted ? { s: '已註銷', t: '已註銷，不能保留', c: 'muted' }
-    : on ? { s: '保留', t: '保留到下半季', c: 'on' }
-      : c.rank != null && c.rank <= KEEPER_RISK_RANK ? { s: '可能被選走', t: '很可能在補強選秀被選走', c: 'risk' }
-        : { s: '可簽回', t: '大概沒人選，之後可從自由球員簽回', c: 'muted' }
+  // 不顯示設計稿的「不保留的話」：keeper 揭曉前保密，猜不準會不會被選走（docs/decisions.md）
+  const delisted = (c: KeeperCandidate) => c.delisted && <i className="kp-tag">已註銷</i>
   const full = n >= limit
   const saveBar = (
     <div className={`kp-save${wide ? ' w' : ''}`}>
@@ -177,23 +177,22 @@ export default function KeeperPage({ draft, onChange }: { draft: DraftView; onCh
           <div className="kp-lab sm"><span>下半季名單 {rosterSize} 人</span><span>保留 {n}・選秀 {rounds}・空位 {open}</span></div>
           {stripBox}
         </div>
-        <p className="kp-note">Keeper 不佔選秀輪次。沒保留的球員回到球員池，任何隊伍都能在補強選秀選他。各隊 keeper 在順位揭曉時一起公開。</p>
+        <p className="kp-note">Keeper 不佔選秀輪次。沒保留的球員回到球員池，補強選秀和之後的自由球員都可能被別隊拿走。各隊 keeper 在順位揭曉時一起公開。</p>
         <div className="lv-label"><span>你的名單 · {list.length} 人</span>{sortSeg}</div>
         <div className="kp-list">
           {list.map((c) => {
-            const on = keep.includes(c.playerId), h = hint(c, on)
+            const on = keep.includes(c.playerId)
             return (
               <button key={c.playerId} type="button" className={`kp-row${on ? ' on' : ''}${!on && (full || c.delisted) ? ' dim' : ''}`} onClick={() => toggle(c)} disabled={locked}>
                 <span className="ck">{on && '✓'}</span>
                 <Medal rank={c.rank} jersey={c.jerseyNumber} team={c.cpblTeam} size={38} />
-                <span className="who"><span className="l1"><b>{c.name}</b><span className="pos">{c.position}</span><span className={`rk${(c.rank ?? 99) <= 10 ? ' top' : ''}`}>#{c.rank ?? '–'}</span></span>
+                <span className="who"><span className="l1"><b>{c.name}</b><span className="pos">{c.position}</span><span className={`rk${(c.rank ?? 99) <= 10 ? ' top' : ''}`}>#{c.rank ?? '–'}</span>{delisted(c)}</span>
                   <span className="l2">{c.via}・{cpblTeam(c.cpblTeam).short}</span></span>
-                <span className={`hint ${h.c}`}>{h.s}</span>
               </button>
             )
           })}
         </div>
-        <p className="kp-note">右邊的提示依上半季排名：前 {KEEPER_RISK_RANK} 名不保留，很可能在補強選秀被選走；其餘大多能從自由球員簽回。</p>
+        <p className="kp-note">已註銷的球員不能保留。</p>
         {saveBar}
       </div>
     )
@@ -206,21 +205,20 @@ export default function KeeperPage({ draft, onChange }: { draft: DraftView; onCh
       <div className="kp-cols">
         <div className="kp-table">
           <div className="kp-thead"><span className="lv-label-t">你的名單 · {list.length} 人</span><span className="muted">點一列加入或移出保留席</span><span className="sp" />{sortSeg}</div>
-          <div className="kp-grid head"><span /><span>球員</span><span>位置</span><span className="r">上半季排名</span><span>取得方式</span><span>不保留的話</span></div>
+          <div className="kp-grid head"><span /><span>球員</span><span>位置</span><span className="r">上半季排名</span><span>取得方式</span></div>
           {list.map((c) => {
-            const on = keep.includes(c.playerId), h = hint(c, on), t = cpblTeam(c.cpblTeam)
+            const on = keep.includes(c.playerId), t = cpblTeam(c.cpblTeam)
             return (
               <button key={c.playerId} type="button" className={`kp-grid${on ? ' on' : ''}${!on && (full || c.delisted) ? ' dim' : ''}`} onClick={() => toggle(c)} disabled={locked}>
                 <span className="ck">{on && '✓'}</span>
-                <span className="who"><Medal rank={c.rank} jersey={c.jerseyNumber} team={c.cpblTeam} size={34} /><b>{c.name}</b><span className="team"><i style={{ background: t.bg }} />{t.short}</span></span>
+                <span className="who"><Medal rank={c.rank} jersey={c.jerseyNumber} team={c.cpblTeam} size={34} /><b>{c.name}</b><span className="team"><i style={{ background: t.bg }} />{t.short}</span>{delisted(c)}</span>
                 <span className="pos">{c.position}</span>
                 <span className={`r rk${(c.rank ?? 99) <= 10 ? ' top' : ''}`}>{c.rank ?? '–'}</span>
                 <span className="via">{c.via}</span>
-                <span className={`hint ${h.c}`}>{h.t}</span>
               </button>
             )
           })}
-          <div className="kp-tfoot">「不保留的話」依上半季排名估計：前 {KEEPER_RISK_RANK} 名很可能在補強選秀被選走，其餘大多能從自由球員簽回。已註銷的球員不能保留。</div>
+          <div className="kp-tfoot">沒保留的球員回到球員池，補強選秀和之後的自由球員都可能被別隊拿走。已註銷的球員不能保留。</div>
         </div>
         <div className="kp-side">
           <div className="kp-box"><div className="kp-lab"><span>保留席 · {n} / {limit}</span><span className="muted">點 × 移出</span></div>{slotGrid}</div>
