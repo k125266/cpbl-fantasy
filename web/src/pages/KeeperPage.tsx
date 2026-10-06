@@ -56,7 +56,10 @@ export default function KeeperPage({ draft, onChange }: { draft: DraftView; onCh
   const limit = league?.league.keeperLimit ?? 15
   const rounds = draft.rounds
   const rosterSize = league?.league.draftRounds ?? 20
-  const saved = useMemo(() => draft.myKeepers.map((k) => k.playerId), [draft.myKeepers])
+  // 選秀資料每 3 秒輪詢一次，每次都是新陣列；以內容判斷，伺服器上的 keeper 真的變了（例：另一台裝置儲存）
+  // 才重設，否則還沒儲存的勾選會被蓋掉
+  const savedKey = draft.myKeepers.map((k) => k.playerId).join(',')
+  const saved = useMemo(() => (savedKey ? savedKey.split(',').map(Number) : []), [savedKey])
   const [keep, setKeep] = useState<number[]>(saved)
   const [sort, setSort] = useState<'rank' | 'pos'>('rank')
   const [note, setNote] = useState<string | null>(null)
