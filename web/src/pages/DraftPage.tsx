@@ -5,13 +5,9 @@ import { api, type DraftView, type PlayerRow } from '../api'
 import { Avatar, celebrate, ErrorBox, Loading, PlayerCard, StatusBadge, TeamChip, tierOf, useLoad } from '../components'
 import { cpblTeam } from '../teams'
 import DraftOrderPage from './DraftOrderPage'
+import { RoomHeader } from './DraftRoomPage'
 import KeeperPage from './KeeperPage'
 import { cardBack, cardLine } from './PlayersPage'
-
-const DRAFT_STATUS: Record<string, string> = {
-  SETUP: '準備中', KEEPERS: 'Keeper 選擇期', IN_PROGRESS: '進行中', COMPLETED: '已完成',
-}
-const C = 2 * Math.PI * 44
 
 /**
  * 選秀入口：/draft/keepers（Keeper）、/draft/order（順位抽籤／揭曉）、/draft/room（選秀室）。
@@ -95,36 +91,11 @@ function DraftRoom({ draft, onChange }: { draft: DraftView; onChange: () => void
   const { league } = useApp()
   const teamName = (id: number | null) => league?.teams.find((t) => t.id === id)?.name ?? ''
   const myTurn = draft.status === 'IN_PROGRESS' && draft.currentTeamId === league?.myTeamId
-  const [left, setLeft] = useState(draft.secondsLeft)
-  useEffect(() => {
-    setLeft(draft.secondsLeft)
-    const t = setInterval(() => setLeft((x) => Math.max(0, x - 1)), 1000)
-    return () => clearInterval(t)
-  }, [draft.secondsLeft, draft.currentPickNo])
-
-  const current = draft.picks.find((p) => p.pickNo === draft.currentPickNo)
-  const next = draft.picks.find((p) => p.pickNo > draft.currentPickNo && !p.playerId)
   const myPicks = draft.picks.filter((p) => p.teamId === league?.myTeamId && p.playerId)
 
   return (
     <>
-      {draft.status === 'IN_PROGRESS' ? (
-        <div className={`clock ${myTurn ? '' : 'idle'}`}>
-          <div className={`ring ${left <= 10 ? 'urgent' : ''}`}>
-            <svg viewBox="0 0 100 100"><circle className="track" cx="50" cy="50" r="44" /><circle className="prog" cx="50" cy="50" r="44" style={{ strokeDasharray: C, strokeDashoffset: C * (1 - left / draft.pickSeconds) }} /></svg>
-            <span>{left}</span>
-          </div>
-          <div>
-            <h2 className={myTurn ? 'gold-text' : ''}>{myTurn ? '輪到你了' : `${teamName(draft.currentTeamId)} 選擇中`}</h2>
-            <p>第 {current?.round} 輪・第 {draft.currentPickNo} 順位{next && <><br />下一位：{teamName(next.teamId)}</>}</p>
-          </div>
-        </div>
-      ) : (
-        <div className="card">
-          <div className="spread"><h2 style={{ margin: 0 }}>{draft.halfNo === 1 ? '上' : '下'}半季選秀</h2><span className="badge gold">{DRAFT_STATUS[draft.status]}</span></div>
-          <p className="ps" style={{ marginBottom: 0 }}>Snake draft・{draft.rounds} 輪・每次 {draft.pickSeconds} 秒，逾時自動選取排名最高且符合洋將上限與位置需求的球員。</p>
-        </div>
-      )}
+      <RoomHeader draft={draft} />
       {draft.status === 'KEEPERS' && !draft.revealedAt && <p className="muted">Keeper 選擇期：<Link to="/draft/keepers">前往選擇 Keeper</Link></p>}
       {draft.status === 'IN_PROGRESS' && <Available draft={draft} myTurn={myTurn} onPicked={onChange} />}
       {myPicks.length > 0 && (

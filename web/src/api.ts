@@ -324,6 +324,60 @@ export interface DraftPick {
   playerTeam: string | null
   keeper: boolean
   auto: boolean
+  playerPosition: string | null
+  playerJersey: string | null
+}
+
+/** 選秀室一位球員的數據；打者看 r～avg、投手看 qs～whip。ab、outs 為 0 時比率為 null */
+export interface DraftStats {
+  r: number; hr: number; h: number; bb: number; avg: number | null; ab: number
+  qs: number; k: number; wsv: number; era: number | null; whip: number | null; outs: number
+}
+
+/** 選秀室的可選球員（GET …/drafts/{id}/board） */
+export interface BoardPlayer {
+  playerId: number
+  name: string
+  jerseyNumber: string | null
+  cpblTeam: string
+  position: string
+  pitcher: boolean
+  foreign: boolean
+  eligible: string[]
+  /** 選秀排名；沒有數據為 null */
+  rank: number | null
+  /** 補得進自己目前的先發缺位 */
+  fillsNeed: boolean
+  /** 推薦：補缺位的前 3 名 */
+  recommended: boolean
+  stats: DraftStats
+}
+
+export interface DraftBoard {
+  /** 數據來源：「2025」（參考季）或「本季」 */
+  basis: string
+  players: BoardPlayer[]
+  /** 先發缺位：IF／OF／UTIL／SP／RP 已排進幾人／名額 */
+  needs: { slot: string; filled: number; max: number }[]
+}
+
+/** 選秀成績單（GET …/drafts/{id}/report，選秀完成後） */
+export interface DraftReport {
+  basis: string
+  maxPoints: number
+  teams: {
+    teamId: number
+    points: number
+    grade: string
+    place: number
+    best: string[]
+    projection: Record<string, number | null>
+    ranks: Record<string, number>
+  }[]
+  /** BEST_VALUE（撿到寶）、BOLDEST_REACH（最大膽）；delta = 順位 − 排名 */
+  highlights: { kind: string; playerId: number; name: string; cpblTeam: string; pickNo: number; round: number; rank: number | null; delta: number }[]
+  /** 我的陣容依位置分組 */
+  roster: { key: string; names: string[] }[]
 }
 
 export interface DraftView {
