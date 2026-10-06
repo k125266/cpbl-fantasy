@@ -32,15 +32,38 @@ public class PlayerRankingService {
         this.props = props;
     }
 
-    record Line(long id, String name, String listed, long ab, long h, long r, long hr, long bb, long outs, long er,
+    /** 一位球員的累計數據（打擊與投球）。 */
+    public record Line(long id, String name, String listed, long ab, long h, long r, long hr, long bb, long outs, long er,
                 long ph, long pbb, long k, long wsv, long qs) {
     }
 
     public record Ranked(long playerId, double score, int rank) {
     }
 
+    /** 季中排名：只用當季數據（規則書 6.5）。 */
     public Map<Long, Ranked> rankings() {
-        List<Line> lines = jdbc.sql("""
+        return rank(currentLines());
+    }
+
+    /**
+     * 選秀用的排名與數據來源：上半季選秀用參考季（上一季，有封存時），下半季用當季。
+     * 只用於選秀室（排名、數據欄、推薦、自動選、成績單），不影響計分（docs/rulebook-amendments.md「6.5 選秀參考數據」）。
+     */
+    public record DraftBasis(String label, Map<Long, Line> lines, Map<Long, Ranked> ranks) {
+    }
+
+    public DraftBasis draftBasis(int halfNo) {
+        int refYear = props.seasonYear() - 1;
+        boolean reference = halfNo == 1 && jdbc.sql("select count(*) from reference_stat where season_year = ?")
+                .param(refYear).query(Integer.class).single() > 0;
+        List<Line> lines = reference ? referenceLines(refYear) : currentLines();
+        Map<Long, Line> byId = new HashMap<>();
+        lines.forEach(l -> byId.put(l.id(), l));
+        return new DraftBasis(reference ? String.valueOf(refYear) : "本季", byId, rank(lines));
+    }
+
+    private List<Line> currentLines() {
+        return jdbc.sql("""
                 select p.id, p.name, p.listed_position,
                        coalesce(sum(gs.ab),0), coalesce(sum(gs.h),0), coalesce(sum(gs.r),0), coalesce(sum(gs.hr),0),
                        coalesce(sum(gs.bb),0), coalesce(sum(gs.outs),0), coalesce(sum(gs.p_er),0),
@@ -51,12 +74,27 @@ public class PlayerRankingService {
                 left join game_stat gs on gs.player_id = p.id
                      and gs.game_id in (select id from game where season_year = ? and status = 'FINAL')
                 group by p.id, p.name, p.listed_position
-                """).param(props.seasonYear())
-                .query((rs, n) -> new Line(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getLong(4), rs.getLong(5),
-                        rs.getLong(6), rs.getLong(7), rs.getLong(8), rs.getLong(9), rs.getLong(10), rs.getLong(11),
-                        rs.getLong(12), rs.getLong(13), rs.getLong(14), rs.getLong(15)))
-                .list();
+                """).param(props.seasonYear()).query(PlayerRankingService::line).list();
+    }
 
+    private List<Line> referenceLines(int year) {
+        return jdbc.sql("""
+                select p.id, p.name, p.listed_position,
+                       coalesce(rs.ab,0), coalesce(rs.h,0), coalesce(rs.r,0), coalesce(rs.hr,0), coalesce(rs.bb,0),
+                       coalesce(rs.outs,0), coalesce(rs.p_er,0), coalesce(rs.p_h,0), coalesce(rs.p_bb,0), coalesce(rs.p_k,0),
+                       coalesce(rs.w + rs.sv,0), coalesce(rs.qs,0)
+                from player p left join reference_stat rs on rs.player_id = p.id and rs.season_year = ?
+                """).param(year).query(PlayerRankingService::line).list();
+    }
+
+    private static Line line(java.sql.ResultSet rs, int n) throws java.sql.SQLException {
+        return new Line(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getLong(4), rs.getLong(5),
+                rs.getLong(6), rs.getLong(7), rs.getLong(8), rs.getLong(9), rs.getLong(10), rs.getLong(11),
+                rs.getLong(12), rs.getLong(13), rs.getLong(14), rs.getLong(15));
+    }
+
+    /** 十個類別各自轉為 z-score 後加總；沒有數據的球員排在後面，依姓名。 */
+    private Map<Long, Ranked> rank(List<Line> lines) {
         List<Line> hitters = lines.stream().filter(l -> l.ab() > 0).toList();
         List<Line> pitchers = lines.stream().filter(l -> l.outs() > 0).toList();
         double lgAvg = ratio(hitters, Line::h, Line::ab);
@@ -76,8 +114,9 @@ public class PlayerRankingService {
         addZ(score, pitchers, l -> lgWhipPerOut * l.outs() - (l.ph() + l.pbb()));
 
         List<Line> sorted = new ArrayList<>(lines);
-        sorted.sort(Comparator.comparingDouble((Line l) -> -score.getOrDefault(l.id(), 0.0))
-                .thenComparing(l -> score.containsKey(l.id()) ? 0 : 1)
+        // 有數據的排前面（沒上場的不會排在表現差但有上場的人前面），再依分數、姓名
+        sorted.sort(Comparator.comparing((Line l) -> score.containsKey(l.id()) ? 0 : 1)
+                .thenComparingDouble(l -> -score.getOrDefault(l.id(), 0.0))
                 .thenComparing(Line::name));
         Map<Long, Ranked> out = new HashMap<>();
         for (int i = 0; i < sorted.size(); i++) {
