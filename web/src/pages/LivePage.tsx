@@ -17,7 +17,7 @@ import { cpblTeam, fantasyTeamColor } from '../teams'
 
 type Mode = 'mine' | 'vs' | 'all' | 'full'
 const MODES: { k: Mode; t: string }[] = [
-  { k: 'mine', t: '我的隊' }, { k: 'vs', t: '對戰' }, { k: 'all', t: '全聯盟' }, { k: 'full', t: '全場' },
+  { k: 'full', t: '全場' }, { k: 'mine', t: '我的隊' }, { k: 'vs', t: '對戰' }, { k: 'all', t: '全聯盟' },
 ]
 const REFRESH = 60
 const PLAYING = (g: LiveGame) => g.status !== 'POSTPONED' && g.status !== 'CANCELLED'
@@ -79,10 +79,26 @@ function cells(r: Row): { v: string | number; c?: string }[] {
   return [{ v: ip(l.outs) }, v(l.pH), v(l.pBb), v(l.pEr), v(l.pK), { v: l.w ? 'W' : l.sv ? 'SV' : '–', c: l.w || l.sv ? 'gold' : 'dim' }]
 }
 
+/** 官網沒有出局數，從本半局的打席結果代碼推算；盜壘刺、牽制出局不在打席結果裡，可能少算 */
+const OUTS_HINT = '出局數依本半局打席結果推算，不含盜壘刺與牽制出局'
+function outsOf(g: LiveGame): number | null {
+  if (!g.halfInning || g.halfInning.length === 0) return null
+  let n = 0
+  for (const { result: r } of g.halfInning) {
+    if (r == null) continue
+    if (r === '三殺') n += 3
+    else if (r === '雙殺') n += 2
+    else if (r === '三振' || r === '犧短' || r === '犧飛' || /^[投捕一二三游左中右](飛|滾|平|界飛|短)$/.test(r)) n += 1
+  }
+  return Math.min(n, 3)
+}
+
 function gameState(g: LiveGame, lines: LiveLine[]): { inn: string; sub: string; live: boolean } {
   switch (g.status) {
-    case 'IN_PROGRESS':
-      return { inn: g.inning ?? '進行中', sub: '進行中・非最終', live: true }
+    case 'IN_PROGRESS': {
+      const outs = outsOf(g)
+      return { inn: g.inning ?? '進行中', sub: outs == null ? '進行中・非最終' : `${outs} 出局・非最終`, live: true }
+    }
     case 'FINAL': {
       const settled = lines.some((l) => l.gameId === g.id && l.settled)
       return { inn: '終', sub: g.statsFinal ? '數據已定版' : settled ? '比賽結束' : '比賽結束・結算中', live: false }
@@ -105,7 +121,7 @@ export default function LivePage() {
   const [error, setError] = useState<unknown>(null)
   const [upd, setUpd] = useState('')
   const [sec, setSec] = useState(REFRESH)
-  const [mode, setMode] = useState<Mode>('mine')
+  const [mode, setMode] = useState<Mode>('full')
   const [selId, setSelId] = useState<number | null>(null)
 
   const load = useCallback(() => {
@@ -256,7 +272,7 @@ export default function LivePage() {
         )}
         {g.halfInning && g.halfInning.length > 0 && (
           <div className="lv-half">
-            <span className="lab">本半局</span>
+            <span className="lab" title={OUTS_HINT}>本半局・{outsOf(g)} 出局</span>
             {g.halfInning.map((pa, i) => (
               <span key={i} className={pa.result == null ? 'now' : ''}>
                 {i > 0 && <em>→</em>}{pa.name} {pa.result ?? '對決中'}
@@ -274,7 +290,9 @@ export default function LivePage() {
 
   const nameCell = (r: Row, g: LiveGame) => (
     <>
+      {r.sub && <span className="subm" aria-hidden>↳</span>}
       <Link to={`/players/${r.playerId}`} className="n">{r.name}</Link>
+      {r.sub && <span className="tag">替補</span>}
       {mode !== 'mine' && r.team && <span className="ft" title={r.team.name} style={{ color: fantasyTeamColor(r.team.id, teams) }}><TeamIcon icon={r.team.icon} size={13} /></span>}
       {r.pos && r.pos !== r.slot && <span className="pos">{r.pos}</span>}
       {r.batting && <span className="tag live">打擊中</span>}
