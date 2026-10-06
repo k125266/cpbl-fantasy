@@ -18,7 +18,8 @@ const SETTINGS: { key: string; field: keyof League; label: string }[] = [
   { key: 'waiver_days', field: 'waiverDays', label: 'Waiver 期（日）' },
   { key: 'trade_review_hours', field: 'tradeReviewHours', label: '交易審核期（小時）' },
   { key: 'matchup_lock_hours', field: 'matchupLockHours', label: '對戰結果緩衝期（小時）' },
-  { key: 'keeper_limit', field: 'keeperLimit', label: 'Keeper 上限' },
+  { key: 'keeper_limit', field: 'keeperLimit', label: 'Keeper 上限（下半季，不佔輪次）' },
+  { key: 'second_half_rounds', field: 'secondHalfRounds', label: '下半季補強選秀輪數' },
   { key: 'draft_pick_seconds', field: 'draftPickSeconds', label: '選秀每次時限（秒）' },
 ]
 

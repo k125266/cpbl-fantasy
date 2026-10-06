@@ -127,8 +127,12 @@ export interface League {
   waiverDays: number
   tradeReviewHours: number
   matchupLockHours: number
+  /** 下半季 keeper 上限（不佔輪次） */
   keeperLimit: number
+  /** 上半季完整選秀輪數（蛇形） */
   draftRounds: number
+  /** 下半季補強選秀輪數（每輪同順序） */
+  secondHalfRounds: number
   draftPickSeconds: number
   refundFaabOnDelist: boolean
   championTeamId: number | null
@@ -332,9 +336,20 @@ export interface DraftView {
   currentTeamId: number | null
   deadline: string | null
   secondsLeft: number
+  /** 順位；揭曉前為空 */
   order: number[]
   picks: DraftPick[]
-  myKeepers: { playerId: number; name: string; round: number }[]
+  /** 自己的 keeper（不佔輪次） */
+  myKeepers: { playerId: number; name: string }[]
+  /** 選秀時間；keeper 在前 10 分鐘截止 */
+  scheduledAt: string | null
+  keeperDeadline: string | null
+  /** 順位揭曉時間（各裝置依此同步播放揭曉動畫）；未揭曉為 null */
+  revealedAt: string | null
+  /** 蛇形（上半季）；補強選秀每輪同一順序 */
+  snake: boolean
+  /** 各隊 keeper，揭曉後才公開 */
+  keepers: { teamId: number; players: { playerId: number; name: string }[] }[]
 }
 
 export interface Trade {

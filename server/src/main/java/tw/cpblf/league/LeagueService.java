@@ -304,7 +304,7 @@ public class LeagueService {
     static final List<String> SETTINGS = List.of(
             "foreign_player_limit", "position_min_games", "sp_min_starts", "eligibility_grace_days", "faab_budget_per_half",
             "slots_na", "minors_return_days", "foreign_minors_return_days", "hitter_idle_game_days", "pitcher_idle_days",
-            "waiver_days", "trade_review_hours", "matchup_lock_hours", "keeper_limit", "draft_pick_seconds",
+            "waiver_days", "trade_review_hours", "matchup_lock_hours", "keeper_limit", "second_half_rounds", "draft_pick_seconds",
             "refund_faab_on_delist");
 
     @Transactional
