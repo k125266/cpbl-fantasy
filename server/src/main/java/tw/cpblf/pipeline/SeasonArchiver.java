@@ -68,7 +68,21 @@ public class SeasonArchiver {
         return archive(src, props.seasonYear(), props.kindCode(), ctx);
     }
 
-    Result archive(Source src, int year, String kindCode, JobRunner.JobContext ctx) {
+    /**
+     * 選秀參考季（上一季）：只封存比賽，不封存球員（重播會把封存的球員當成本季已註冊）。
+     * 封存後由 {@link ReferenceSeason} 彙總成 reference_stat。
+     */
+    public Result runReference(JobRunner.JobContext ctx) {
+        StatsSiteDataSource site = new StatsSiteDataSource(props);
+        return archiveGames(site::fetchGamePage, props.seasonYear() - 1, props.kindCode(), ctx);
+    }
+
+    interface GameSource {
+        StatsSiteParsers.GamePage game(int year, String kindCode, int sno);
+    }
+
+    /** 依編號逐場封存比賽，已結束的不重抓；連續 STOP_AFTER_MISSES 個不存在就停止。 */
+    Result archiveGames(GameSource src, int year, String kindCode, JobRunner.JobContext ctx) {
         int fetched = 0, skipped = 0, misses = 0, last = 0;
         for (int sno = 1; sno <= MAX_SNO && misses < STOP_AFTER_MISSES; sno++) {
             if (archive.hasFinalGame(SourceArchive.gameKey(year, kindCode, sno))) {
@@ -87,11 +101,20 @@ public class SeasonArchiver {
                 misses++;
             }
         }
+        if (ctx != null) {
+            ctx.note(year + " 比賽：新抓 " + fetched + "、已封存略過 " + skipped + "（最後編號 " + last + "）");
+        }
+        return new Result(fetched, skipped, last, 0);
+    }
+
+    Result archive(Source src, int year, String kindCode, JobRunner.JobContext ctx) {
+        Result games = archiveGames(src::game, year, kindCode, ctx);
+        int fetched = games.gamesFetched(), skipped = games.gamesSkipped(), last = games.lastSno();
 
         // 球員：列表上的人，加上 box score 裡出現但已不在列表上的人（季中離隊等），否則重播結算會遇到未知球員
         Map<String, SourcePlayer> players = new LinkedHashMap<>();
         src.registration().registered().forEach(p -> players.put(p.cpblPlayerId(), p));
-        for (StatsSiteParsers.GamePage page : archive.games()) {
+        for (StatsSiteParsers.GamePage page : archive.games(year)) {
             String home = page.game().homeTeamName(), away = page.game().awayTeamName();
             for (BatterLine b : page.box().batters()) {
                 players.putIfAbsent(b.cpblPlayerId(), new SourcePlayer(b.cpblPlayerId(), b.name(), b.home() ? home : away, null, null, null));
@@ -111,8 +134,7 @@ public class SeasonArchiver {
             added++;
         }
         if (ctx != null) {
-            ctx.note("比賽：新抓 " + fetched + "、已封存略過 " + skipped + "（最後編號 " + last + "）；球員新增 " + added
-                    + "，共 " + archive.count("player"));
+            ctx.note("球員新增 " + added + "，共 " + archive.count("player"));
         }
         return new Result(fetched, skipped, last, added);
     }

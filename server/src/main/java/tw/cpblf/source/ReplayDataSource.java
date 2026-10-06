@@ -34,11 +34,14 @@ public class ReplayDataSource implements CpblDataSource {
 
     private final SourceArchive archive;
     private final AppClock clock;
+    /** 重播的賽季；封存裡的其他年份（選秀參考季）不會被讀到 */
+    private final int seasonYear;
     private List<StatsSiteParsers.GamePage> games = List.of();
 
-    public ReplayDataSource(SourceArchive archive, AppClock clock) {
+    public ReplayDataSource(SourceArchive archive, AppClock clock, int seasonYear) {
         this.archive = archive;
         this.clock = clock;
+        this.seasonYear = seasonYear;
     }
 
     @Override
@@ -46,10 +49,10 @@ public class ReplayDataSource implements CpblDataSource {
         return "replay";
     }
 
-    /** 封存可能在啟動後才完成，數量變了就重新載入。 */
+    /** 當季的封存比賽（不含參考季）。封存可能在啟動後才完成，數量變了就重新載入。 */
     private synchronized List<StatsSiteParsers.GamePage> games() {
-        if (games.size() != archive.count("game")) {
-            games = archive.games();
+        if (games.size() != archive.countGames(seasonYear)) {
+            games = archive.games(seasonYear);
         }
         return games;
     }

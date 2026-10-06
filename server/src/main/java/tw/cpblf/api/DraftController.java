@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import tw.cpblf.auth.Auth;
 import tw.cpblf.auth.CurrentUser;
 import tw.cpblf.common.ApiException;
+import tw.cpblf.draft.DraftBoardService;
 import tw.cpblf.draft.DraftService;
 import tw.cpblf.league.LeagueService;
 
@@ -23,8 +24,10 @@ public class DraftController {
 
     private final LeagueService leagues;
     private final DraftService drafts;
+    private final DraftBoardService board;
 
-    public DraftController(LeagueService leagues, DraftService drafts) {
+    public DraftController(LeagueService leagues, DraftService drafts, DraftBoardService board) {
+        this.board = board;
         this.leagues = leagues;
         this.drafts = drafts;
     }
@@ -65,6 +68,43 @@ public class DraftController {
     }
 
     public record Keepers(List<Long> playerIds) {
+    }
+
+    /** 選秀室：可選球員（排名、數據、守位、補缺位、推薦）與我的先發缺位。 */
+    @GetMapping("/{draftId}/board")
+    public DraftBoardService.Board board(@PathVariable long leagueId, @PathVariable long draftId) {
+        CurrentUser u = Auth.require();
+        leagues.requireMember(leagueId, u);
+        check(leagueId, draftId);
+        return board.board(draftId, leagues.teamOf(leagueId, u.id()).orElse(null));
+    }
+
+    /** 選秀成績單：各隊 10 類別預估、等第與名次；我的關鍵順位與陣容。選秀完成後才有。 */
+    @GetMapping("/{draftId}/report")
+    public DraftBoardService.Report report(@PathVariable long leagueId, @PathVariable long draftId) {
+        CurrentUser u = Auth.require();
+        leagues.requireMember(leagueId, u);
+        check(leagueId, draftId);
+        if (!"COMPLETED".equals(drafts.view(draftId, null).status())) {
+            throw ApiException.conflict("選秀完成後才有成績單");
+        }
+        return board.report(draftId, leagues.teamOf(leagueId, u.id()).orElse(null));
+    }
+
+    /** 自己的候選清單（預排清單），依順序；被選走的已排除。 */
+    @GetMapping("/{draftId}/queue")
+    public List<Long> queue(@PathVariable long leagueId, @PathVariable long draftId) {
+        long team = leagues.requireTeam(leagueId, Auth.require());
+        check(leagueId, draftId);
+        return drafts.queue(draftId, team);
+    }
+
+    /** 整份取代候選清單（加入、移除、調整順序都用這個）。 */
+    @org.springframework.web.bind.annotation.PutMapping("/{draftId}/queue")
+    public List<Long> setQueue(@PathVariable long leagueId, @PathVariable long draftId, @RequestBody Keepers req) {
+        long team = leagues.requireTeam(leagueId, Auth.require());
+        check(leagueId, draftId);
+        return drafts.setQueue(draftId, team, req.playerIds());
     }
 
     /** 自己的 keeper 候選：目前名單，附上半季排名與取得方式。 */
