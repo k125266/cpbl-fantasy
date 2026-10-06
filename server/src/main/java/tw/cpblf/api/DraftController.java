@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import tw.cpblf.auth.Auth;
 import tw.cpblf.auth.CurrentUser;
 import tw.cpblf.common.ApiException;
+import tw.cpblf.draft.DraftBoardService;
 import tw.cpblf.draft.DraftService;
 import tw.cpblf.league.LeagueService;
 
@@ -23,8 +24,10 @@ public class DraftController {
 
     private final LeagueService leagues;
     private final DraftService drafts;
+    private final DraftBoardService board;
 
-    public DraftController(LeagueService leagues, DraftService drafts) {
+    public DraftController(LeagueService leagues, DraftService drafts, DraftBoardService board) {
+        this.board = board;
         this.leagues = leagues;
         this.drafts = drafts;
     }
@@ -65,6 +68,15 @@ public class DraftController {
     }
 
     public record Keepers(List<Long> playerIds) {
+    }
+
+    /** 選秀室：可選球員（排名、數據、守位、補缺位、推薦）與我的先發缺位。 */
+    @GetMapping("/{draftId}/board")
+    public DraftBoardService.Board board(@PathVariable long leagueId, @PathVariable long draftId) {
+        CurrentUser u = Auth.require();
+        leagues.requireMember(leagueId, u);
+        check(leagueId, draftId);
+        return board.board(draftId, leagues.teamOf(leagueId, u.id()).orElse(null));
     }
 
     /** 自己的候選清單（預排清單），依順序；被選走的已排除。 */

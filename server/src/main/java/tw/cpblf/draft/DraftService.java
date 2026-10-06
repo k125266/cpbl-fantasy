@@ -80,7 +80,7 @@ public class DraftService {
         return t == null ? null : t.toInstant();
     }
 
-    private DraftRow draft(long draftId) {
+    DraftRow draft(long draftId) {
         return jdbc.sql("""
                 select d.id, d.league_id, d.season_half_id, h.half_no, h.start_date, d.status, d.rounds, d.pick_seconds,
                        d.current_pick_no, d.current_pick_deadline, d.snake, d.scheduled_at, d.revealed_at
@@ -463,7 +463,7 @@ public class DraftService {
     }
 
     /** 可選球員：一軍登錄、尚未被選、也不是任何一隊的 keeper。 */
-    private List<Long> available(DraftRow d) {
+    List<Long> available(DraftRow d) {
         return new ArrayList<>(jdbc.sql("""
                 select id from player where registration_status = 'REGISTERED' and first_team_status = 'ACTIVE'
                   and id not in (select player_id from draft_pick where draft_id = ? and player_id is not null)
@@ -472,7 +472,7 @@ public class DraftService {
     }
 
     /** 這隊已確定的球員：keeper（不佔輪次）＋已選的人。 */
-    private List<Long> teamPlayers(DraftRow d, long teamId) {
+    List<Long> teamPlayers(DraftRow d, long teamId) {
         List<Long> out = new ArrayList<>(jdbc.sql("select player_id from keeper_selection where draft_id = ? and team_id = ?")
                 .params(d.id(), teamId).query(Long.class).list());
         out.addAll(jdbc.sql("""
@@ -529,7 +529,7 @@ public class DraftService {
         return null;
     }
 
-    private LocalDate eligibilityDate(DraftRow d) {
+    LocalDate eligibilityDate(DraftRow d) {
         LocalDate today = clock.today();
         return today.isBefore(d.halfStart()) ? d.halfStart() : today;
     }
@@ -597,7 +597,7 @@ public class DraftService {
     // ------------------------------------------------------------------
 
     public record PickView(int pickNo, int round, long teamId, String teamName, Long playerId, String playerName,
-                           String playerTeam, boolean keeper, boolean auto) {
+                           String playerTeam, boolean keeper, boolean auto, String playerPosition, String playerJersey) {
     }
 
     /** 一隊公開的 keeper（揭曉後才有）。 */
@@ -636,12 +636,13 @@ public class DraftService {
         List<Long> order = !revealed ? List.of() : jdbc.sql("select team_id from draft_slot where draft_id = ? order by draft_position")
                 .param(draftId).query(Long.class).list();
         List<PickView> picks = jdbc.sql("""
-                select dp.pick_no, dp.round, dp.team_id, t.name, dp.player_id, p.name, p.cpbl_team_code, dp.is_keeper, dp.is_auto
+                select dp.pick_no, dp.round, dp.team_id, t.name, dp.player_id, p.name, p.cpbl_team_code, dp.is_keeper, dp.is_auto,
+                       p.listed_position, p.jersey_number
                 from draft_pick dp join fantasy_team t on t.id = dp.team_id left join player p on p.id = dp.player_id
                 where dp.draft_id = ? order by dp.pick_no
                 """).param(draftId).query((rs, n) -> {
             return new PickView(rs.getInt(1), rs.getInt(2), rs.getLong(3), rs.getString(4), rs.getObject(5, Long.class),
-                    rs.getString(6), rs.getString(7), rs.getBoolean(8), rs.getBoolean(9));
+                    rs.getString(6), rs.getString(7), rs.getBoolean(8), rs.getBoolean(9), rs.getString(10), rs.getString(11));
         }).list();
         Long current = "IN_PROGRESS".equals(d.status()) ? currentTeam(d) : null;
         long secondsLeft = d.deadline() == null ? 0 : Math.max(0, Duration.between(clock.now(), d.deadline()).toSeconds());
