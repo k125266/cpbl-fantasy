@@ -40,8 +40,9 @@ export default function App() {
   const [memberships, setMemberships] = useState<Membership[] | null>(null)
   const [league, setLeague] = useState<LeagueDetail | null>(null)
   const navigate = useNavigate()
-  // 即時比分在寬螢幕是左右兩欄（設計稿 1b），外框放寬
-  const liveWide = useLocation().pathname === '/live'
+  // 即時比分、選秀在寬螢幕是多欄版面，外框放寬（其他頁面維持 480px）
+  const { pathname } = useLocation()
+  const widePage = pathname === '/live' || pathname.startsWith('/draft')
 
   const reloadSystem = useCallback(() => {
     api.get<SystemInfo>('/api/system').then(setSystem).catch(() => setSystem(null))
@@ -115,7 +116,7 @@ export default function App() {
 
   return (
     <AppContext.Provider value={{ user, system, leagueId, league, reloadLeague, reloadSystem, logout }}>
-      <div className={`app${liveWide ? ' app-live' : ''}`}>
+      <div className={`app${widePage ? ' app-wide' : ''}`}>
         <LeagueTopBar />
         {!league ? <Loading /> : (
           <Routes>
@@ -126,7 +127,7 @@ export default function App() {
             <Route path="/matchups/:matchupId" element={<MatchupPage />} />
             <Route path="/players" element={<PlayersPage />} />
             <Route path="/players/:playerId" element={<PlayerDetailPage />} />
-            <Route path="/draft" element={<DraftPage />} />
+            <Route path="/draft/*" element={<DraftPage />} />
             <Route path="/league" element={<LeagueHubPage />} />
             <Route path="/league/settings" element={<LeaguePage />} />
             <Route path="/standings" element={<Navigate to="/league" />} />
