@@ -79,6 +79,18 @@ public class DraftController {
         return board.board(draftId, leagues.teamOf(leagueId, u.id()).orElse(null));
     }
 
+    /** 選秀成績單：各隊 10 類別預估、等第與名次；我的關鍵順位與陣容。選秀完成後才有。 */
+    @GetMapping("/{draftId}/report")
+    public DraftBoardService.Report report(@PathVariable long leagueId, @PathVariable long draftId) {
+        CurrentUser u = Auth.require();
+        leagues.requireMember(leagueId, u);
+        check(leagueId, draftId);
+        if (!"COMPLETED".equals(drafts.view(draftId, null).status())) {
+            throw ApiException.conflict("選秀完成後才有成績單");
+        }
+        return board.report(draftId, leagues.teamOf(leagueId, u.id()).orElse(null));
+    }
+
     /** 自己的候選清單（預排清單），依順序；被選走的已排除。 */
     @GetMapping("/{draftId}/queue")
     public List<Long> queue(@PathVariable long leagueId, @PathVariable long draftId) {

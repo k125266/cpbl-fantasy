@@ -38,5 +38,16 @@ class DraftBoardTest extends IntegrationTest {
         var after = board.board(d, team);
         assertThat(after.players()).noneMatch(p -> p.playerId() == first);
         assertThat(after.needs().stream().mapToInt(Need::filled).sum()).isEqualTo(1);
+
+        // 選完後的成績單：每類別依名次給 n..1 分，總分合計固定；我的關鍵順位兩筆
+        while (drafts.inProgress(d)) {
+            drafts.autoPick(d);
+        }
+        var r = board.report(d, team);
+        int n = r.teams().size();
+        assertThat(r.teams().stream().mapToInt(DraftBoardService.TeamReport::points).sum()).isEqualTo(10 * n * (n + 1) / 2);
+        assertThat(r.maxPoints()).isEqualTo(10 * n);
+        assertThat(r.teams()).allSatisfy(t -> assertThat(t.grade()).isNotBlank());
+        assertThat(r.highlights()).extracting(DraftBoardService.Highlight::kind).containsExactly("BEST_VALUE", "BOLDEST_REACH");
     }
 }
