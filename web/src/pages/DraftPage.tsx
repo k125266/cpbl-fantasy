@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type BoardPlayer, type DraftView } from '../api'
-import { celebrate, ErrorBox, Loading, TeamChip, useLoad } from '../components'
+import { celebrate, ErrorBox, Loading, useLoad } from '../components'
 import DraftOrderPage from './DraftOrderPage'
-import { PlayerList, RoomHeader, useDraftBoard, useDraftQueue } from './DraftRoomPage'
+import { DraftGrid, PlayerList, RoomHeader, useDraftBoard, useDraftQueue } from './DraftRoomPage'
 import KeeperPage from './KeeperPage'
 
 /**
@@ -87,7 +87,6 @@ export default function DraftPage() {
 
 function DraftRoom({ draft, onChange }: { draft: DraftView; onChange: () => void }) {
   const { leagueId, league } = useApp()
-  const teamName = (id: number | null) => league?.teams.find((t) => t.id === id)?.name ?? ''
   const myTurn = draft.status === 'IN_PROGRESS' && draft.currentTeamId === league?.myTeamId
   const myPicks = draft.picks.filter((p) => p.teamId === league?.myTeamId && p.playerId)
   const queue = useDraftQueue(draft)
@@ -122,19 +121,7 @@ function DraftRoom({ draft, onChange }: { draft: DraftView; onChange: () => void
           </div>
         </div>
       )}
-      {draft.picks.length > 0 && (
-        <div className="card">
-          <div className="h2" style={{ margin: '0 0 10px' }}>選秀板 <small>順序：{draft.order.map((id) => teamName(id).slice(0, 2)).join(' → ')}</small></div>
-          <div className="board">
-            {draft.picks.filter((p) => p.playerId || p.pickNo === draft.currentPickNo).slice(-30).reverse().map((p) => (
-              <div key={p.pickNo} className={`pick ${p.pickNo === draft.currentPickNo && draft.status === 'IN_PROGRESS' ? 'current' : ''} ${p.teamId === league?.myTeamId ? 'mine' : ''}`}>
-                <div className="ps">#{p.pickNo}・R{p.round}・{p.teamName}</div>
-                {p.playerId ? <div><TeamChip code={p.playerTeam} /> {p.playerName}{p.keeper && <span className="badge" style={{ marginLeft: 4 }}>K</span>}{p.auto && <span className="badge" style={{ marginLeft: 4 }}>自動</span>}</div> : <div className="amber">選擇中…</div>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {draft.order.length > 0 && <DraftGrid draft={draft} />}
     </>
   )
 }

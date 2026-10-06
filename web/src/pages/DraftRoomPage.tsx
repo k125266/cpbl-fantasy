@@ -281,6 +281,60 @@ export function PlayerList({ draft, board, queue, myTurn, onPick, selId, onSelec
   )
 }
 
+// ------------------------------------------------------------------
+// 選秀板：輪 × 隊伍（照揭曉的順位）；蛇形雙數輪反向，補強選秀每輪同順序
+// ------------------------------------------------------------------
+
+export function DraftGrid({ draft }: { draft: DraftView }) {
+  const { league } = useApp()
+  const wide = useWide()
+  const teams = league?.teams ?? []
+  const n = draft.order.length || 1
+  const at = new Map(draftSlots(draft).map((p) => [`${p.round}-${p.teamId}`, p]))
+  const live = draft.status === 'IN_PROGRESS'
+  const cols = { gridTemplateColumns: `${wide ? 44 : 22}px repeat(${n}, minmax(0, 1fr))` }
+  return (
+    <div className="dr-grid">
+      <div className="hd" style={cols}>
+        <span />
+        {draft.order.map((id) => {
+          const t = teams.find((x) => x.id === id)
+          return (
+            <div key={id} className={id === league?.myTeamId ? 'me' : ''}>
+              <i style={{ background: fantasyTeamColor(id, teams) }} />
+              <span><b>{t?.name}</b>{wide && <small>{t?.owner}</small>}</span>
+            </div>
+          )
+        })}
+      </div>
+      {Array.from({ length: draft.rounds }, (_, i) => i + 1).map((r) => {
+        const back = draft.snake && r % 2 === 0
+        return (
+          <div key={r} className="r" style={cols}>
+            <div className="rn">R{r}<span>{back ? '←' : '→'}</span></div>
+            {draft.order.map((id) => {
+              const p = at.get(`${r}-${id}`)
+              const cur = live && p?.pickNo === draft.currentPickNo
+              const t = p?.playerTeam ? cpblTeam(p.playerTeam) : null
+              return (
+                <div key={id} className={`c${p?.playerId ? ' done' : ''}${cur ? ' cur' : ''}${id === league?.myTeamId ? ' me' : ''}`}>
+                  <span className="nm">{p?.playerName ?? (cur ? '選擇中' : '')}</span>
+                  <span className="ft">
+                    <span>{p?.playerPosition ?? ''}</span>
+                    {wide && t && <i style={{ background: t.bg, color: t.fg }}>{t.short}</i>}
+                    {p?.auto && <em>自動</em>}
+                    <span className="no">{p ? pickLabel(p.pickNo, n) : ''}</span>
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 /** 選秀室資料（可選球員、缺位）：每個順位結束後重新讀取 */
 export function useDraftBoard(draft: DraftView) {
   const { leagueId } = useApp()
