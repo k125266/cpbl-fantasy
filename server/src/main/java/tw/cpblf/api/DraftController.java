@@ -67,6 +67,22 @@ public class DraftController {
     public record Keepers(List<Long> playerIds) {
     }
 
+    /** 自己的候選清單（預排清單），依順序；被選走的已排除。 */
+    @GetMapping("/{draftId}/queue")
+    public List<Long> queue(@PathVariable long leagueId, @PathVariable long draftId) {
+        long team = leagues.requireTeam(leagueId, Auth.require());
+        check(leagueId, draftId);
+        return drafts.queue(draftId, team);
+    }
+
+    /** 整份取代候選清單（加入、移除、調整順序都用這個）。 */
+    @org.springframework.web.bind.annotation.PutMapping("/{draftId}/queue")
+    public List<Long> setQueue(@PathVariable long leagueId, @PathVariable long draftId, @RequestBody Keepers req) {
+        long team = leagues.requireTeam(leagueId, Auth.require());
+        check(leagueId, draftId);
+        return drafts.setQueue(draftId, team, req.playerIds());
+    }
+
     /** 自己的 keeper 候選：目前名單，附上半季排名與取得方式。 */
     @GetMapping("/{draftId}/keeper-candidates")
     public List<DraftService.KeeperCandidate> keeperCandidates(@PathVariable long leagueId, @PathVariable long draftId) {

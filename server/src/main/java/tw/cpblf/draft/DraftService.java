@@ -117,6 +117,7 @@ public class DraftService {
                 throw ApiException.conflict("此半季選秀已開始或已完成");
             }
             jdbc.sql("delete from keeper_selection where draft_id = ?").param(existing).update();
+            jdbc.sql("delete from draft_queue where draft_id = ?").param(existing).update();
             jdbc.sql("delete from draft_slot where draft_id = ?").param(existing).update();
             jdbc.sql("delete from draft where id = ?").param(existing).update();
         }
@@ -334,7 +335,10 @@ public class DraftService {
         record(d, playerId, false);
     }
 
-    /** 逾時自動選取當前排名最高、且符合洋將上限與位置需求的可選球員。 */
+    /**
+     * 逾時（或剩餘全部自動選取）時代選：候選清單第一個能選的 → 能補先發缺位、選秀排名最高的 → 選秀排名最高的。
+     * 都要通過洋將上限與位置檢查（{@link #validatePick}）。選秀排名上半季用參考季（{@link PlayerRankingService#draftBasis}）。
+     */
     @Transactional
     public boolean autoPick(long draftId) {
         DraftRow d = draft(draftId);
@@ -343,9 +347,22 @@ public class DraftService {
             return false;
         }
         long team = currentTeam(d);
-        Map<Long, PlayerRankingService.Ranked> ranks = ranking.rankings();
+        for (Long pid : queue(draftId, team)) {
+            if (validatePick(d, team, pid) == null) {
+                record(d, pid, true);
+                return true;
+            }
+        }
+        Map<Long, PlayerRankingService.Ranked> ranks = ranking.draftBasis(d.halfNo()).ranks();
         List<Long> pool = available(d);
         pool.sort(Comparator.comparingInt(id -> ranks.containsKey(id) ? ranks.get(id).rank() : Integer.MAX_VALUE));
+        Set<Long> fills = fillsNeed(d, team, pool.subList(0, Math.min(pool.size(), NEED_LOOKAHEAD)));
+        for (Long pid : pool) {
+            if (fills.contains(pid) && validatePick(d, team, pid) == null) {
+                record(d, pid, true);
+                return true;
+            }
+        }
         for (Long pid : pool) {
             if (validatePick(d, team, pid) == null) {
                 record(d, pid, true);
@@ -353,6 +370,59 @@ public class DraftService {
             }
         }
         throw new IllegalStateException("找不到可自動選取的球員");
+    }
+
+    /** 補缺位只看排名前這麼多人（避免對整個球員池逐一計算）。 */
+    static final int NEED_LOOKAHEAD = 60;
+
+    /** 候選中能讓這隊的先發缺位變少的人。 */
+    Set<Long> fillsNeed(DraftRow d, long teamId, List<Long> candidates) {
+        League league = leagues.get(d.leagueId());
+        List<Long> mine = teamPlayers(d, teamId);
+        List<Long> all = new ArrayList<>(mine);
+        all.addAll(candidates);
+        Map<Long, Set<Slot>> el = eligibility.eligibility(league, all, eligibilityDate(d));
+        List<SlotAssigner.Candidate> base = mine.stream().map(id -> new SlotAssigner.Candidate(id, el.get(id))).toList();
+        int before = SlotAssigner.unfilled(base, league.slotCounts());
+        Set<Long> out = new HashSet<>();
+        for (Long c : candidates) {
+            List<SlotAssigner.Candidate> with = new ArrayList<>(base);
+            with.add(new SlotAssigner.Candidate(c, el.get(c)));
+            if (SlotAssigner.unfilled(with, league.slotCounts()) < before) {
+                out.add(c);
+            }
+        }
+        return out;
+    }
+
+    // ------------------------------------------------------------------
+    // 候選清單（預排清單）：網頁與手機同步；被選走的自動移除；逾時先從這裡選
+    // ------------------------------------------------------------------
+
+    /** 這隊的候選清單（依順序），只含還能選的人。 */
+    public List<Long> queue(long draftId, long teamId) {
+        return jdbc.sql("""
+                select q.player_id from draft_queue q
+                where q.draft_id = ? and q.team_id = ?
+                  and q.player_id not in (select player_id from draft_pick where draft_id = q.draft_id and player_id is not null)
+                  and q.player_id not in (select player_id from keeper_selection where draft_id = q.draft_id)
+                order by q.position
+                """).params(draftId, teamId).query(Long.class).list();
+    }
+
+    @Transactional
+    public List<Long> setQueue(long draftId, long teamId, List<Long> playerIds) {
+        DraftRow d = draft(draftId);
+        if ("COMPLETED".equals(d.status())) {
+            throw ApiException.conflict("選秀已完成");
+        }
+        jdbc.sql("delete from draft_queue where draft_id = ? and team_id = ?").params(draftId, teamId).update();
+        int pos = 0;
+        for (Long p : new java.util.LinkedHashSet<>(playerIds)) {
+            jdbc.sql("insert into draft_queue (draft_id, team_id, player_id, position) values (?, ?, ?, ?)")
+                    .params(draftId, teamId, p, pos++).update();
+        }
+        return queue(draftId, teamId);
     }
 
     /** 已逾時、需自動選取的選秀。由排程每秒檢查，再透過 bean 呼叫 autoPick（確保交易邊界）。 */
@@ -369,6 +439,8 @@ public class DraftService {
         jdbc.sql("""
                 update draft_pick set player_id = ?, is_auto = ?, picked_at = ? where draft_id = ? and pick_no = ?
                 """).params(playerId, auto, Timestamp.from(clock.now()), d.id(), d.currentPickNo()).update();
+        // 被選走的從每一隊的候選清單移除
+        jdbc.sql("delete from draft_queue where draft_id = ? and player_id = ?").params(d.id(), playerId).update();
         advance(d.id());
     }
 
