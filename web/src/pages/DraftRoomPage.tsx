@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import confetti from 'canvas-confetti'
 import { useApp } from '../App'
-import { api, type BoardPlayer, type DraftBoard, type DraftPick, type DraftStats, type DraftView } from '../api'
+import { api, type BoardPlayer, type DraftBoard, type DraftPick, type DraftReport, type DraftStats, type DraftView } from '../api'
 import { BottomSheet, ErrorBox, TIER_LABEL, tierOf, useLoad } from '../components'
 import { useServerNow, useWide } from '../hooks'
 import { cpblTeam, fantasyTeamColor } from '../teams'
@@ -595,6 +595,128 @@ function PickReveal({ rv, draft, onClose }: { rv: Reveal; draft: DraftView; onCl
 }
 
 // ------------------------------------------------------------------
+// 選秀成績單（選秀完成後）
+// ------------------------------------------------------------------
+
+const REPORT_CATS = [...HIT, ...PIT]
+const HL: Record<string, [string, string]> = { BEST_VALUE: ['撿到寶 · BEST VALUE', 'gold'], BOLDEST_REACH: ['最大膽 · BOLDEST REACH', 'silver'] }
+const gradeTone = (g: string) => (g.startsWith('A') ? 'gold' : g.startsWith('B') ? 'silver' : 'bronze')
+
+function DraftReportView({ draft, onClose }: { draft: DraftView; onClose: () => void }) {
+  const { leagueId, league, system } = useApp()
+  const wide = useWide()
+  const r = useLoad(() => api.get<DraftReport>(`/api/leagues/${leagueId}/drafts/${draft.id}/report`), [leagueId, draft.id])
+  const teams = league?.teams ?? []
+  const n = draft.order.length || 1
+  const me = r.data?.teams.find((t) => t.teamId === league?.myTeamId)
+  const myTeam = teams.find((t) => t.id === league?.myTeamId)
+  useEffect(() => { if (me?.grade.startsWith('A')) setTimeout(boom, 300) }, [me?.grade])
+  if (r.error) return <ErrorBox error={r.error} />
+  if (!r.data) return <div className="dr-empty">載入成績單…</div>
+  const rep = r.data
+  const strong = me ? REPORT_CATS.filter((c) => me.ranks[c] === 1) : []
+  const weak = me ? REPORT_CATS.filter((c) => (me.ranks[c] ?? 0) >= 4) : []
+  const summary = `${strong.length ? `${strong.join('、')} 預估全聯盟第 1` : '沒有類別預估第 1'}${weak.length ? `；${weak.join('、')} 偏弱，開季可以從自由球員補。` : '；10 類別都在前 3。'}`
+  const rankTone = (x: number) => (x === 1 ? 'r1' : x === 2 ? 'r2' : x === 3 ? 'r3' : '')
+
+  const gradeCard = me && (
+    <div className={`rp-grade ${gradeTone(me.grade)}`}>
+      <div className="in">
+        <div className="top">
+          <div className="g">{me.grade}</div>
+          <div className="t">
+            <div className="nm"><i style={{ background: fantasyTeamColor(me.teamId, teams) }} /><b>{myTeam?.name}</b></div>
+            <div className="pl">預估全聯盟 <b>第 {me.place} 名</b></div>
+            <div className="pt">10 類別積分 <b>{me.points}</b> / {rep.maxPoints}</div>
+          </div>
+        </div>
+        <div className="tear" />
+        <p>{summary}</p>
+      </div>
+    </div>
+  )
+  const sec = (no: string, zh: string, en: string) => <div className="rp-h"><span>{no}</span><b>{zh}</b><small>{en}</small></div>
+  const cats = me && (
+    <>
+      {sec('01', '類別預估', 'PROJECTION')}
+      <div className="rp-cats">
+        {REPORT_CATS.map((c) => (
+          <div key={c} className={me.ranks[c] === 1 ? 'top' : ''}>
+            <small>{c}</small><b>{fmtStat(c, me.projection[c])}</b><em className={rankTone(me.ranks[c])}>第 {me.ranks[c]}</em>
+          </div>
+        ))}
+      </div>
+    </>
+  )
+  const highlights = rep.highlights.length > 0 && (
+    <>
+      {sec('02', '關鍵順位', 'HIGHLIGHTS')}
+      <div className="rp-hl">
+        {rep.highlights.map((h) => {
+          const t = cpblTeam(h.cpblTeam)
+          const [k, tone] = HL[h.kind] ?? [h.kind, 'silver']
+          return (
+            <div key={h.kind} className={tone}>
+              <small>{k}</small>
+              <div className="nm"><b>{h.name}</b><i style={{ background: t.bg, color: t.fg }}>{t.short}</i></div>
+              <div className="sub">{pickLabel(h.pickNo, n)} 選中 · 排名 {h.rank ?? '–'}</div>
+              <div className="d">{h.delta > 0 ? `+${h.delta}` : h.delta}</div>
+            </div>
+          )
+        })}
+      </div>
+    </>
+  )
+  const leagueRows = (
+    <>
+      {sec('03', '全聯盟成績', 'LEAGUE')}
+      <div className="rp-league">
+        {[...rep.teams].sort((a, b) => a.place - b.place).map((t, i) => {
+          const tv = teams.find((x) => x.id === t.teamId)
+          return (
+            <div key={t.teamId} className={t.teamId === league?.myTeamId ? 'me' : ''}>
+              <i style={{ background: fantasyTeamColor(t.teamId, teams) }} />
+              <span className={`i${i === 0 ? ' first' : ''}`}>{t.place}</span>
+              <div className="m"><b>{tv?.name}</b><small>{tv?.owner}・最佳類別 {t.best.length ? t.best.slice(0, 2).join('、') : '—'}</small></div>
+              <span className="p">{t.points} 分</span>
+              <span className={`g ${gradeTone(t.grade)}`}>{t.grade}</span>
+            </div>
+          )
+        })}
+      </div>
+    </>
+  )
+  const roster = (
+    <>
+      {sec('04', '我的陣容', `ROSTER · ${rep.roster.reduce((a, g) => a + g.names.length, 0)}`)}
+      <div className="rp-roster">
+        {rep.roster.filter((g) => g.names.length > 0).map((g) => (
+          <div key={g.key}><span>{g.key}</span><div>{g.names.map((x) => <em key={x}>{x}</em>)}</div></div>
+        ))}
+      </div>
+    </>
+  )
+  return (
+    <div className="rp">
+      <div className="rp-top">
+        <button type="button" onClick={onClose}>‹ 回選秀板</button>
+        <span>{draftSlots(draft).length} PICKS · FINAL</span>
+      </div>
+      <div className="rp-title"><span className="eb">DRAFT REPORT · {system?.seasonYear}</span><b>選秀成績單</b><small>預估依 {rep.basis} 數據，比率類別先加總再相除</small></div>
+      {wide ? (
+        <div className="rp-cols">
+          <div>{gradeCard}{highlights}</div>
+          <div>{cats}{leagueRows}</div>
+          <div>{roster}</div>
+        </div>
+      ) : (
+        <div className="rp-one">{gradeCard}{cats}{highlights}{leagueRows}{roster}</div>
+      )}
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------
 // 選秀室
 // ------------------------------------------------------------------
 
@@ -656,15 +778,27 @@ export default function DraftRoom({ draft, onChange }: { draft: DraftView; onCha
   const needs = board.data && <Needs needs={board.data.needs} count={myPicks.length} rounds={draft.rounds} />
   const keeperNote = draft.status === 'KEEPERS' && !draft.revealedAt && <p className="muted">Keeper 選擇期：<Link to="/draft/keepers">前往選擇 Keeper</Link></p>
 
+  // 選完後打開成績單（剛好是自己的最後一個選擇時，等選中動畫關掉再開）
+  const [report, setReport] = useState(done)
+  useEffect(() => { if (done) setReport(true) }, [done])
+  const reportBtn = done && <button type="button" className="dr-report-btn" onClick={() => setReport(true)}>看選秀成績單</button>
+  if (done && report && !rv) {
+    return <div className="dr"><DraftReportView draft={draft} onClose={() => setReport(false)} /></div>
+  }
+  const header = <RoomHeader draft={draft} queueLen={queue.ids.length} onReport={() => setReport(true)} />
+
   if (wide) {
     return (
       <div className="dr">
-        <RoomHeader draft={draft} queueLen={queue.ids.length} />
+        {header}
         {keeperNote}
         <ErrorBox error={err || board.error} />
         <div className="dr-main">
           <div className="dr-left">
-            <Seg value={done ? 'board' : dtab} onChange={setDtab} items={done ? [['board', '選秀板']] : [['avail', '可選球員'], ['board', '選秀板']]} />
+            <div className="dr-left-top">
+              <Seg value={done ? 'board' : dtab} onChange={setDtab} items={done ? [['board', '選秀板']] : [['avail', '可選球員'], ['board', '選秀板']]} />
+              {reportBtn}
+            </div>
             {dtab === 'avail' && !done ? list : <DraftGrid draft={draft} />}
           </div>
           <div className="dr-right">
@@ -684,17 +818,18 @@ export default function DraftRoom({ draft, onChange }: { draft: DraftView; onCha
   const tabs: ['avail' | 'queue' | 'board' | 'mine', string][] = done
     ? [['board', '選秀板'], ['mine', `我的 ${myPicks.length}`]]
     : [['avail', '球員'], ['queue', `候選 ${qPlayers.length}`], ['board', '選秀板'], ['mine', `我的 ${myPicks.length}`]]
+  const tabNow = done && (tab === 'avail' || tab === 'queue') ? 'board' : tab
   return (
     <div className="dr">
-      <RoomHeader draft={draft} queueLen={queue.ids.length} />
+      {header}
       {keeperNote}
       {needs}
       <ErrorBox error={err || board.error} />
-      <div className="dr-tabs"><Seg value={tab} onChange={setTab} items={tabs} /></div>
-      {tab === 'avail' && list}
-      {tab === 'queue' && <QueueList players={qPlayers} myTurn={myTurn} onPick={pick} onRemove={queue.remove} />}
-      {tab === 'board' && <DraftGrid draft={draft} />}
-      {tab === 'mine' && <MyRoster draft={draft} picks={myPicks} />}
+      <div className="dr-tabs"><Seg value={tabNow} onChange={setTab} items={tabs} /></div>
+      {tabNow === 'avail' && list}
+      {tabNow === 'queue' && <QueueList players={qPlayers} myTurn={myTurn} onPick={pick} onRemove={queue.remove} />}
+      {tabNow === 'board' && <>{reportBtn}<DraftGrid draft={draft} /></>}
+      {tabNow === 'mine' && <MyRoster draft={draft} picks={myPicks} />}
       {sel != null && selP && (
         <BottomSheet label={selP.name} onClose={() => setSel(null)}>{panel(selP)}</BottomSheet>
       )}
