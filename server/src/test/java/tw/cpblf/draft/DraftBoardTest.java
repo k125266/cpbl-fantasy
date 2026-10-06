@@ -45,9 +45,17 @@ class DraftBoardTest extends IntegrationTest {
         }
         var r = board.report(d, team);
         int n = r.teams().size();
-        assertThat(r.teams().stream().mapToInt(DraftBoardService.TeamReport::points).sum()).isEqualTo(10 * n * (n + 1) / 2);
+        assertThat(r.teams().stream().mapToDouble(DraftBoardService.TeamReport::points).sum()).isEqualTo(10.0 * n * (n + 1) / 2);
         assertThat(r.maxPoints()).isEqualTo(10 * n);
         assertThat(r.teams()).allSatisfy(t -> assertThat(t.grade()).isNotBlank());
         assertThat(r.highlights()).extracting(DraftBoardService.Highlight::kind).containsExactly("BEST_VALUE", "BOLDEST_REACH");
+
+        // 開季前沒有數據，各類別全部同分：名次並列、平分積分，沒有人是「最佳類別」
+        assertThat(r.teams()).allSatisfy(t -> {
+            assertThat(t.place()).isEqualTo(1);
+            assertThat(t.points()).isEqualTo(10.0 * (n + 1) / 2);
+            assertThat(t.ranks().values()).containsOnly(1);
+            assertThat(t.best()).isEmpty();
+        });
     }
 }

@@ -9,6 +9,7 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    proxy: { '/api': 'http://localhost:8080' },
+    // API=http://localhost:8082 npm run dev 可接到另一個後端（例：本機同時跑真實資料與 demo）
+    proxy: { '/api': process.env.API ?? 'http://localhost:8080' },
   },
 })

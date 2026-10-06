@@ -80,11 +80,12 @@ public class DraftBoardService {
     static final List<String> CATS = List.of("R", "HR", "H", "BB", "AVG", "QS", "K", "W+SV", "ERA", "WHIP");
 
     /**
+     * @param points     10 類別積分；並列的隊伍平分名次分數，所以可能是 .5
      * @param projection 各類別預估（比率類別先加總再相除）；沒有數據為 null
-     * @param ranks      各類別在聯盟的名次
-     * @param best       名次第 1 的類別
+     * @param ranks      各類別在聯盟的名次（同數值並列）
+     * @param best       名次第 1 的類別（全聯盟都並列第 1 的不算）
      */
-    public record TeamReport(long teamId, int points, String grade, int place, List<String> best,
+    public record TeamReport(long teamId, double points, String grade, int place, List<String> best,
                              Map<String, Double> projection, Map<String, Integer> ranks) {
     }
 
@@ -111,28 +112,46 @@ public class DraftBoardService {
             proj.put(t, projection(drafts.teamPlayers(d, t), basis.lines()));
         }
         Map<Long, Map<String, Integer>> ranks = new HashMap<>();
-        Map<Long, Integer> points = new HashMap<>();
+        Map<Long, Double> points = new HashMap<>();
         teams.forEach(t -> {
             ranks.put(t, new HashMap<>());
-            points.put(t, 0);
+            points.put(t, 0.0);
         });
         for (String c : CATS) {
             boolean low = c.equals("ERA") || c.equals("WHIP");
+            // 越好越前；沒有數據的視為最差，彼此並列
+            Comparator<Long> better = Comparator.comparingDouble(t -> {
+                Double v = proj.get(t).get(c);
+                return v == null ? Double.POSITIVE_INFINITY : low ? v : -v;
+            });
             List<Long> order = new ArrayList<>(teams);
-            // 沒有數據的排最後
-            order.sort(Comparator.comparing((Long t) -> proj.get(t).get(c) == null ? 1 : 0)
-                    .thenComparingDouble(t -> proj.get(t).get(c) == null ? 0 : (low ? 1 : -1) * proj.get(t).get(c)));
-            for (int i = 0; i < order.size(); i++) {
-                ranks.get(order.get(i)).put(c, i + 1);
-                points.merge(order.get(i), n - i, Integer::sum);
+            order.sort(better);
+            // 同數值的隊伍名次並列，平分這幾個名次的積分（第 1 名 n 分 … 第 n 名 1 分），總分不變
+            for (int i = 0; i < n; ) {
+                int j = i;
+                while (j + 1 < n && better.compare(order.get(i), order.get(j + 1)) == 0) {
+                    j++;
+                }
+                double share = 0;
+                for (int k = i; k <= j; k++) {
+                    share += n - k;
+                }
+                share /= j - i + 1;
+                for (int k = i; k <= j; k++) {
+                    ranks.get(order.get(k)).put(c, i + 1);
+                    points.merge(order.get(k), share, Double::sum);
+                }
+                i = j + 1;
             }
         }
         int max = CATS.size() * n;
         List<TeamReport> out = new ArrayList<>();
         for (Long t : teams) {
-            int pts = points.get(t);
+            double pts = points.get(t);
             int place = 1 + (int) teams.stream().filter(o -> points.get(o) > pts).count();
-            List<String> best = CATS.stream().filter(c -> ranks.get(t).get(c) == 1).toList();
+            List<String> best = CATS.stream()
+                    .filter(c -> ranks.get(t).get(c) == 1 && teams.stream().anyMatch(o -> ranks.get(o).get(c) != 1))
+                    .toList();
             out.add(new TeamReport(t, pts, grade(pts, max), place, best, proj.get(t), ranks.get(t)));
         }
         out.sort(Comparator.comparingInt(TeamReport::place).thenComparingLong(TeamReport::teamId));
@@ -209,8 +228,8 @@ public class DraftBoardService {
     }
 
     /** 等第（設計稿 5 隊、滿分 50 的門檻 40／35／31／27／23，依隊數等比換算）。 */
-    static String grade(int points, int max) {
-        double p = (double) points / max;
+    static String grade(double points, int max) {
+        double p = points / max;
         return p >= 0.8 ? "A" : p >= 0.7 ? "A-" : p >= 0.62 ? "B+" : p >= 0.54 ? "B" : p >= 0.46 ? "B-" : "C+";
     }
 
