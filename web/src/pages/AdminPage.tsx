@@ -17,6 +17,8 @@ interface Status {
     suggested: { opening: string | null; half1End: string | null; half2Start: string | null; seasonEnd: string | null }
     leagues: { league_id: number; name: string; half_no: number | null; start_date: string | null; draft_status: string }[]
   }
+  /** 選秀參考季（上一季），模擬賽季沒有 */
+  reference?: { year: number; games: number; players: number }
 }
 
 /** 一次性建盟碼（GET /api/admin/create-codes） */
@@ -140,6 +142,19 @@ export default function AdminPage() {
           ))}
         </ul>
       </div>
+      {s?.reference && (
+        <div className="card">
+          <h2>選秀參考季（{s.reference.year}）</h2>
+          <p className="small">已封存比賽 {s.reference.games} 場・本季球員有參考數據 {s.reference.players} 人</p>
+          <button className="primary" disabled={busy} onClick={() => run(() => api.post('/api/admin/jobs/reference-archive/run'))}>
+            {s.reference.games > 0 ? '續抓／重新彙總' : `封存 ${s.reference.year} 參考季`}
+          </button>
+          <p className="small muted">
+            開季前選秀沒有本季數據，選秀室的排名、數據、推薦、自動選與成績單改用上一季當參考（只用於選秀，不影響計分）。
+            只封存比賽、不封存球員，請求間隔 1.5 秒，第一次約 25 分鐘；中斷後再按一次即可續抓。
+          </p>
+        </div>
+      )}
       {s?.demoClock && (
         <div className="card">
           <h2>{s.replay ? '重播時鐘' : 'Demo 時鐘'}</h2>

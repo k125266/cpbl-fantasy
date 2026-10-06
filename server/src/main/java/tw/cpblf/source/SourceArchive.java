@@ -60,9 +60,16 @@ public class SourceArchive {
                 .param(cpblId).query(Integer.class).single() > 0;
     }
 
-    public List<StatsSiteParsers.GamePage> games() {
-        return jdbc.sql("select payload::text from source_archive where kind = 'game'").query(String.class).list().stream()
+    /** 某一年的封存比賽（參考季與當季分開讀，重播不會讀到參考季）。 */
+    public List<StatsSiteParsers.GamePage> games(int year) {
+        return jdbc.sql("select payload::text from source_archive where kind = 'game' and key like ?").param(year + "-%")
+                .query(String.class).list().stream()
                 .map(s -> Json.read(s, new TypeReference<StatsSiteParsers.GamePage>() { })).toList();
+    }
+
+    public int countGames(int year) {
+        return jdbc.sql("select count(*) from source_archive where kind = 'game' and key like ?").param(year + "-%")
+                .query(Integer.class).single();
     }
 
     public List<SourcePlayer> players() {

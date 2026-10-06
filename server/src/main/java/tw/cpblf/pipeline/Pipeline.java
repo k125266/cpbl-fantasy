@@ -44,12 +44,15 @@ public class Pipeline {
     private final AppProperties props;
     private final WeeklyMvpService weeklyMvp;
     private final SeasonArchiver archiver;
+    private final ReferenceSeason reference;
 
     public Pipeline(JobRunner runner, SchedulePoller schedule, RegistrationSync registration, SettlementJob settlement,
                     LivePoller live, MatchupService matchups, RosterService roster, WaiverService waivers, TradeService trades,
                     LeagueService leagues, AlertService alerts, CpblDataSource source, BoxScoreMapper mapper, JdbcClient jdbc,
-                    AppClock clock, AppProperties props, WeeklyMvpService weeklyMvp, SeasonArchiver archiver) {
+                    AppClock clock, AppProperties props, WeeklyMvpService weeklyMvp, SeasonArchiver archiver,
+                    ReferenceSeason reference) {
         this.weeklyMvp = weeklyMvp;
+        this.reference = reference;
         this.archiver = archiver;
         this.runner = runner;
         this.schedule = schedule;
@@ -80,6 +83,15 @@ public class Pipeline {
     /** E12：封存整季比賽與球員（一次性，約 25 分鐘）。 */
     public void archiveSeason() {
         runner.run(SeasonArchiver.JOB, archiver::run);
+    }
+
+    /** 選秀參考季：封存上一季的比賽（不含球員），再彙總成 reference_stat（一次性，約 25 分鐘）。 */
+    public void archiveReference() {
+        runner.run(ReferenceSeason.JOB, ctx -> {
+            archiver.runReference(ctx);
+            int year = props.seasonYear() - 1;
+            ctx.note(year + " 參考數據：" + reference.rebuild(year) + " 位本季球員");
+        });
     }
 
     public void settle() {

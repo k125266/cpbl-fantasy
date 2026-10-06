@@ -29,7 +29,7 @@ class ReplayDataSourceTest extends IntegrationTest {
             archive.putGame(StatsSiteParsers.parseGame(StatsSiteParsersTest.fixture("game-2026-A-" + sno + ".md"), 2026, "A", sno));
         }
         StatsSiteParsers.parsePlayerList(StatsSiteParsersTest.fixture("players-page-1.md")).players().forEach(archive::putPlayer);
-        replay = new ReplayDataSource(archive, clock);
+        replay = new ReplayDataSource(archive, clock, 2026);
     }
 
     void at(String time) {

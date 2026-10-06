@@ -19,7 +19,7 @@ public class DataSourceConfig {
             return new SimulatedDataSource(clock, props.seasonYear(), props.demo().seed());
         }
         if (props.isReplay()) {
-            return new ReplayDataSource(archive, clock);
+            return new ReplayDataSource(archive, clock, props.seasonYear());
         }
         if ("stats".equalsIgnoreCase(props.source())) {
             return new StatsSiteDataSource(props);

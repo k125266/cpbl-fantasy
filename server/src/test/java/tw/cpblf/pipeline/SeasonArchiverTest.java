@@ -119,8 +119,20 @@ class SeasonArchiverTest extends IntegrationTest {
     @Test
     void archivedPagesRoundTripThroughJson() {
         archiver.archive(new FakeSite(), 2026, "A", null);
-        var page = archive.games().stream().filter(p -> p.game().gameSno() == 1).findFirst().orElseThrow();
+        var page = archive.games(2026).stream().filter(p -> p.game().gameSno() == 1).findFirst().orElseThrow();
         assertThat(page.game().awayScore()).isEqualTo(3);
         assertThat(page.box().pitchers()).anyMatch(p -> p.name().equals("勝騎士") && p.w() == 1);
+    }
+
+    @Test
+    void referenceSeasonArchivesGamesOnlyAndStaysApartFromTheSeason() {
+        FakeSite site = new FakeSite();
+        var r = archiver.archiveGames(site::game, 2025, "A", null);
+        assertThat(r.gamesFetched()).isEqualTo(4);
+        // 參考季不封存球員（重播會把封存的球員當成本季已註冊），也不混進本季的比賽
+        assertThat(archive.count("player")).isZero();
+        assertThat(archive.games(2025)).hasSize(4);
+        assertThat(archive.games(2026)).isEmpty();
+        assertThat(archive.countGames(2026)).isZero();
     }
 }

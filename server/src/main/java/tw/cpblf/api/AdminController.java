@@ -81,7 +81,7 @@ public class AdminController {
                 """).query().singleRow());
         if (props.isReplay()) {
             Map<String, Object> replay = new LinkedHashMap<>();
-            replay.put("archivedGames", archive.count("game"));
+            replay.put("archivedGames", archive.countGames(props.seasonYear()));
             replay.put("archivedPlayers", archive.count("player"));
             replay.put("suggested", archive.suggestedSeason(props.seasonYear(), props.kindCode()));
             // 所有聯盟共用時鐘：列出各聯盟各半季的選秀狀態，快轉前確認
@@ -92,6 +92,13 @@ public class AdminController {
                     order by l.id, h.half_no
                     """).query().listOfRows());
             out.put("replay", replay);
+        }
+        // 選秀參考季（上一季，只用於選秀室）；模擬賽季沒有
+        if (!props.isDemo()) {
+            int year = props.seasonYear() - 1;
+            out.put("reference", Map.of("year", year, "games", archive.countGames(year),
+                    "players", jdbc.sql("select count(*) from reference_stat where season_year = ?").param(year)
+                            .query(Integer.class).single()));
         }
         return out;
     }
@@ -134,6 +141,7 @@ public class AdminController {
             }
             case "registration-deadline" -> pipeline.registrationDeadlineSync();
             case "season-archive" -> pipeline.archiveSeason();
+            case "reference-archive" -> pipeline.archiveReference();
             default -> throw ApiException.badRequest("未知 job：" + name);
         }
         return Map.of("ok", true);
