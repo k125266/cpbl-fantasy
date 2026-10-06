@@ -157,6 +157,53 @@ public class DraftService {
     public record KeeperView(long playerId, String name) {
     }
 
+    /**
+     * Keeper 畫面的一位候選（自己目前名單上的人）。
+     *
+     * @param rank     本季排名（下半季選 keeper 時即上半季排名）；沒有數據為 null
+     * @param via      取得方式，例：選秀第 3 輪、Keeper、交易、Waiver、自由球員
+     * @param delisted 已註銷，不能保留
+     */
+    public record KeeperCandidate(long playerId, String name, String jerseyNumber, String cpblTeam, String position,
+                                  boolean pitcher, Integer rank, String via, boolean delisted) {
+    }
+
+    public List<KeeperCandidate> keeperCandidates(long draftId, long teamId) {
+        DraftRow d = draft(draftId);
+        Map<Long, PlayerRankingService.Ranked> ranks = ranking.rankings();
+        LocalDate today = clock.today();
+        List<KeeperCandidate> out = new ArrayList<>();
+        for (RosterService.Entry e : roster.openEntries(teamId, today)) {
+            out.add(jdbc.sql("""
+                    select p.name, p.jersey_number, p.cpbl_team_code, p.listed_position, p.registration_status,
+                           (select re.acquired_via from roster_entry re where re.team_id = ? and re.player_id = p.id
+                              and re.acquired_via <> 'MOVE' order by re.valid_from desc limit 1) as via,
+                           (select dp.round from draft_pick dp join draft x on x.id = dp.draft_id
+                              where x.league_id = ? and x.id <> ? and dp.team_id = ? and dp.player_id = p.id
+                              order by x.id desc limit 1) as round
+                    from player p where p.id = ?
+                    """).params(teamId, d.leagueId(), d.id(), teamId, e.playerId()).query((rs, n) -> {
+                String via = rs.getString("via");
+                Integer round = (Integer) rs.getObject("round");
+                String text = via == null ? "—" : switch (via) {
+                    case "DRAFT" -> round == null ? "選秀" : "選秀第 " + round + " 輪";
+                    case "KEEPER" -> "Keeper";
+                    case "TRADE" -> "交易";
+                    case "WAIVER" -> "Waiver";
+                    case "FA" -> "自由球員";
+                    default -> via;
+                };
+                PlayerRankingService.Ranked r = ranks.get(e.playerId());
+                String pos = rs.getString("listed_position");
+                return new KeeperCandidate(e.playerId(), rs.getString("name"), rs.getString("jersey_number"),
+                        rs.getString("cpbl_team_code"), pos, "P".equals(pos), r == null ? null : r.rank(), text,
+                        "DELISTED".equals(rs.getString("registration_status")));
+            }).single());
+        }
+        out.sort(Comparator.comparing((KeeperCandidate c) -> c.rank() == null ? Integer.MAX_VALUE : c.rank()));
+        return out;
+    }
+
     @Transactional
     public List<KeeperView> setKeepers(long draftId, long teamId, List<Long> playerIds) {
         DraftRow d = draft(draftId);

@@ -67,6 +67,14 @@ public class DraftController {
     public record Keepers(List<Long> playerIds) {
     }
 
+    /** 自己的 keeper 候選：目前名單，附上半季排名與取得方式。 */
+    @GetMapping("/{draftId}/keeper-candidates")
+    public List<DraftService.KeeperCandidate> keeperCandidates(@PathVariable long leagueId, @PathVariable long draftId) {
+        long team = leagues.requireTeam(leagueId, Auth.require());
+        check(leagueId, draftId);
+        return drafts.keeperCandidates(draftId, team);
+    }
+
     @PostMapping("/{draftId}/keepers")
     public List<DraftService.KeeperView> keepers(@PathVariable long leagueId, @PathVariable long draftId, @RequestBody Keepers req) {
         long team = leagues.requireTeam(leagueId, Auth.require());

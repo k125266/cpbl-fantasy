@@ -127,6 +127,17 @@ class DraftRulesTest extends IntegrationTest {
     }
 
     @Test
+    void keeperCandidatesShowRankAndHowEachPlayerWasAcquired() {
+        firstHalfDrafted();
+        long d2 = drafts.create(leagueId, 2, null);
+        long me = teams.get(0);
+        var cands = drafts.keeperCandidates(d2, me);
+        assertThat(cands).hasSize(rosterOf(me).size());
+        assertThat(cands).allSatisfy(c -> assertThat(c.via()).startsWith("選秀第 ").endsWith(" 輪"));
+        assertThat(cands).extracting(DraftService.KeeperCandidate::rank).doesNotContainNull().isSorted();
+    }
+
+    @Test
     void keepersCloseTenMinutesBeforeTheDraft() {
         firstHalfDrafted();
         Instant draftAt = clock.now().plus(Duration.ofMinutes(5)).truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
