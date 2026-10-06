@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../App'
 import { api, type BoardPlayer, type DraftBoard, type DraftPick, type DraftStats, type DraftView } from '../api'
-import { useLoad } from '../components'
+import { Link } from 'react-router-dom'
+import { BottomSheet, celebrate, ErrorBox, TIER_LABEL, tierOf, useLoad } from '../components'
 import { useServerNow, useWide } from '../hooks'
 import { cpblTeam, fantasyTeamColor } from '../teams'
 import { Medal } from './KeeperPage'
@@ -339,4 +340,202 @@ export function DraftGrid({ draft }: { draft: DraftView }) {
 export function useDraftBoard(draft: DraftView) {
   const { leagueId } = useApp()
   return useLoad(() => api.get<DraftBoard>(`/api/leagues/${leagueId}/drafts/${draft.id}/board`), [leagueId, draft.id, draft.currentPickNo, draft.status])
+}
+
+// ------------------------------------------------------------------
+// 球員卡、先發缺位、候選清單、我的陣容
+// ------------------------------------------------------------------
+
+function PlayerPanel({ p, basis, inQ, onToggle, pickText, canPick, onPick }: {
+  p: BoardPlayer; basis: string; inQ: boolean; onToggle: () => void; pickText: string; canPick: boolean; onPick: () => void
+}) {
+  const t = cpblTeam(p.cpblTeam)
+  const tier = tierOf(p.rank)
+  return (
+    <div className={`dr-card t-${tier}`}>
+      <div className="in" style={{ background: `linear-gradient(165deg, ${t.bg}33 0%, ${t.bg}12 42%, transparent 72%), var(--surface)` }}>
+        <div className="top"><span>PLAYER CARD</span><span className="ink">排名 {p.rank ?? '–'} · {TIER_LABEL[tier]}</span></div>
+        <div className="id">
+          <Medal rank={p.rank} jersey={p.jerseyNumber} team={p.cpblTeam} size={56} />
+          <div>
+            <div className="l1"><b>{p.name}</b><i style={{ background: t.bg, color: t.fg }}>{t.short}</i>{p.foreign && <i className="tag">洋</i>}</div>
+            <div className={`pos${p.fillsNeed ? ' need' : ''}`}>{p.eligible.join('・')}{p.fillsNeed ? '・補先發缺位' : ''}</div>
+            <div className="basis">{basis} · {keyLine(p)}</div>
+          </div>
+        </div>
+        <div className="stats">
+          {(p.pitcher ? PIT : HIT).map((c) => <div key={c}><small>{c}</small><b>{fmtStat(c, statOf(p.stats, c))}</b></div>)}
+        </div>
+        <div className="btns">
+          <button type="button" className={`q${inQ ? ' on' : ''}`} onClick={onToggle}>{inQ ? '★ 候選中' : '☆ 候選'}</button>
+          <button type="button" className={`p${canPick ? ' on' : ''}`} disabled={!canPick} onClick={onPick}>{pickText}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Needs({ needs, count, rounds }: { needs: DraftBoard['needs']; count: number; rounds: number }) {
+  return (
+    <div className="dr-needs">
+      <div className="h"><span>ROSTER NEEDS · 先發缺位</span><span>{count} / {rounds}</span></div>
+      <div className="g">
+        {needs.map((n) => (
+          <div key={n.slot} className={n.filled >= n.max ? 'full' : n.filled ? 'part' : ''}>
+            <small>{n.slot}</small><b>{n.filled}<span>/{n.max}</span></b>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function QueueList({ players, myTurn, onPick, onRemove }: { players: BoardPlayer[]; myTurn: boolean; onPick: (p: BoardPlayer) => void; onRemove: (id: number) => void }) {
+  return (
+    <div className="dr-side-list">
+      <p className="hint">時間到會照這個順序自動選；被別隊選走的會自動移除。</p>
+      {players.map((p, i) => {
+        const t = cpblTeam(p.cpblTeam)
+        return (
+          <div key={p.playerId} className="it">
+            <span className={`n${i === 0 ? ' first' : ''}`}>{i + 1}</span>
+            <div className="m">
+              <div className="l1"><b>{p.name}</b><i style={{ background: t.bg, color: t.fg }}>{t.short}</i></div>
+              <div className="l2">{p.position} · 排名 {p.rank ?? '–'} · {keyLine(p)}</div>
+            </div>
+            <div className="a">
+              {myTurn && <button type="button" className="dr-pick" onClick={() => onPick(p)}>選</button>}
+              <button type="button" className="x" aria-label="移出候選" onClick={() => onRemove(p.playerId)}>×</button>
+            </div>
+          </div>
+        )
+      })}
+      {players.length === 0 && <div className="dr-empty">還沒有候選。在球員列按 ☆ 加入。</div>}
+    </div>
+  )
+}
+
+function MyRoster({ draft, picks }: { draft: DraftView; picks: DraftPick[] }) {
+  const n = draft.order.length || 1
+  return (
+    <div className="dr-side-list">
+      {picks.map((p) => {
+        const t = cpblTeam(p.playerTeam)
+        return (
+          <div key={p.pickNo} className="it mine">
+            <span className="lb">{pickLabel(p.pickNo, n)}</span>
+            <div className="m">
+              <div className="l1"><b>{p.playerName}</b><i style={{ background: t.bg, color: t.fg }}>{t.short}</i></div>
+              <div className="l2">{p.playerPosition ?? ''}{p.auto ? '・自動選' : ''}</div>
+            </div>
+          </div>
+        )
+      })}
+      {draft.myKeepers.length > 0 && (
+        <div className="keep"><span className="lb">KEEPER</span>{draft.myKeepers.map((k) => k.name).join('、')}</div>
+      )}
+      {picks.length === 0 && <div className="dr-empty">還沒選人。</div>}
+    </div>
+  )
+}
+
+function Seg<T extends string>({ value, items, onChange }: { value: T; items: [T, string][]; onChange: (v: T) => void }) {
+  return (
+    <div className="dr-seg" role="tablist">
+      {items.map(([v, t]) => <button key={v} type="button" role="tab" aria-selected={value === v} onClick={() => onChange(v)}>{t}</button>)}
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------
+// 選秀室
+// ------------------------------------------------------------------
+
+export default function DraftRoom({ draft, onChange }: { draft: DraftView; onChange: () => void }) {
+  const { leagueId, league } = useApp()
+  const wide = useWide()
+  const done = draft.status === 'COMPLETED'
+  const myTurn = draft.status === 'IN_PROGRESS' && draft.currentTeamId === league?.myTeamId
+  const queue = useDraftQueue(draft)
+  const board = useDraftBoard(draft)
+  const [sel, setSel] = useState<number | null>(null)
+  const [tab, setTab] = useState<'avail' | 'queue' | 'board' | 'mine'>(done ? 'board' : 'avail')
+  const [dtab, setDtab] = useState<'avail' | 'board'>(done ? 'board' : 'avail')
+  const [side, setSide] = useState<'queue' | 'mine'>('queue')
+  const [err, setErr] = useState<unknown>(null)
+
+  const players = useMemo(() => board.data?.players ?? [], [board.data])
+  const byId = useMemo(() => new Map(players.map((p) => [p.playerId, p])), [players])
+  const qPlayers = queue.ids.map((id) => byId.get(id)).filter((p): p is BoardPlayer => !!p)
+  const myPicks = draftSlots(draft).filter((p) => p.teamId === league?.myTeamId && p.playerId).reverse()
+  const nextMe = draftSlots(draft).find((p) => p.teamId === league?.myTeamId && p.pickNo >= draft.currentPickNo && !p.playerId)
+  // 網頁版右欄預設顯示排名第一的可選球員（設計稿）；被選走就換下一位
+  const selP = (sel != null ? byId.get(sel) : undefined) ?? (wide ? players[0] : undefined)
+
+  const pick = async (p: BoardPlayer) => {
+    setErr(null)
+    try {
+      await api.post(`/api/leagues/${leagueId}/drafts/${draft.id}/pick`, { playerId: p.playerId })
+      setSel(null)
+      celebrate()
+      onChange()
+    } catch (e) {
+      setErr(e)
+    }
+  }
+  const pickText = myTurn ? '選這位' : done ? '選秀已結束' : nextMe ? `還沒輪到你・再 ${nextMe.pickNo - draft.currentPickNo} 順位` : '你已選完'
+  const panel = (p: BoardPlayer) => (
+    <PlayerPanel p={p} basis={board.data?.basis ?? ''} inQ={queue.ids.includes(p.playerId)} onToggle={() => queue.toggle(p.playerId)}
+      pickText={pickText} canPick={myTurn} onPick={() => pick(p)} />
+  )
+  const list = (
+    <PlayerList draft={draft} board={board.data ?? null} queue={queue} myTurn={myTurn} onPick={pick}
+      selId={selP?.playerId ?? null} onSelect={(p) => setSel(p.playerId)} />
+  )
+  const needs = board.data && <Needs needs={board.data.needs} count={myPicks.length} rounds={draft.rounds} />
+  const keeperNote = draft.status === 'KEEPERS' && !draft.revealedAt && <p className="muted">Keeper 選擇期：<Link to="/draft/keepers">前往選擇 Keeper</Link></p>
+
+  if (wide) {
+    return (
+      <div className="dr">
+        <RoomHeader draft={draft} queueLen={queue.ids.length} />
+        {keeperNote}
+        <ErrorBox error={err || board.error} />
+        <div className="dr-main">
+          <div className="dr-left">
+            <Seg value={done ? 'board' : dtab} onChange={setDtab} items={done ? [['board', '選秀板']] : [['avail', '可選球員'], ['board', '選秀板']]} />
+            {dtab === 'avail' && !done ? list : <DraftGrid draft={draft} />}
+          </div>
+          <div className="dr-right">
+            {selP && !done && panel(selP)}
+            {needs}
+            <div className="dr-box">
+              <Seg value={side} onChange={setSide} items={[['queue', `候選 ${qPlayers.length}`], ['mine', `我的陣容 ${myPicks.length}`]]} />
+              {side === 'queue' ? <QueueList players={qPlayers} myTurn={myTurn} onPick={pick} onRemove={queue.remove} /> : <MyRoster draft={draft} picks={myPicks} />}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const tabs: ['avail' | 'queue' | 'board' | 'mine', string][] = done
+    ? [['board', '選秀板'], ['mine', `我的 ${myPicks.length}`]]
+    : [['avail', '球員'], ['queue', `候選 ${qPlayers.length}`], ['board', '選秀板'], ['mine', `我的 ${myPicks.length}`]]
+  return (
+    <div className="dr">
+      <RoomHeader draft={draft} queueLen={queue.ids.length} />
+      {keeperNote}
+      {needs}
+      <ErrorBox error={err || board.error} />
+      <div className="dr-tabs"><Seg value={tab} onChange={setTab} items={tabs} /></div>
+      {tab === 'avail' && list}
+      {tab === 'queue' && <QueueList players={qPlayers} myTurn={myTurn} onPick={pick} onRemove={queue.remove} />}
+      {tab === 'board' && <DraftGrid draft={draft} />}
+      {tab === 'mine' && <MyRoster draft={draft} picks={myPicks} />}
+      {sel != null && selP && (
+        <BottomSheet label={selP.name} onClose={() => setSel(null)}>{panel(selP)}</BottomSheet>
+      )}
+    </div>
+  )
 }

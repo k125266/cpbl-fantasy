@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { useApp } from '../App'
-import { api, type BoardPlayer, type DraftView } from '../api'
-import { celebrate, ErrorBox, Loading, useLoad } from '../components'
+import { api, type DraftView } from '../api'
+import { ErrorBox, Loading, useLoad } from '../components'
 import DraftOrderPage from './DraftOrderPage'
-import { DraftGrid, PlayerList, RoomHeader, useDraftBoard, useDraftQueue } from './DraftRoomPage'
+import DraftRoom from './DraftRoomPage'
 import KeeperPage from './KeeperPage'
 
 /**
@@ -82,46 +82,5 @@ export default function DraftPage() {
         </div>
       )}
     </div>
-  )
-}
-
-function DraftRoom({ draft, onChange }: { draft: DraftView; onChange: () => void }) {
-  const { leagueId, league } = useApp()
-  const myTurn = draft.status === 'IN_PROGRESS' && draft.currentTeamId === league?.myTeamId
-  const myPicks = draft.picks.filter((p) => p.teamId === league?.myTeamId && p.playerId)
-  const queue = useDraftQueue(draft)
-  const board = useDraftBoard(draft)
-  const [sel, setSel] = useState<number | null>(null)
-  const [err, setErr] = useState<unknown>(null)
-  const pick = async (p: BoardPlayer) => {
-    setErr(null)
-    try {
-      await api.post(`/api/leagues/${leagueId}/drafts/${draft.id}/pick`, { playerId: p.playerId })
-      celebrate()
-      onChange()
-    } catch (e) {
-      setErr(e)
-    }
-  }
-
-  return (
-    <>
-      <RoomHeader draft={draft} queueLen={queue.ids.length} />
-      {draft.status === 'KEEPERS' && !draft.revealedAt && <p className="muted">Keeper 選擇期：<Link to="/draft/keepers">前往選擇 Keeper</Link></p>}
-      <ErrorBox error={err || board.error} />
-      {draft.status !== 'COMPLETED' && (
-        <PlayerList draft={draft} board={board.data ?? null} queue={queue} myTurn={myTurn} onPick={pick}
-          selId={sel} onSelect={(p) => setSel(p.playerId)} />
-      )}
-      {myPicks.length > 0 && (
-        <div className="card flush">
-          <div className="listhead">我的選秀 <small>{myPicks.length} / {draft.rounds}</small></div>
-          <div style={{ padding: '10px 14px' }} className="row">
-            {myPicks.map((p) => <span key={p.pickNo} className="badge">{p.round}. {p.playerName}{p.keeper ? '（K）' : ''}</span>)}
-          </div>
-        </div>
-      )}
-      {draft.order.length > 0 && <DraftGrid draft={draft} />}
-    </>
   )
 }
