@@ -661,8 +661,10 @@ function DraftReportView({ draft, onClose }: { draft: DraftView; onClose: () => 
   if (r.error) return <ErrorBox error={r.error} />
   if (!r.data) return <div className="dr-empty">載入成績單…</div>
   const rep = r.data
-  const strong = me ? REPORT_CATS.filter((c) => me.ranks[c] === 1) : []
+  // 同數值名次並列：全聯盟都並列第 1 的類別不算強項（例：開季前沒有數據）
+  const strong = me?.best ?? []
   const weak = me ? REPORT_CATS.filter((c) => (me.ranks[c] ?? 0) >= 4) : []
+  const pts = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1))
   const summary = `${strong.length ? `${strong.join('、')} 預估全聯盟第 1` : '沒有類別預估第 1'}${weak.length ? `；${weak.join('、')} 偏弱，開季可以從自由球員補。` : '；10 類別都在前 3。'}`
   const rankTone = (x: number) => (x === 1 ? 'r1' : x === 2 ? 'r2' : x === 3 ? 'r3' : '')
 
@@ -674,7 +676,7 @@ function DraftReportView({ draft, onClose }: { draft: DraftView; onClose: () => 
           <div className="t">
             <div className="nm"><i style={{ background: fantasyTeamColor(me.teamId, teams) }} /><b>{myTeam?.name}</b></div>
             <div className="pl">預估全聯盟 <b>第 {me.place} 名</b></div>
-            <div className="pt">10 類別積分 <b>{me.points}</b> / {rep.maxPoints}</div>
+            <div className="pt">10 類別積分 <b>{pts(me.points)}</b> / {rep.maxPoints}</div>
           </div>
         </div>
         <div className="tear" />
@@ -725,7 +727,7 @@ function DraftReportView({ draft, onClose }: { draft: DraftView; onClose: () => 
               <i style={{ background: fantasyTeamColor(t.teamId, teams) }} />
               <span className={`i${i === 0 ? ' first' : ''}`}>{t.place}</span>
               <div className="m"><b>{tv?.name}</b><small>{tv?.owner}・最佳類別 {t.best.length ? t.best.slice(0, 2).join('、') : '—'}</small></div>
-              <span className="p">{t.points} 分</span>
+              <span className="p">{pts(t.points)} 分</span>
               <span className={`g ${gradeTone(t.grade)}`}>{t.grade}</span>
             </div>
           )
