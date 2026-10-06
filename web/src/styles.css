@@ -829,7 +829,9 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 .lv .sp { flex: 1; }
 .lv-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 8px; align-items: center; min-height: 44px; box-sizing: border-box; padding: 5px 14px; border-top: 1px solid #1d2027; }
 .lv-row.fresh, .lv-grid.fresh { background: rgb(216 178 90 / .035); }
-.lv-row.sub .who, .lv-grid.sub .who { padding-left: 12px; }
+/* 替補：名字對齊不縮排，以 ↳、「替補」標籤與灰色棒次區分 */
+.lv-row .subm, .lv-grid .subm { color: var(--dim); margin-right: 2px; }
+.lv-row.sub .slot, .lv-grid.sub .slot { color: var(--dim); }
 .lv-row .slot, .lv-grid .slot { font: 600 12px var(--font-num); letter-spacing: .04em; color: var(--muted); }
 .lv .who { min-width: 0; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .lv .who .n { font-size: 13.5px; color: var(--text); white-space: nowrap; }

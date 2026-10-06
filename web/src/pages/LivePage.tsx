@@ -290,7 +290,9 @@ export default function LivePage() {
 
   const nameCell = (r: Row, g: LiveGame) => (
     <>
+      {r.sub && <span className="subm" aria-hidden>↳</span>}
       <Link to={`/players/${r.playerId}`} className="n">{r.name}</Link>
+      {r.sub && <span className="tag">替補</span>}
       {mode !== 'mine' && r.team && <span className="ft" title={r.team.name} style={{ color: fantasyTeamColor(r.team.id, teams) }}><TeamIcon icon={r.team.icon} size={13} /></span>}
       {r.pos && r.pos !== r.slot && <span className="pos">{r.pos}</span>}
       {r.batting && <span className="tag live">打擊中</span>}
