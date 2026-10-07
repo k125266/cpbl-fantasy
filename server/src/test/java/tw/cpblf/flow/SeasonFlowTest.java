@@ -120,13 +120,15 @@ class SeasonFlowTest extends IntegrationTest {
                 .param(p1.id()).query().listOfRows();
 
         LocalDate today = clock.today();
-        long give = starter(a, today);
-        long get = starter(b, today);
+        long[] pair = benchSwap(a, b, today);
+        long give = pair[0];
+        long get = pair[1];
         long tradeId = trades.propose(a, b, List.of(give), List.of(get), "test");
         trades.respond(b, tradeId, true);
         clock.setNow(clock.now().plusSeconds(25 * 3600));
         trades.processDue();
-        assertThat(jdbc.sql("select status from trade where id = ?").param(tradeId).query(String.class).single()).isEqualTo("COMPLETED");
+        Map<String, Object> trade = jdbc.sql("select status, result_note from trade where id = ?").param(tradeId).query().singleRow();
+        assertThat(trade.get("status")).as("交易失敗原因：%s", trade.get("result_note")).isEqualTo("COMPLETED");
         assertThat(roster.ownerTeam(leagueId, give, clock.today().plusDays(1))).contains(b);
 
         assertThat(scoring.teamTotals(a, p1.startDate(), p1.endDate())).isEqualTo(beforeA);
@@ -213,7 +215,28 @@ class SeasonFlowTest extends IntegrationTest {
         assertThat(st.get(delistTarget).code()).isEqualTo(PlayerStatusService.Code.DELISTED);
     }
 
-    private long starter(long team, LocalDate date) {
-        return roster.entriesOn(team, date).stream().filter(e -> e.slot() == Slot.BN).findFirst().orElseThrow().playerId();
+    /**
+     * 兩隊各一位板凳球員，交換後兩隊都合法：一換一、板凳換板凳，名額與人數不變；
+     * 洋將身分相同，洋將人數也不變。上半季順位隨機，各隊名單每次不同，所以要挑而不是取第一位（E19）。
+     */
+    private long[] benchSwap(long a, long b, LocalDate date) {
+        List<Long> benchA = bench(a, date);
+        List<Long> benchB = bench(b, date);
+        for (long x : benchA) {
+            for (long y : benchB) {
+                if (foreign(x) == foreign(y)) {
+                    return new long[] {x, y};
+                }
+            }
+        }
+        throw new IllegalStateException("兩隊板凳找不到洋將身分相同的一對");
+    }
+
+    private List<Long> bench(long team, LocalDate date) {
+        return roster.entriesOn(team, date).stream().filter(e -> e.slot() == Slot.BN).map(e -> e.playerId()).toList();
+    }
+
+    private boolean foreign(long playerId) {
+        return jdbc.sql("select is_foreign from player where id = ?").param(playerId).query(Boolean.class).single();
     }
 }
