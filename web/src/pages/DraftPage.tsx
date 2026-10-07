@@ -171,8 +171,14 @@ function localValue(iso: string | null) {
   return new Date(Date.parse(iso) + 8 * 3600_000).toISOString().slice(0, 16)
 }
 
+/** 伺服器現在 + 幾分鐘，轉成 datetime-local 的值（台北時間；demo 的模擬時鐘也照伺服器算） */
+function afterMinutes(serverNowMs: number, minutes: number) {
+  return new Date(serverNowMs + minutes * 60_000 + 8 * 3600_000).toISOString().slice(0, 16)
+}
+
 function DraftSetup({ halfNo, draft, call }: { halfNo: number; draft: DraftView | null; call: (fn: () => Promise<unknown>) => void }) {
   const { leagueId, league } = useApp()
+  const now = useServerNow(30_000)
   const [when, setWhen] = useState(localValue(draft?.scheduledAt ?? null))
   const [secs, setSecs] = useState(draft?.pickSeconds ?? league?.league.draftPickSeconds ?? 60)
   useEffect(() => {
@@ -195,6 +201,13 @@ function DraftSetup({ halfNo, draft, call }: { halfNo: number; draft: DraftView 
           {draft?.scheduledAt ? '儲存' : '設定選秀'}
         </button>
       </div>
+      <div className="row" style={{ marginTop: 8 }}>
+        <span className="muted">快速選時間（伺服器時間起算）：</span>
+        {[3, 15, 60].map((m) => (
+          <button key={m} type="button" className="dl-quick" onClick={() => setWhen(afterMinutes(now, m))}>{m} 分鐘後</button>
+        ))}
+      </div>
+      {!when && <p className="muted" style={{ margin: '8px 0 0' }}>先選好日期時間（至少 2 分鐘後），「設定選秀」才能按。</p>}
     </div>
   )
 }
