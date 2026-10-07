@@ -7,6 +7,7 @@ import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -100,11 +101,28 @@ public class DraftController {
     }
 
     /** 整份取代候選清單（加入、移除、調整順序都用這個）。 */
-    @org.springframework.web.bind.annotation.PutMapping("/{draftId}/queue")
+    @PutMapping("/{draftId}/queue")
     public List<Long> setQueue(@PathVariable long leagueId, @PathVariable long draftId, @RequestBody Keepers req) {
         long team = leagues.requireTeam(leagueId, Auth.require());
         check(leagueId, draftId);
         return drafts.setQueue(draftId, team, req.playerIds());
+    }
+
+    public record Autopilot(long teamId, boolean on) {
+    }
+
+    /** 託管（E18）：自己的隊伍可以設定；聯盟管理員可以設定任何隊伍（例：電腦隊伍）。 */
+    @PutMapping("/{draftId}/autopilot")
+    public Map<String, Boolean> autopilot(@PathVariable long leagueId, @PathVariable long draftId, @RequestBody Autopilot req) {
+        CurrentUser u = Auth.require();
+        leagues.requireMember(leagueId, u);
+        check(leagueId, draftId);
+        Long mine = leagues.teamOf(leagueId, u.id()).orElse(null);
+        if (mine == null || mine != req.teamId()) {
+            leagues.requireCommissioner(leagueId, u);
+        }
+        drafts.setAutopilot(draftId, req.teamId(), req.on());
+        return Map.of("ok", true);
     }
 
     /** 自己的 keeper 候選：目前名單，附上半季排名與取得方式。 */

@@ -426,9 +426,29 @@ public class DraftService {
     }
 
     /** 已逾時、需自動選取的選秀。由排程每秒檢查，再透過 bean 呼叫 autoPick（確保交易邊界）。 */
+    /** 託管隊伍輪到後幾秒自動選（E18）。 */
+    static final int AUTOPILOT_SECONDS = 3;
+
+    /** 該自動選的選秀：時間到了，或輪到託管隊伍且這一手已開始 AUTOPILOT_SECONDS 秒。 */
     public List<Long> overdueDrafts() {
-        return jdbc.sql("select id from draft where status = 'IN_PROGRESS' and current_pick_deadline <= ?")
-                .param(Timestamp.from(clock.now())).query(Long.class).list();
+        return jdbc.sql("""
+                select d.id from draft d
+                left join draft_pick p on p.draft_id = d.id and p.pick_no = d.current_pick_no
+                left join fantasy_team t on t.id = p.team_id
+                where d.status = 'IN_PROGRESS'
+                  and (d.current_pick_deadline <= :now
+                       or (t.draft_autopilot
+                           and d.current_pick_deadline - make_interval(secs => d.pick_seconds - :auto) <= :now))
+                """).param("now", Timestamp.from(clock.now())).param("auto", AUTOPILOT_SECONDS).query(Long.class).list();
+    }
+
+    /** 設定一隊的託管（隊伍屬於這場選秀的聯盟）。 */
+    public void setAutopilot(long draftId, long teamId, boolean on) {
+        int n = jdbc.sql("update fantasy_team set draft_autopilot = ? where id = ? and league_id = (select league_id from draft where id = ?)")
+                .params(on, teamId, draftId).update();
+        if (n == 0) {
+            throw ApiException.notFound("隊伍不在這場選秀的聯盟");
+        }
     }
 
     public boolean inProgress(long draftId) {
@@ -612,11 +632,13 @@ public class DraftService {
      * @param snake          蛇形（上半季）；補強選秀每輪同一順序
      * @param myKeepers      自己的 keeper（任何時候都看得到）
      * @param keepers        各隊 keeper，揭曉後才公開
+     * @param autopilotTeams 開啟託管的隊伍（E18）
      */
     public record DraftView(long id, int halfNo, String status, int rounds, int pickSeconds, int currentPickNo,
                             Long currentTeamId, OffsetDateTime deadline, long secondsLeft, List<Long> order,
                             List<PickView> picks, List<KeeperView> myKeepers, OffsetDateTime scheduledAt,
-                            OffsetDateTime keeperDeadline, OffsetDateTime revealedAt, boolean snake, List<TeamKeepers> keepers) {
+                            OffsetDateTime keeperDeadline, OffsetDateTime revealedAt, boolean snake, List<TeamKeepers> keepers,
+                            List<Long> autopilotTeams) {
     }
 
     public List<DraftView> list(long leagueId, Long viewerTeamId) {
@@ -663,9 +685,11 @@ public class DraftService {
             });
             byTeam.forEach((t, ks) -> all.add(new TeamKeepers(t, ks)));
         }
+        List<Long> autopilot = jdbc.sql("select id from fantasy_team where league_id = ? and draft_autopilot order by id")
+                .param(d.leagueId()).query(Long.class).list();
         return new DraftView(d.id(), d.halfNo(), d.status(), d.rounds(), d.pickSeconds(), d.currentPickNo(), current,
                 odt(d.deadline()), secondsLeft, order, picks, mine, odt(d.scheduledAt()), odt(d.keeperDeadline()),
-                odt(d.revealedAt()), d.snake(), all);
+                odt(d.revealedAt()), d.snake(), all, autopilot);
     }
 
     private OffsetDateTime odt(Instant i) {
