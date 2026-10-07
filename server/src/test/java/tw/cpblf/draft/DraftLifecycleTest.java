@@ -15,8 +15,8 @@ import tw.cpblf.common.ApiException;
 import tw.cpblf.demo.DemoSeeder;
 
 /**
- * 選秀流程（Yahoo Live Standard Draft，時間驅動）：設定時間 → T−30 選秀室開放 → T−10 自動揭曉 → T 自動開始；
- * 選秀中可以暫停／繼續、調整每手秒數。
+ * 選秀流程（Yahoo Live Standard Draft）：選秀自動進入「準備中」→ 管理員按開始：keeper 鎖定、馬上揭曉 →
+ * 動畫播完自動開始；選秀中可以暫停／繼續、調整每手秒數。沒有預設選秀時間（玩家自己討論時間）。
  */
 class DraftLifecycleTest extends IntegrationTest {
 
@@ -36,66 +36,63 @@ class DraftLifecycleTest extends IntegrationTest {
     }
 
     @Test
-    void schedulingNeedsATimeAndKeepsWhatPlayersAlreadySet() {
+    void draftsAppearOnTheirOwnAndTheSecondHalfWaitsForTheFirst() {
         seed();
-        assertThat(phase()).isEqualTo("UNSCHEDULED");
-        assertThatThrownBy(() -> drafts.schedule(league, 1, null, null)).isInstanceOf(ApiException.class).hasMessageContaining("請設定");
-        assertThatThrownBy(() -> drafts.schedule(league, 1, clock.now().plusSeconds(60), null))
-                .isInstanceOf(ApiException.class).hasMessageContaining("2 分鐘");
-
+        assertThat(phase()).isEqualTo("PREPARING");
+        // 重複呼叫不會重建（候選清單還在）
         long team = jdbc.sql("select id from fantasy_team where league_id = ? order by id limit 1").param(league).query(Long.class).single();
         List<Long> some = jdbc.sql("select id from player order by id limit 2").query(Long.class).list();
         drafts.setQueue(draftId, team, some);
-
-        // 重新設定是修改同一場，不會刪掉重建：候選清單還在
-        assertThat(drafts.schedule(league, 1, clock.now().plus(Duration.ofMinutes(40)), 45)).isEqualTo(draftId);
-        assertThat(drafts.view(draftId, null).pickSeconds()).isEqualTo(45);
+        drafts.ensureDrafts(league);
+        drafts.ensureDrafts(league);
+        assertThat(count("select count(*) from draft where league_id = ?", league)).isEqualTo(1);
         assertThat(drafts.queue(draftId, team)).containsExactlyElementsOf(some);
-        assertThat(phase()).isEqualTo("SCHEDULED");
+
+        // 下半季要等上半季選完
+        drafts.begin(draftId, null);
+        clock.setNow(clock.now().plusSeconds(DraftService.REVEAL_SECONDS));
+        drafts.start(draftId);
+        drafts.ensureDrafts(league);
+        assertThat(count("select count(*) from draft where league_id = ?", league)).isEqualTo(1);
+        while (drafts.inProgress(draftId)) {
+            drafts.autoPick(draftId);
+        }
+        drafts.ensureDrafts(league);
+        assertThat(count("select count(*) from draft where league_id = ?", league)).isEqualTo(2);
     }
 
     @Test
-    void lobbyAtTMinus30RevealAtTMinus10StartAtT() {
+    void beginRevealsAtOnceAndTheDraftStartsOnceTheAnimationIsOver() {
         seed();
-        Instant t0 = clock.now();
-        drafts.schedule(league, 1, t0.plus(Duration.ofMinutes(40)), null);
-        assertThat(phase()).isEqualTo("SCHEDULED");
-
-        clock.setNow(t0.plus(Duration.ofMinutes(11)));
-        assertThat(phase()).isEqualTo("LOBBY");
-        assertThat(drafts.dueReveals()).doesNotContain(draftId);
-
-        clock.setNow(t0.plus(Duration.ofMinutes(30))); // T−10
-        assertThat(drafts.dueReveals()).contains(draftId);
-        drafts.reveal(draftId);
-        assertThat(phase()).isEqualTo("REVEALED");
-        assertThat(drafts.view(draftId, null).order()).isNotEmpty();
+        // 還沒按開始：順位保密，不會自動開始
+        assertThat(drafts.view(draftId, null).order()).isEmpty();
         assertThat(drafts.dueStarts()).doesNotContain(draftId);
-        // 揭曉後不能改時間
-        assertThatThrownBy(() -> drafts.schedule(league, 1, t0.plus(Duration.ofMinutes(60)), null))
-                .isInstanceOf(ApiException.class).hasMessageContaining("揭曉");
 
-        clock.setNow(t0.plus(Duration.ofMinutes(40))); // T
+        drafts.begin(draftId, 45);
+        var v = drafts.view(draftId, null);
+        assertThat(v.phase()).isEqualTo("REVEALED");
+        assertThat(v.order()).isNotEmpty();
+        assertThat(v.pickSeconds()).isEqualTo(45);
+        assertThatThrownBy(() -> drafts.begin(draftId, null)).isInstanceOf(ApiException.class).hasMessageContaining("按過");
+
+        // 動畫還在播：不開始
+        clock.setNow(clock.now().plusSeconds(DraftService.REVEAL_SECONDS - 3));
+        assertThat(drafts.dueStarts()).doesNotContain(draftId);
+        assertThatThrownBy(() -> drafts.requireRevealShown(draftId)).isInstanceOf(ApiException.class);
+        // 播完：排程接手自動開始
+        clock.setNow(clock.now().plusSeconds(5));
         assertThat(drafts.dueStarts()).contains(draftId);
         drafts.start(draftId);
         assertThat(phase()).isEqualTo("IN_PROGRESS");
         assertThat(drafts.view(draftId, null).currentTeamId()).isNotNull();
+        assertThatThrownBy(() -> drafts.begin(draftId, null)).isInstanceOf(ApiException.class);
     }
 
     @Test
-    void startWaitsForTheRevealAnimationEvenAtT() {
+    void beginRejectsTooShortAPick() {
         seed();
-        Instant t = clock.now().plus(Duration.ofMinutes(3));
-        drafts.schedule(league, 1, t, null);
-        // 離 T 不到 10 分鐘：馬上就該揭曉
-        assertThat(drafts.dueReveals()).contains(draftId);
-        // 假設排程晚了，T 前 5 秒才揭曉：到 T 時動畫還沒播完，不開始
-        clock.setNow(t.minusSeconds(5));
-        drafts.reveal(draftId);
-        clock.setNow(t);
-        assertThat(drafts.dueStarts()).doesNotContain(draftId);
-        clock.setNow(t.plusSeconds(DraftService.REVEAL_SECONDS));
-        assertThat(drafts.dueStarts()).contains(draftId);
+        assertThatThrownBy(() -> drafts.begin(draftId, 10)).isInstanceOf(ApiException.class).hasMessageContaining("15");
+        assertThat(phase()).isEqualTo("PREPARING");
     }
 
     @Test

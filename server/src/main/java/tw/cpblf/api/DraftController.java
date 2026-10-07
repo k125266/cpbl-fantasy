@@ -1,6 +1,5 @@
 package tw.cpblf.api;
 
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -37,6 +36,7 @@ public class DraftController {
     public List<DraftService.DraftView> list(@PathVariable long leagueId) {
         CurrentUser u = Auth.require();
         leagues.requireMember(leagueId, u);
+        drafts.ensureDrafts(leagueId); // 選秀自動進入「準備中」，不需要管理員建立
         return drafts.list(leagueId, leagues.teamOf(leagueId, u.id()).orElse(null));
     }
 
@@ -48,20 +48,20 @@ public class DraftController {
         return drafts.view(draftId, leagues.teamOf(leagueId, u.id()).orElse(null));
     }
 
-    /** @param scheduledAt 選秀時間（keeper 在前 10 分鐘截止）；可不填 */
-    /**
-     * @param scheduledAt 選秀時間 T（必填）：T−30 開放選秀室、T−10 自動揭曉、T 自動開始
-     * @param pickSeconds 每手秒數；不填用聯盟設定
-     */
-    public record Schedule(OffsetDateTime scheduledAt, Integer pickSeconds) {
+    /** @param pickSeconds 每手秒數；不填維持目前設定 */
+    public record Begin(Integer pickSeconds) {
     }
 
-    /** 設定某個半季的選秀（聯盟管理員）：第一次建立，之後修改；揭曉後不能改。 */
-    @PutMapping("/half/{halfNo}")
-    public Map<String, Object> schedule(@PathVariable long leagueId, @PathVariable int halfNo, @RequestBody Schedule req) {
+    /**
+     * 聯盟管理員按「開始選秀」：keeper 鎖定、馬上揭曉順位，動畫播完後自動開始第一手。
+     * 沒有預設選秀時間——玩家自己討論好時間，管理員到時候按開始。
+     */
+    @PostMapping("/{draftId}/begin")
+    public Map<String, Boolean> begin(@PathVariable long leagueId, @PathVariable long draftId, @RequestBody Begin req) {
         leagues.requireCommissioner(leagueId, Auth.require());
-        return Map.of("id", drafts.schedule(leagueId, halfNo,
-                req.scheduledAt() == null ? null : req.scheduledAt().toInstant(), req.pickSeconds()));
+        check(leagueId, draftId);
+        drafts.begin(draftId, req.pickSeconds());
+        return Map.of("ok", true);
     }
 
     /** 揭曉順位並公開各隊 keeper（聯盟管理員）。 */

@@ -99,49 +99,55 @@ public class DraftService {
         return create(leagueId, halfNo, order, null);
     }
 
-    /** 選秀時間至少在現在之後這麼久（方便測試，又不會設在過去）。 */
-    static final Duration MIN_LEAD = Duration.ofMinutes(2);
-
     /**
-     * 設定一個半季的選秀（聯盟管理員）：第一次設定時建立，之後只修改時間與每手秒數，keeper 與候選清單都保留。
-     * 揭曉後（T−10 起）不能再改。時間到了由 {@link #advanceSchedules} 自動揭曉、開始。
+     * 選秀自動進入「準備中」（使用者決定：不預設選秀時間，管理員要開始就按開始，玩家自己討論時間）：
+     * 上半季在賽程產生後（至少 2 隊）、下半季在上半季選秀完成後，沒有選秀就建立一場。已有的不動，所以可以重複呼叫。
      */
     @Transactional
-    public long schedule(long leagueId, int halfNo, Instant scheduledAt, Integer pickSeconds) {
-        if (scheduledAt == null) {
-            throw ApiException.badRequest("請設定選秀時間");
-        }
-        if (scheduledAt.isBefore(clock.now().plus(MIN_LEAD))) {
-            throw ApiException.badRequest("選秀時間至少要在 " + MIN_LEAD.toMinutes() + " 分鐘後");
-        }
-        if (pickSeconds != null && pickSeconds < 15) {
-            throw ApiException.badRequest("每手至少 15 秒");
+    public void ensureDrafts(long leagueId) {
+        List<SeasonService.Half> halves = season.halves(leagueId);
+        if (halves.isEmpty()) {
+            return;
         }
         lock.lock(leagueId);
-        SeasonService.Half half = season.halves(leagueId).stream().filter(h -> h.halfNo() == halfNo).findFirst()
-                .orElseThrow(() -> ApiException.badRequest("請先產生賽程"));
-        Long existing = jdbc.sql("select id from draft where season_half_id = ?").param(half.id()).query(Long.class)
-                .optional().orElse(null);
-        long id;
-        if (existing == null) {
-            id = create(leagueId, halfNo, null, scheduledAt);
-        } else {
-            DraftRow d = draft(existing);
-            if (!"SETUP".equals(d.status()) && !"KEEPERS".equals(d.status())) {
-                throw ApiException.conflict("此半季選秀已開始或已完成");
+        for (SeasonService.Half h : halves.stream().sorted(Comparator.comparingInt(SeasonService.Half::halfNo)).toList()) {
+            Long existing = jdbc.sql("select id from draft where season_half_id = ?").param(h.id()).query(Long.class)
+                    .optional().orElse(null);
+            if (existing == null) {
+                int teams = jdbc.sql("select count(*) from fantasy_team where league_id = ?").param(leagueId)
+                        .query(Integer.class).single();
+                if (teams >= 2) {
+                    create(leagueId, h.halfNo(), null, null);
+                }
+                return;
             }
-            if (d.revealedAt() != null) {
-                throw ApiException.conflict("順位已揭曉，不能再改選秀時間");
+            if (!"COMPLETED".equals(draft(existing).status())) {
+                return; // 這半季還沒選完，下半季先不出現
             }
-            id = existing;
-            jdbc.sql("update draft set scheduled_at = ? where id = ?").params(Timestamp.from(scheduledAt), id).update();
-            notifications.notifyLeague(leagueId, (halfNo == 2 ? "下半季補強選秀" : "上半季選秀") + "時間改為"
-                    + scheduledAt.atZone(clock.zone()).toLocalDateTime().toString().replace('T', ' '));
+        }
+    }
+
+    /**
+     * 聯盟管理員按「開始選秀」：keeper 鎖定、馬上揭曉順位，動畫播完（{@link #REVEAL_SECONDS} 秒）後由排程自動開始第一手。
+     * 每手秒數可以順便設定。
+     */
+    @Transactional
+    public void begin(long draftId, Integer pickSeconds) {
+        DraftRow d = draft(draftId);
+        lock.lock(d.leagueId());
+        if (!"SETUP".equals(d.status()) && !"KEEPERS".equals(d.status())) {
+            throw ApiException.conflict("選秀已開始");
+        }
+        if (d.revealedAt() != null) {
+            throw ApiException.conflict("已經按過開始選秀");
         }
         if (pickSeconds != null) {
-            jdbc.sql("update draft set pick_seconds = ? where id = ?").params(pickSeconds, id).update();
+            if (pickSeconds < 15) {
+                throw ApiException.badRequest("每手至少 15 秒");
+            }
+            jdbc.sql("update draft set pick_seconds = ? where id = ?").params(pickSeconds, draftId).update();
         }
-        return id;
+        revealInternal(draft(draftId));
     }
 
     /**
@@ -333,25 +339,12 @@ public class DraftService {
     /** 揭曉動畫的長度（前端每 1.7 秒翻一張，5 隊約 9 秒），播完才能開始選秀。 */
     static final int REVEAL_SECONDS = 10;
 
-    /** 選秀室在選秀時間前這麼久開放（只影響畫面；候選清單任何時候都能排）。 */
-    public static final Duration LOBBY_BEFORE = Duration.ofMinutes(30);
-
-    /** 時間驅動（排程每秒問一次）：到了 T−10、還沒揭曉的選秀。 */
-    public List<Long> dueReveals() {
-        return jdbc.sql("""
-                select id from draft
-                where status in ('SETUP', 'KEEPERS') and revealed_at is null and scheduled_at is not null
-                  and scheduled_at - make_interval(secs => :lock) <= :now
-                """).param("lock", KEEPER_LOCK_BEFORE.toSeconds()).param("now", Timestamp.from(clock.now()))
-                .query(Long.class).list();
-    }
-
-    /** 時間驅動：已揭曉、到了 T、而且揭曉動畫已播完的選秀。 */
+    /** 排程每秒問一次：管理員已按開始（已揭曉）、而且揭曉動畫已播完的選秀，該自動開始第一手了。 */
     public List<Long> dueStarts() {
         return jdbc.sql("""
                 select id from draft
-                where status in ('SETUP', 'KEEPERS') and revealed_at is not null and scheduled_at is not null
-                  and scheduled_at <= :now and revealed_at + make_interval(secs => :anim) <= :now
+                where status in ('SETUP', 'KEEPERS') and revealed_at is not null
+                  and revealed_at + make_interval(secs => :anim) <= :now
                 """).param("anim", REVEAL_SECONDS).param("now", Timestamp.from(clock.now())).query(Long.class).list();
     }
 
@@ -766,15 +759,14 @@ public class DraftService {
      * @param myKeepers      自己的 keeper（任何時候都看得到）
      * @param keepers        各隊 keeper，揭曉後才公開
      * @param autopilotTeams 開啟託管的隊伍（E18）
-     * @param phase          流程階段：UNSCHEDULED 尚未設定時間、SCHEDULED 已排定、LOBBY 選秀室開放（T−30）、
-     *                       REVEALED 順位已揭曉（T−10 起）、IN_PROGRESS、PAUSED、COMPLETED
-     * @param lobbyAt        選秀室開放時間（T−30）；揭曉時間為 keeperDeadline（T−10），開始為 scheduledAt（T）
+     * @param phase          流程階段：PREPARING 準備中（排候選、選 keeper，等管理員按開始）、REVEALED 已揭曉（動畫播完
+     *                       自動開始）、IN_PROGRESS、PAUSED、COMPLETED。選秀時間（scheduledAt）已不使用，永遠是 null
      */
     public record DraftView(long id, int halfNo, String status, int rounds, int pickSeconds, int currentPickNo,
                             Long currentTeamId, OffsetDateTime deadline, long secondsLeft, List<Long> order,
                             List<PickView> picks, List<KeeperView> myKeepers, OffsetDateTime scheduledAt,
                             OffsetDateTime keeperDeadline, OffsetDateTime revealedAt, boolean snake, List<TeamKeepers> keepers,
-                            List<Long> autopilotTeams, String phase, OffsetDateTime lobbyAt) {
+                            List<Long> autopilotTeams, String phase) {
     }
 
     public List<DraftView> list(long leagueId, Long viewerTeamId) {
@@ -828,19 +820,16 @@ public class DraftService {
         }
         List<Long> autopilot = jdbc.sql("select id from fantasy_team where league_id = ? and draft_autopilot order by id")
                 .param(d.leagueId()).query(Long.class).list();
-        Instant lobbyAt = d.scheduledAt() == null ? null : d.scheduledAt().minus(LOBBY_BEFORE);
         return new DraftView(d.id(), d.halfNo(), d.status(), d.rounds(), d.pickSeconds(), d.currentPickNo(), current,
                 paused ? null : odt(d.deadline()), secondsLeft, order, picks, mine, odt(d.scheduledAt()), odt(d.keeperDeadline()),
-                odt(d.revealedAt()), d.snake(), all, autopilot, phase(d, lobbyAt), odt(lobbyAt));
+                odt(d.revealedAt()), d.snake(), all, autopilot, phase(d));
     }
 
-    /** 流程階段（見 DraftView）：已開始後看狀態，開始前看時間與是否已揭曉。 */
-    private String phase(DraftRow d, Instant lobbyAt) {
+    /** 流程階段（見 DraftView）：已開始後看狀態，開始前看管理員是否已按開始（已揭曉）。 */
+    private String phase(DraftRow d) {
         return switch (d.status()) {
             case "IN_PROGRESS", "PAUSED", "COMPLETED" -> d.status();
-            default -> d.revealedAt() != null ? "REVEALED"
-                    : d.scheduledAt() == null ? "UNSCHEDULED"
-                    : !clock.now().isBefore(lobbyAt) ? "LOBBY" : "SCHEDULED";
+            default -> d.revealedAt() != null ? "REVEALED" : "PREPARING";
         };
     }
 
