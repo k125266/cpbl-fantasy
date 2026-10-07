@@ -86,6 +86,22 @@ export default function DraftPage() {
               <button type="button" onClick={() => call(() => api.post(`/api/leagues/${leagueId}/drafts/${active.id}/auto-complete`))}>剩餘全部自動選取</button>
             )}
           </div>
+          {active && active.status !== 'COMPLETED' && (
+            <>
+              <p className="muted" style={{ margin: '12px 0 6px' }}>託管：輪到就在 3 秒內自動選（候選清單 → 補缺位 → 排名）。電腦隊伍或缺席的人可以替他開。</p>
+              <div className="row">
+                {(league.teams ?? []).map((t) => {
+                  const on = active.autopilotTeams.includes(t.id)
+                  return (
+                    <button key={t.id} type="button" aria-pressed={on} className={on ? 'primary' : ''}
+                      onClick={() => call(() => api.put(`/api/leagues/${leagueId}/drafts/${active.id}/autopilot`, { teamId: t.id, on: !on }))}>
+                      {t.name}・託管{on ? '開' : '關'}
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

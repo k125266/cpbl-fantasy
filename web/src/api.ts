@@ -404,6 +404,8 @@ export interface DraftView {
   snake: boolean
   /** 各隊 keeper，揭曉後才公開 */
   keepers: { teamId: number; players: { playerId: number; name: string }[] }[]
+  /** 開啟託管的隊伍：輪到就在 3 秒內自動選（E18） */
+  autopilotTeams: number[]
 }
 
 export interface Trade {
