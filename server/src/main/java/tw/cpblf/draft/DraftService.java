@@ -164,14 +164,16 @@ public class DraftService {
      * @param rank     本季排名（下半季選 keeper 時即上半季排名）；沒有數據為 null
      * @param via      取得方式，例：選秀第 3 輪、Keeper、交易、Waiver、自由球員
      * @param delisted 已註銷，不能保留
+     * @param stats    本季數據（下半季選 keeper 時即上半季），與排名同一個來源
      */
     public record KeeperCandidate(long playerId, String name, String jerseyNumber, String cpblTeam, String position,
-                                  boolean pitcher, Integer rank, String via, boolean delisted) {
+                                  boolean pitcher, Integer rank, String via, boolean delisted, DraftBoardService.Stats stats) {
     }
 
     public List<KeeperCandidate> keeperCandidates(long draftId, long teamId) {
         DraftRow d = draft(draftId);
         Map<Long, PlayerRankingService.Ranked> ranks = ranking.rankings();
+        Map<Long, PlayerRankingService.Line> lines = ranking.lines(PlayerRankingService.Period.SEASON);
         LocalDate today = clock.today();
         List<KeeperCandidate> out = new ArrayList<>();
         for (RosterService.Entry e : roster.openEntries(teamId, today)) {
@@ -198,7 +200,7 @@ public class DraftService {
                 String pos = rs.getString("listed_position");
                 return new KeeperCandidate(e.playerId(), rs.getString("name"), rs.getString("jersey_number"),
                         rs.getString("cpbl_team_code"), pos, "P".equals(pos), r == null ? null : r.rank(), text,
-                        "DELISTED".equals(rs.getString("registration_status")));
+                        "DELISTED".equals(rs.getString("registration_status")), DraftBoardService.Stats.of(lines.get(e.playerId())));
             }).single());
         }
         out.sort(Comparator.comparing((KeeperCandidate c) -> c.rank() == null ? Integer.MAX_VALUE : c.rank()));

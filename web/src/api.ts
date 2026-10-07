@@ -329,10 +329,18 @@ export interface DraftPick {
 }
 
 /** 選秀室一位球員的數據；打者看 r～avg、投手看 qs～whip。ab、outs 為 0 時比率為 null */
+/**
+ * 一位球員一段期間的數據。打者 g、pa、ab、h、r、hr、bb、avg；投手 pg（出賽）、gs（先發）、outs（IP 以出局數表示）、
+ * w、sv、wsv、qs、k、ph（被安打）、pbb（四壞）、era、whip。ab、outs 為 0 時比率為 null。官網沒有打點、盜壘、中繼
+ */
 export interface DraftStats {
-  r: number; hr: number; h: number; bb: number; avg: number | null; ab: number
-  qs: number; k: number; wsv: number; era: number | null; whip: number | null; outs: number
+  g: number; pa: number; ab: number; h: number; r: number; hr: number; bb: number; avg: number | null
+  pg: number; gs: number; outs: number; w: number; sv: number; wsv: number; qs: number; k: number; ph: number; pbb: number
+  era: number | null; whip: number | null
 }
+
+/** 數據期間：REF 上一季全季、SEASON 本季、LAST14 近 14 天 */
+export type DraftPeriod = 'REF' | 'SEASON' | 'LAST14'
 
 /** 選秀室的可選球員（GET …/drafts/{id}/board） */
 export interface BoardPlayer {
@@ -350,15 +358,22 @@ export interface BoardPlayer {
   fillsNeed: boolean
   /** 推薦：補缺位的前 3 名 */
   recommended: boolean
-  stats: DraftStats
+  /** 各期間的數據（只含可選的期間） */
+  stats: Partial<Record<DraftPeriod, DraftStats>>
+  /** 已被選走（pickNo）或保留（keeper）；可選的球員為 null */
+  taken: { teamId: number; pickNo: number | null; keeper: boolean } | null
 }
 
 export interface DraftBoard {
-  /** 數據來源：「2025」（參考季）或「本季」 */
+  /** 排名來源：「2025」（參考季）或「本季」 */
   basis: string
+  /** 可選與已選（taken）的球員，依選秀排名 */
   players: BoardPlayer[]
   /** 先發缺位：IF／OF／UTIL／SP／RP 已排進幾人／名額 */
   needs: { slot: string; filled: number; max: number }[]
+  /** 數據期間的選項；上半季開季前只有參考季 */
+  periods: { key: DraftPeriod; label: string; available: boolean }[]
+  defaultPeriod: DraftPeriod
 }
 
 /** 選秀成績單（GET …/drafts/{id}/report，選秀完成後） */
