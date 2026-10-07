@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import confetti from 'canvas-confetti'
 import { useApp } from '../App'
-import { api, type BoardPlayer, type DraftBoard, type DraftPick, type DraftReport, type DraftStats, type DraftView } from '../api'
+import { api, type BoardPlayer as ApiBoardPlayer, type DraftBoard as ApiDraftBoard, type DraftPick, type DraftReport,
+  type DraftStats, type DraftView } from '../api'
 import { BottomSheet, ErrorBox, TIER_LABEL, tierOf, useLoad } from '../components'
 import { useServerNow, useWide } from '../hooks'
 import { cpblTeam, fantasyTeamColor } from '../teams'
@@ -484,7 +485,19 @@ export function DraftGrid({ draft }: { draft: DraftView }) {
 /** 選秀室資料（可選球員、缺位）：每個順位結束後重新讀取 */
 export function useDraftBoard(draft: DraftView) {
   const { leagueId } = useApp()
-  return useLoad(() => api.get<DraftBoard>(`/api/leagues/${leagueId}/drafts/${draft.id}/board`), [leagueId, draft.id, draft.currentPickNo, draft.status])
+  return useLoad(() => api.get<ApiDraftBoard>(`/api/leagues/${leagueId}/drafts/${draft.id}/board`).then(toRoomBoard),
+    [leagueId, draft.id, draft.currentPickNo, draft.status])
+}
+
+// 過渡：API 已改成各期間數據並含已選球員；畫面跟上新設計稿（期間下拉、顯示已選）前，先用預設期間、只列可選
+type BoardPlayer = Omit<ApiBoardPlayer, 'stats'> & { stats: DraftStats }
+type DraftBoard = Omit<ApiDraftBoard, 'players'> & { players: BoardPlayer[] }
+const NO_STATS: DraftStats = {
+  g: 0, pa: 0, ab: 0, h: 0, r: 0, hr: 0, bb: 0, avg: null,
+  pg: 0, gs: 0, outs: 0, w: 0, sv: 0, wsv: 0, qs: 0, k: 0, ph: 0, pbb: 0, era: null, whip: null,
+}
+function toRoomBoard(b: ApiDraftBoard): DraftBoard {
+  return { ...b, players: b.players.filter((p) => !p.taken).map((p) => ({ ...p, stats: p.stats[b.defaultPeriod] ?? NO_STATS })) }
 }
 
 // ------------------------------------------------------------------

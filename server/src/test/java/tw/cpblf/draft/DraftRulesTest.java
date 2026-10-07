@@ -25,6 +25,7 @@ class DraftRulesTest extends IntegrationTest {
 
     @Autowired DemoSeeder seeder;
     @Autowired DraftService drafts;
+    @Autowired DraftBoardService board;
     @Autowired SeasonService season;
 
     long leagueId;
@@ -101,10 +102,17 @@ class DraftRulesTest extends IntegrationTest {
         // 揭曉前：自己看得到，別隊看不到
         assertThat(drafts.view(d2, me).myKeepers()).hasSize(15);
         assertThat(drafts.view(d2, other).keepers()).isEmpty();
+        // 選秀室清單也不能洩漏：別隊看我的 keeper 仍是可選（沒有 taken）；我自己看得到標為 keeper
+        assertThat(board.board(d2, other).players()).filteredOn(p -> keep.contains(p.playerId()))
+                .hasSize(15).allMatch(p -> p.taken() == null);
+        assertThat(board.board(d2, me).players()).filteredOn(p -> keep.contains(p.playerId()))
+                .hasSize(15).allMatch(p -> p.taken() != null && p.taken().keeper() && p.taken().teamId() == me);
 
         drafts.reveal(d2);
         assertThat(drafts.view(d2, other).keepers()).filteredOn(k -> k.teamId() == me)
                 .singleElement().satisfies(k -> assertThat(k.players()).hasSize(15));
+        assertThat(board.board(d2, other).players()).filteredOn(p -> keep.contains(p.playerId()))
+                .hasSize(15).allMatch(p -> p.taken() != null && p.taken().keeper());
         // 揭曉後鎖定
         assertThatThrownBy(() -> drafts.setKeepers(d2, me, keep.subList(0, 10))).isInstanceOf(ApiException.class);
 
@@ -135,6 +143,8 @@ class DraftRulesTest extends IntegrationTest {
         assertThat(cands).hasSize(rosterOf(me).size());
         assertThat(cands).allSatisfy(c -> assertThat(c.via()).startsWith("選秀第 ").endsWith(" 輪"));
         assertThat(cands).extracting(DraftService.KeeperCandidate::rank).doesNotContainNull().isSorted();
+        // 每位候選附本季（上半季）數據，給 Keeper 頁的數據欄
+        assertThat(cands).allSatisfy(c -> assertThat(c.stats()).isNotNull());
     }
 
     @Test
