@@ -12,7 +12,14 @@ import KeeperPage from './KeeperPage'
  * /draft 依狀態自動決定：keeper 期 → Keeper；揭曉前後到開始前 → 順位；進行中、完成 → 選秀室。
  */
 export default function DraftPage() {
-  const { leagueId, league, reloadLeague } = useApp()
+  const { leagueId, league, reloadLeague, reloadSystem } = useApp()
+  // 選秀的倒數、揭曉動畫都以伺服器時間計算（useServerNow）。App 只在開啟時對時一次，伺服器重啟、
+  // demo 快轉後會不準，所以進入選秀頁時重新對時，之後每 60 秒再對一次
+  useEffect(() => {
+    reloadSystem()
+    const t = setInterval(reloadSystem, 60_000)
+    return () => clearInterval(t)
+  }, [reloadSystem])
   const { pathname } = useLocation()
   const drafts = useLoad(() => api.get<DraftView[]>(`/api/leagues/${leagueId}/drafts`), [leagueId])
   const [err, setErr] = useState<unknown>(null)

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type DraftView, type StandingRow, type TeamView } from '../api'
@@ -37,7 +37,10 @@ export default function DraftOrderPage({ draft, onChange }: { draft: DraftView; 
   const teams: TeamView[] = league?.teams ?? []
   const n = draft.order.length || teams.length
   const revealed = !!draft.revealedAt
-  const start = replayAt ?? (draft.revealedAt ? new Date(draft.revealedAt).getTime() : null)
+  // 本機時間落後時，揭曉時間看起來還在未來，會一直等；這時改從看到揭曉的那一刻開始播
+  const seenAt = useRef<number | null>(null)
+  if (draft.revealedAt && seenAt.current == null) seenAt.current = now
+  const start = replayAt ?? (draft.revealedAt ? Math.min(new Date(draft.revealedAt).getTime(), seenAt.current ?? now) : null)
   const k = !revealed || start == null ? 0
     : reduced() && replayAt == null ? n
       : Math.min(n, Math.max(0, Math.floor((now - start - FIRST_DELAY) / STEP) + 1))
@@ -63,6 +66,8 @@ export default function DraftOrderPage({ draft, onChange }: { draft: DraftView; 
     setErr(null)
     try {
       await api.post(`/api/leagues/${leagueId}/drafts/${draft.id}/reveal`)
+      // 按下的人從現在開始播，不受對時誤差影響
+      setReplayAt(now)
       onChange()
     } catch (e) {
       setErr(e)
