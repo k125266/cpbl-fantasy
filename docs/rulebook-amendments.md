@@ -127,7 +127,7 @@
 |---|---|
 | 設定 | `league.keeper_limit`（15）、`league.second_half_rounds`（5）、`league.draft_rounds`（20） |
 | 選秀 | `draft.snake`、`draft.scheduled_at`（keeper 截止 = 前 10 分鐘）、`draft.revealed_at` |
-| 揭曉 | `POST /api/leagues/{id}/drafts/{draftId}/reveal`（聯盟管理員）；開始選秀前一定要先揭曉，且揭曉後 10 秒（動畫播完）才能開始（2026-10-07 修訂，原本會自動揭曉） |
+| 時程 | 管理員設定選秀時間 T（`PUT /api/leagues/{id}/drafts/half/{halfNo}`）；T−30 開放選秀室、T−10 keeper 截止並自動揭曉順位（公開 keeper）、T 自動開始（至少在揭曉 10 秒後）。選秀中管理員可暫停／繼續、調整每手秒數（2026-10-07 修訂：照 Yahoo Live Standard Draft 改為時間驅動，原本揭曉與開始靠管理員按鈕） |
 | 測試 | `DraftRulesTest` |
 | 待辦 | 託管（我不在時系統代選，E18）；預排清單在選秀室 v3 一起做 |
 
