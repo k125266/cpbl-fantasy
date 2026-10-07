@@ -283,6 +283,23 @@ public class DraftService {
         notifications.notifyLeague(d.leagueId(), (d.halfNo() == 2 ? "補強選秀順位揭曉，各隊 keeper 已公開" : "選秀順位抽籤揭曉"));
     }
 
+    /** 揭曉動畫的長度（前端每 1.7 秒翻一張，5 隊約 9 秒），播完才能開始選秀。 */
+    static final int REVEAL_SECONDS = 10;
+
+    /**
+     * 從 API 開始選秀前的檢查：一定要先揭曉順位，而且揭曉動畫播完（使用者決定：不能跳過揭曉）。
+     * {@link #start} 本身沒揭曉時仍會自動揭曉，只供測試與 demo 種子使用。
+     */
+    public void requireRevealShown(long draftId) {
+        DraftRow d = draft(draftId);
+        if (d.revealedAt() == null) {
+            throw ApiException.conflict("請先揭曉順位，再開始選秀");
+        }
+        if (clock.now().isBefore(d.revealedAt().plusSeconds(REVEAL_SECONDS))) {
+            throw ApiException.conflict("順位揭曉中，動畫播完再開始選秀");
+        }
+    }
+
     @Transactional
     public void start(long draftId) {
         DraftRow d = draft(draftId);

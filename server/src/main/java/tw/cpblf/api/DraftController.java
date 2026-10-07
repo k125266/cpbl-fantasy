@@ -144,6 +144,7 @@ public class DraftController {
     public Map<String, Boolean> start(@PathVariable long leagueId, @PathVariable long draftId) {
         leagues.requireCommissioner(leagueId, Auth.require());
         check(leagueId, draftId);
+        drafts.requireRevealShown(draftId);
         drafts.start(draftId);
         return Map.of("ok", true);
     }

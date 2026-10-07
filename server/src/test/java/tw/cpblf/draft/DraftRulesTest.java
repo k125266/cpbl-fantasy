@@ -52,6 +52,23 @@ class DraftRulesTest extends IntegrationTest {
     }
 
     @Test
+    void draftCannotStartBeforeTheRevealHasBeenShown() {
+        leagueId = seeder.seed();
+        long d1 = jdbc.sql("select id from draft where league_id = ?").param(leagueId).query(Long.class).single();
+        // 不能跳過揭曉
+        assertThatThrownBy(() -> drafts.requireRevealShown(d1)).isInstanceOf(ApiException.class).hasMessageContaining("請先揭曉");
+        drafts.reveal(d1);
+        // 揭曉動畫還在播
+        clock.setNow(clock.now().plusSeconds(DraftService.REVEAL_SECONDS - 3));
+        assertThatThrownBy(() -> drafts.requireRevealShown(d1)).isInstanceOf(ApiException.class).hasMessageContaining("揭曉中");
+        // 播完之後可以開始
+        clock.setNow(clock.now().plusSeconds(5));
+        drafts.requireRevealShown(d1);
+        drafts.start(d1);
+        assertThat(drafts.inProgress(d1)).isTrue();
+    }
+
+    @Test
     void firstHalfIsASnakeOfTwentyRoundsRevealedAtStart() {
         leagueId = seeder.seed();
         long d1 = jdbc.sql("select id from draft where league_id = ?").param(leagueId).query(Long.class).single();
