@@ -422,12 +422,10 @@ export interface DraftView {
   /** 開啟託管的隊伍：輪到就在 3 秒內自動選（E18） */
   autopilotTeams: number[]
   /**
-   * 流程階段（時間驅動）：UNSCHEDULED 尚未設定時間、SCHEDULED 已排定、LOBBY 選秀室開放（T−30）、
-   * REVEALED 順位已揭曉（T−10 起）、IN_PROGRESS、PAUSED、COMPLETED
+   * 流程階段：PREPARING 準備中（排候選、選 keeper，等管理員按開始）、REVEALED 已揭曉（動畫播完自動開始）、
+   * IN_PROGRESS、PAUSED、COMPLETED。沒有預設選秀時間：玩家自己討論時間，管理員到時候按開始
    */
-  phase: 'UNSCHEDULED' | 'SCHEDULED' | 'LOBBY' | 'REVEALED' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED'
-  /** 選秀室開放時間（T−30）；揭曉 = keeperDeadline（T−10）、開始 = scheduledAt（T） */
-  lobbyAt: string | null
+  phase: 'PREPARING' | 'REVEALED' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED'
 }
 
 export interface Trade {

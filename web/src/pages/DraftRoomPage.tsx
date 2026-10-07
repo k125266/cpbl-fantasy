@@ -86,9 +86,13 @@ export function RoomHeader({ draft, queueLen = 0, onReport, onChange }: { draft:
   const slots = draftSlots(draft)
   const done = draft.status === 'COMPLETED'
   const live = draft.status === 'IN_PROGRESS'
+  const paused = draft.status === 'PAUSED'
+  // 還沒開始（準備中、揭曉後）：等管理員按開始；揭曉後動畫播完自動開始
+  const pre = !live && !paused && !done
   const team = teams.find((t) => t.id === draft.currentTeamId)
   const mine = live && draft.currentTeamId === league?.myTeamId
-  const rem = draft.deadline ? Math.max(0, Math.ceil((Date.parse(draft.deadline) - now) / 1000)) : draft.secondsLeft
+  // 暫停時倒數停住（後端給暫停當下剩下的秒數）
+  const rem = draft.deadline && !paused ? Math.max(0, Math.ceil((Date.parse(draft.deadline) - now) / 1000)) : draft.secondsLeft
   const urgent = mine && rem <= 10
   const cur = slots.find((p) => p.pickNo === draft.currentPickNo)
   const nextMe = slots.find((p) => p.teamId === league?.myTeamId && p.pickNo >= draft.currentPickNo && !p.playerId)
@@ -99,7 +103,8 @@ export function RoomHeader({ draft, queueLen = 0, onReport, onChange }: { draft:
   const state = done ? 'done' : urgent ? 'urgent' : mine ? 'mine' : 'idle'
   const label = cur ? pickLabel(cur.pickNo, n) : '—'
   const note = done ? '看成績單 ›'
-    : !live ? '尚未開始'
+    : paused ? '暫停中，等管理員繼續'
+      : pre ? (draft.revealedAt ? '順位已揭曉・馬上自動開始' : '等管理員按下開始選秀')
       : mine ? (myAuto ? '託管中・3 秒內自動選' : queueLen > 0 ? '時間到選候選第 1 位' : '時間到自動補缺位')
         : nextMe ? `再 ${nextMe.pickNo - draft.currentPickNo} 順位輪到你（${pickLabel(nextMe.pickNo, n)}）` : '你已選完'
 
@@ -148,18 +153,24 @@ export function RoomHeader({ draft, queueLen = 0, onReport, onChange }: { draft:
       <div className={`dr-ticket ${state}`}>
         <div className="in">
           <div className="top">
-            <div className="k"><span className="kc">{done ? '完成' : 'ON THE CLOCK'}</span>{!done && ` · ${mine ? '輪到你' : live ? `${team?.name ?? ''}選擇中` : '等待開始'}`}</div>
+            <div className="k">
+              <span className="kc">{done ? '完成' : paused ? 'PAUSED' : pre ? 'WAITING' : 'ON THE CLOCK'}</span>
+              {!done && ` · ${paused ? '暫停中' : pre ? '等待開始' : mine ? '輪到你' : `${team?.name ?? ''}選擇中`}`}
+            </div>
             <span>ROUND {done ? draft.rounds : cur?.round ?? 1} / {draft.rounds}</span>
           </div>
           <div className="mid">
             <div className="who">
               <i style={{ background: done ? 'var(--gold)' : team ? color(team.id) : 'var(--line-2)' }} />
-              <b>{done ? '選秀結束' : team?.name ?? '—'}</b>
-              <small>{done ? `${slots.length} 個順位全部選完` : team ? `${team.owner}・${auto(team.id) ? '託管・3 秒內自動選' : mine ? '選一位球員' : '思考中…'}` : ''}</small>
+              <b>{done ? '選秀結束' : pre ? (draft.revealedAt ? '順位已揭曉' : '等管理員開始') : team?.name ?? '—'}</b>
+              <small>{done ? `${slots.length} 個順位全部選完`
+                : pre ? '現在可以先排候選清單'
+                  : paused ? '管理員暫停中'
+                    : team ? `${team.owner}・${auto(team.id) ? '託管・3 秒內自動選' : mine ? '選一位球員' : '思考中…'}` : ''}</small>
             </div>
-            <div className="time">{done || !live ? '0:00' : fmtClock(rem)}</div>
+            <div className="time">{done ? '0:00' : pre ? '—' : fmtClock(rem)}</div>
           </div>
-          <div className="bar"><i style={{ width: live ? `${Math.min(100, (rem / draft.pickSeconds) * 100)}%` : '0%' }} /></div>
+          <div className="bar"><i style={{ width: live || paused ? `${Math.min(100, (rem / draft.pickSeconds) * 100)}%` : '0%' }} /></div>
         </div>
         <div className="tear" />
         <div className={`foot${done && onReport ? ' go' : ''}`} onClick={done ? onReport : undefined}>
@@ -842,7 +853,7 @@ export default function DraftRoom({ draft, onChange }: { draft: DraftView; onCha
     }
   }
   const reveal = rv && <PickReveal key={rv.pick.pickNo} rv={rv} draft={draft} onClose={() => setRv(null)} />
-  const pickText = myTurn ? '選這位' : done ? '選秀已結束' : draft.status !== 'IN_PROGRESS' ? '選秀尚未開始'
+  const pickText = myTurn ? '選這位' : done ? '選秀已結束' : draft.status === 'PAUSED' ? '選秀暫停中' : draft.status !== 'IN_PROGRESS' ? '選秀尚未開始'
     : nextMe ? `還沒輪到你・再 ${nextMe.pickNo - draft.currentPickNo} 順位` : '你已選完'
   const panel = (p: BoardPlayer) => (
     <PlayerPanel p={p} basis={board.data?.basis ?? ''} inQ={queue.ids.includes(p.playerId)} onToggle={() => queue.toggle(p.playerId)}
