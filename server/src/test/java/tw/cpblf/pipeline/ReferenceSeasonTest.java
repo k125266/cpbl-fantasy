@@ -31,14 +31,17 @@ class ReferenceSeasonTest extends IntegrationTest {
         long pitcher = player(sp.cpblPlayerId(), sp.name());
 
         assertThat(reference.rebuild(2025)).isEqualTo(2);
-        Map<String, Object> bat = jdbc.sql("select games, ab, h, hr, bb from reference_stat where season_year = 2025 and player_id = ?")
-                .param(batter).query().singleRow();
-        assertThat(bat).containsEntry("games", 2).containsEntry("ab", 2 * b.ab()).containsEntry("h", 2 * b.h())
-                .containsEntry("hr", 2 * b.hr()).containsEntry("bb", 2 * b.bb());
-        Map<String, Object> pit = jdbc.sql("select outs, p_k, qs from reference_stat where season_year = 2025 and player_id = ?")
+        Map<String, Object> bat = jdbc.sql("""
+                select games, pa, ab, h, hr, bb, g_bat, g_pit from reference_stat where season_year = 2025 and player_id = ?
+                """).param(batter).query().singleRow();
+        assertThat(bat).containsEntry("games", 2).containsEntry("pa", 2 * b.pa()).containsEntry("ab", 2 * b.ab())
+                .containsEntry("h", 2 * b.h()).containsEntry("hr", 2 * b.hr()).containsEntry("bb", 2 * b.bb())
+                .containsEntry("g_bat", 2).containsEntry("g_pit", 0);
+        Map<String, Object> pit = jdbc.sql("select outs, p_k, qs, g_pit, gs from reference_stat where season_year = 2025 and player_id = ?")
                 .param(pitcher).query().singleRow();
         assertThat(pit).containsEntry("outs", 2 * sp.outs()).containsEntry("p_k", 2 * sp.k())
-                .containsEntry("qs", sp.outs() >= 18 && sp.er() <= 3 ? 2 : 0);
+                .containsEntry("qs", sp.outs() >= 18 && sp.er() <= 3 ? 2 : 0)
+                .containsEntry("g_pit", 2).containsEntry("gs", 2);
         // 重新彙總結果一致
         assertThat(reference.rebuild(2025)).isEqualTo(2);
         assertThat(count("select count(*) from reference_stat")).isEqualTo(2);
