@@ -26,15 +26,57 @@ public class PlayerRankingService {
 
     private final JdbcClient jdbc;
     private final AppProperties props;
+    private final tw.cpblf.config.AppClock clock;
 
-    public PlayerRankingService(JdbcClient jdbc, AppProperties props) {
+    public PlayerRankingService(JdbcClient jdbc, AppProperties props, tw.cpblf.config.AppClock clock) {
         this.jdbc = jdbc;
         this.props = props;
+        this.clock = clock;
     }
 
-    /** 一位球員的累計數據（打擊與投球）。 */
-    public record Line(long id, String name, String listed, long ab, long h, long r, long hr, long bb, long outs, long er,
-                long ph, long pbb, long k, long wsv, long qs) {
+    /**
+     * 一位球員的累計數據。打者：gBat 出賽、pa、ab、h、r、hr、bb；投手：gPit 出賽、gs 先發、outs、er、ph 被安打、pbb 四壞、
+     * k、w、sv、qs。官網沒有打點、盜壘、中繼。
+     */
+    public record Line(long id, String name, String listed, long gBat, long pa, long ab, long h, long r, long hr, long bb,
+                long gPit, long gs, long outs, long er, long ph, long pbb, long k, long w, long sv, long qs) {
+
+        /** 計分類別 W+SV */
+        public long wsv() {
+            return w + sv;
+        }
+    }
+
+    /** 選秀室的數據期間：上一季全季（參考季）、本季、近 14 天。 */
+    public enum Period { REF, SEASON, LAST14 }
+
+    /** 某段期間每位球員的數據（只算例行賽；季後賽不結算，見 docs/decisions.md「賽季結構」）。 */
+    public Map<Long, Line> lines(Period p) {
+        List<Line> ls = switch (p) {
+            case REF -> referenceLines(props.seasonYear() - 1);
+            case SEASON -> currentLines(null);
+            case LAST14 -> currentLines(clock.today().minusDays(13));
+        };
+        Map<Long, Line> byId = new HashMap<>();
+        ls.forEach(l -> byId.put(l.id(), l));
+        return byId;
+    }
+
+    /** 這段期間有沒有數據：參考季要有封存，本季要有已結算的比賽，近 14 天要有這期間的比賽。 */
+    public boolean available(Period p) {
+        return switch (p) {
+            case REF -> jdbc.sql("select count(*) from reference_stat where season_year = ?").param(props.seasonYear() - 1)
+                    .query(Integer.class).single() > 0;
+            case SEASON -> playedSince(null);
+            case LAST14 -> playedSince(clock.today().minusDays(13));
+        };
+    }
+
+    private boolean playedSince(java.time.LocalDate from) {
+        return jdbc.sql("""
+                select count(*) from game_stat gs join game g on g.id = gs.game_id
+                where g.season_year = ? and g.kind_code = ? and g.status = 'FINAL' and (cast(? as date) is null or g.play_date >= ?)
+                """).params(props.seasonYear(), props.kindCode(), from, from).query(Integer.class).single() > 0;
     }
 
     public record Ranked(long playerId, double score, int rank) {
@@ -42,7 +84,7 @@ public class PlayerRankingService {
 
     /** 季中排名：只用當季數據（規則書 6.5）。 */
     public Map<Long, Ranked> rankings() {
-        return rank(currentLines());
+        return rank(currentLines(null));
     }
 
     /**
@@ -56,33 +98,40 @@ public class PlayerRankingService {
         int refYear = props.seasonYear() - 1;
         boolean reference = halfNo == 1 && jdbc.sql("select count(*) from reference_stat where season_year = ?")
                 .param(refYear).query(Integer.class).single() > 0;
-        List<Line> lines = reference ? referenceLines(refYear) : currentLines();
+        List<Line> lines = reference ? referenceLines(refYear) : currentLines(null);
         Map<Long, Line> byId = new HashMap<>();
         lines.forEach(l -> byId.put(l.id(), l));
         return new DraftBasis(reference ? String.valueOf(refYear) : "本季", byId, rank(lines));
     }
 
-    private List<Line> currentLines() {
+    /** 本季例行賽已結算的數據；from 不為 null 時只算這天起的比賽（近 14 天）。 */
+    private List<Line> currentLines(java.time.LocalDate from) {
         return jdbc.sql("""
                 select p.id, p.name, p.listed_position,
+                       count(gs.game_id) filter (where gs.batted), coalesce(sum(gs.pa),0),
                        coalesce(sum(gs.ab),0), coalesce(sum(gs.h),0), coalesce(sum(gs.r),0), coalesce(sum(gs.hr),0),
-                       coalesce(sum(gs.bb),0), coalesce(sum(gs.outs),0), coalesce(sum(gs.p_er),0),
+                       coalesce(sum(gs.bb),0),
+                       count(gs.game_id) filter (where gs.pitched), count(gs.game_id) filter (where gs.started),
+                       coalesce(sum(gs.outs),0), coalesce(sum(gs.p_er),0),
                        coalesce(sum(gs.p_h),0), coalesce(sum(gs.p_bb),0), coalesce(sum(gs.p_k),0),
-                       coalesce(sum(gs.w + gs.sv),0),
-                       coalesce(sum(case when gs.outs >= 18 and gs.p_er <= 3 then 1 else 0 end),0)
+                       coalesce(sum(gs.w),0), coalesce(sum(gs.sv),0),
+                       coalesce(sum(case when gs.started and gs.outs >= 18 and gs.p_er <= 3 then 1 else 0 end),0)
                 from player p
                 left join game_stat gs on gs.player_id = p.id
-                     and gs.game_id in (select id from game where season_year = ? and status = 'FINAL')
+                     and gs.game_id in (select id from game where season_year = ? and kind_code = ? and status = 'FINAL'
+                                        and (cast(? as date) is null or play_date >= ?))
                 group by p.id, p.name, p.listed_position
-                """).param(props.seasonYear()).query(PlayerRankingService::line).list();
+                """).params(props.seasonYear(), props.kindCode(), from, from).query(PlayerRankingService::line).list();
     }
 
     private List<Line> referenceLines(int year) {
         return jdbc.sql("""
                 select p.id, p.name, p.listed_position,
+                       coalesce(rs.g_bat,0), coalesce(rs.pa,0),
                        coalesce(rs.ab,0), coalesce(rs.h,0), coalesce(rs.r,0), coalesce(rs.hr,0), coalesce(rs.bb,0),
+                       coalesce(rs.g_pit,0), coalesce(rs.gs,0),
                        coalesce(rs.outs,0), coalesce(rs.p_er,0), coalesce(rs.p_h,0), coalesce(rs.p_bb,0), coalesce(rs.p_k,0),
-                       coalesce(rs.w + rs.sv,0), coalesce(rs.qs,0)
+                       coalesce(rs.w,0), coalesce(rs.sv,0), coalesce(rs.qs,0)
                 from player p left join reference_stat rs on rs.player_id = p.id and rs.season_year = ?
                 """).param(year).query(PlayerRankingService::line).list();
     }
@@ -90,7 +139,8 @@ public class PlayerRankingService {
     private static Line line(java.sql.ResultSet rs, int n) throws java.sql.SQLException {
         return new Line(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getLong(4), rs.getLong(5),
                 rs.getLong(6), rs.getLong(7), rs.getLong(8), rs.getLong(9), rs.getLong(10), rs.getLong(11),
-                rs.getLong(12), rs.getLong(13), rs.getLong(14), rs.getLong(15));
+                rs.getLong(12), rs.getLong(13), rs.getLong(14), rs.getLong(15), rs.getLong(16), rs.getLong(17),
+                rs.getLong(18), rs.getLong(19), rs.getLong(20));
     }
 
     /** 十個類別各自轉為 z-score 後加總；沒有數據的球員排在後面，依姓名。 */
