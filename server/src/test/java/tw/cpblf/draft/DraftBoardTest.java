@@ -33,10 +33,21 @@ class DraftBoardTest extends IntegrationTest {
         assertThat(b.needs()).extracting(Need::slot).containsExactly("IF", "OF", "UTIL", "SP", "RP");
         assertThat(b.needs()).allMatch(n -> n.filled() == 0 && n.max() > 0);
 
+        // 上半季、開季前、沒有參考季封存：期間只能看本季（還沒有數據），預設本季
+        assertThat(b.periods()).extracting(DraftBoardService.PeriodView::key).containsExactly("REF", "SEASON", "LAST14");
+        assertThat(b.periods()).noneMatch(DraftBoardService.PeriodView::available);
+        assertThat(b.defaultPeriod()).isEqualTo("SEASON");
+        assertThat(b.players()).allSatisfy(p -> assertThat(p.stats()).containsKey("SEASON"));
+        assertThat(b.players()).allMatch(p -> p.taken() == null);
+
         long first = b.players().stream().filter(BoardPlayer::fillsNeed).findFirst().orElseThrow().playerId();
         drafts.pick(d, team, first);
         var after = board.board(d, team);
-        assertThat(after.players()).noneMatch(p -> p.playerId() == first);
+        // 已選的人仍在清單（「顯示已選」用），標出哪隊第幾順位；不再算補缺位或推薦
+        BoardPlayer picked = after.players().stream().filter(p -> p.playerId() == first).findFirst().orElseThrow();
+        assertThat(picked.taken()).isEqualTo(new DraftBoardService.Taken(team, 1, false));
+        assertThat(picked.fillsNeed()).isFalse();
+        assertThat(picked.recommended()).isFalse();
         assertThat(after.needs().stream().mapToInt(Need::filled).sum()).isEqualTo(1);
 
         // 選完後的成績單：每類別依名次給 n..1 分，總分合計固定；我的關鍵順位兩筆

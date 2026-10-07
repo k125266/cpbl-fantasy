@@ -82,8 +82,8 @@ export default function DraftPage() {
               <option value={2}>下半季補強選秀（含 keeper）</option>
             </select>
             <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} aria-label="選秀時間" title="選秀時間（keeper 在前 10 分鐘截止）" />
-            <button type="button" onClick={() => call(() => api.post(`/api/leagues/${leagueId}/drafts`,
-              { halfNo, scheduledAt: when ? `${when}:00+08:00` : null }))}>建立選秀</button>
+            <button type="button" onClick={() => call(() => api.put(`/api/leagues/${leagueId}/drafts/half/${halfNo}`,
+              { scheduledAt: when ? `${when}:00+08:00` : null }))}>設定選秀</button>
             {active && (active.status === 'SETUP' || active.status === 'KEEPERS') && !active.revealedAt && (
               <button type="button" onClick={async () => {
                 await call(() => api.post(`/api/leagues/${leagueId}/drafts/${active.id}/reveal`))

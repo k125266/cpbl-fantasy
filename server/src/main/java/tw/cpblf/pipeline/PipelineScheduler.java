@@ -90,6 +90,14 @@ public class PipelineScheduler {
 
     @Scheduled(fixedDelay = 1000, initialDelay = 5000)
     void draftClock() {
+        // 管理員按開始 → 馬上揭曉 → 動畫播完自動開始第一手（docs/decisions.md「選秀與 keeper」）
+        for (Long id : drafts.dueStarts()) {
+            try {
+                drafts.start(id);
+            } catch (Exception e) {
+                log.error("auto start failed for draft {}", id, e);
+            }
+        }
         for (Long id : drafts.overdueDrafts()) {
             try {
                 drafts.autoPick(id);

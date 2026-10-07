@@ -32,7 +32,7 @@ public class ReferenceSeason {
 
     /** 每位球員的累計（與 reference_stat 欄位對應）。 */
     static final class Acc {
-        int games, ab, h, r, hr, bb, outs, ph, pbb, er, k, w, sv, qs;
+        int games, pa, ab, h, r, hr, bb, gBat, outs, ph, pbb, er, k, w, sv, qs, gPit, gs;
     }
 
     @Transactional
@@ -47,16 +47,20 @@ public class ReferenceSeason {
                 continue;
             }
             java.util.Set<Long> appeared = new java.util.HashSet<>();
+            java.util.Set<Long> batted = new java.util.HashSet<>();
+            java.util.Set<Long> pitched = new java.util.HashSet<>();
             for (BatterLine b : page.box().batters()) {
                 Long id = ids.get(b.cpblPlayerId());
                 if (id == null) continue;
                 Acc a = acc.computeIfAbsent(id, x -> new Acc());
+                a.pa += b.pa();
                 a.ab += b.ab();
                 a.h += b.h();
                 a.r += b.r();
                 a.hr += b.hr();
                 a.bb += b.bb();
                 appeared.add(id);
+                batted.add(id);
             }
             for (PitcherLine p : page.box().pitchers()) {
                 Long id = ids.get(p.cpblPlayerId());
@@ -70,15 +74,21 @@ public class ReferenceSeason {
                 a.w += p.w();
                 a.sv += p.sv();
                 if (p.started() && p.outs() >= 18 && p.er() <= 3) a.qs++;
+                if (p.started()) a.gs++;
                 appeared.add(id);
+                pitched.add(id);
             }
             appeared.forEach(id -> acc.get(id).games++);
+            batted.forEach(id -> acc.get(id).gBat++);
+            pitched.forEach(id -> acc.get(id).gPit++);
         }
         jdbc.sql("delete from reference_stat where season_year = ?").param(year).update();
         acc.forEach((id, a) -> jdbc.sql("""
-                insert into reference_stat (season_year, player_id, games, ab, h, r, hr, bb, outs, p_h, p_bb, p_er, p_k, w, sv, qs)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """).params(year, id, a.games, a.ab, a.h, a.r, a.hr, a.bb, a.outs, a.ph, a.pbb, a.er, a.k, a.w, a.sv, a.qs).update());
+                insert into reference_stat (season_year, player_id, games, pa, ab, h, r, hr, bb, g_bat, outs, p_h, p_bb, p_er, p_k,
+                                            w, sv, qs, g_pit, gs)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """).params(year, id, a.games, a.pa, a.ab, a.h, a.r, a.hr, a.bb, a.gBat, a.outs, a.ph, a.pbb, a.er, a.k,
+                a.w, a.sv, a.qs, a.gPit, a.gs).update());
         return acc.size();
     }
 
