@@ -1585,6 +1585,24 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .dr-strip .p { font-size: 12.5px; }
 }
 
+/* ---------- 選秀時間軸（Live Standard Draft，設計稿沒有，先做最小版本）---------- */
+.dl-hub h1 { margin: 6px 0 14px; font-size: 22px; font-weight: 900; }
+.dl-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.dl-steps li { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; padding: 0 0 16px; }
+.dl-steps li:not(:last-child)::before { content: ''; position: absolute; left: 13px; top: 28px; bottom: 0; width: 2px; background: var(--line); }
+.dl-steps li.done:not(:last-child)::before { background: var(--silver-lo); }
+.dl-steps i { width: 28px; height: 28px; box-sizing: border-box; border-radius: 50%; border: 1px solid var(--line-2); display: flex; align-items: center; justify-content: center; font: 700 13px 'Barlow Condensed', sans-serif; font-style: normal; color: var(--muted); background: var(--bg); }
+.dl-steps li.done i { border-color: var(--silver-lo); color: var(--silver); }
+.dl-steps li.now i { border-color: var(--gold); color: var(--gold-hi); box-shadow: 0 0 0 3px rgba(216,178,90,.15); }
+.dl-steps b { display: block; font-size: 14.5px; font-weight: 700; margin-top: 4px; color: var(--silver); }
+.dl-steps li.now b { color: var(--gold-hi); }
+.dl-steps li:not(.done):not(.now) b { color: var(--muted); }
+.dl-steps small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.dl-steps em { display: inline-block; margin-top: 6px; font: 700 13px 'Barlow Condensed', 'Noto Sans TC', sans-serif; font-style: normal; color: var(--gold-hi); }
+.dl-msg { font-size: 13px; color: var(--silver); margin: 4px 0 12px; }
+.dl-btn { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line-2); color: var(--text); font-size: 13.5px; }
+.dl-btn.on { border-color: rgba(216,178,90,.7); background: rgba(216,178,90,.1); color: var(--gold-hi); font-weight: 700; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
