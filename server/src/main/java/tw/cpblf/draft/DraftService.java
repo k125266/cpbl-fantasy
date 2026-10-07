@@ -333,6 +333,28 @@ public class DraftService {
     /** 揭曉動畫的長度（前端每 1.7 秒翻一張，5 隊約 9 秒），播完才能開始選秀。 */
     static final int REVEAL_SECONDS = 10;
 
+    /** 選秀室在選秀時間前這麼久開放（只影響畫面；候選清單任何時候都能排）。 */
+    public static final Duration LOBBY_BEFORE = Duration.ofMinutes(30);
+
+    /** 時間驅動（排程每秒問一次）：到了 T−10、還沒揭曉的選秀。 */
+    public List<Long> dueReveals() {
+        return jdbc.sql("""
+                select id from draft
+                where status in ('SETUP', 'KEEPERS') and revealed_at is null and scheduled_at is not null
+                  and scheduled_at - make_interval(secs => :lock) <= :now
+                """).param("lock", KEEPER_LOCK_BEFORE.toSeconds()).param("now", Timestamp.from(clock.now()))
+                .query(Long.class).list();
+    }
+
+    /** 時間驅動：已揭曉、到了 T、而且揭曉動畫已播完的選秀。 */
+    public List<Long> dueStarts() {
+        return jdbc.sql("""
+                select id from draft
+                where status in ('SETUP', 'KEEPERS') and revealed_at is not null and scheduled_at is not null
+                  and scheduled_at <= :now and revealed_at + make_interval(secs => :anim) <= :now
+                """).param("anim", REVEAL_SECONDS).param("now", Timestamp.from(clock.now())).query(Long.class).list();
+    }
+
     /**
      * 從 API 開始選秀前的檢查：一定要先揭曉順位，而且揭曉動畫播完（使用者決定：不能跳過揭曉）。
      * {@link #start} 本身沒揭曉時仍會自動揭曉，只供測試與 demo 種子使用。

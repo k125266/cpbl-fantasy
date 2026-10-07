@@ -90,6 +90,21 @@ public class PipelineScheduler {
 
     @Scheduled(fixedDelay = 1000, initialDelay = 5000)
     void draftClock() {
+        // 選秀時間驅動：T−10 自動揭曉、T 自動開始（docs/decisions.md「選秀與 keeper」）
+        for (Long id : drafts.dueReveals()) {
+            try {
+                drafts.reveal(id);
+            } catch (Exception e) {
+                log.error("auto reveal failed for draft {}", id, e);
+            }
+        }
+        for (Long id : drafts.dueStarts()) {
+            try {
+                drafts.start(id);
+            } catch (Exception e) {
+                log.error("auto start failed for draft {}", id, e);
+            }
+        }
         for (Long id : drafts.overdueDrafts()) {
             try {
                 drafts.autoPick(id);
