@@ -49,14 +49,19 @@ public class DraftController {
     }
 
     /** @param scheduledAt 選秀時間（keeper 在前 10 分鐘截止）；可不填 */
-    public record Create(int halfNo, List<Long> order, OffsetDateTime scheduledAt) {
+    /**
+     * @param scheduledAt 選秀時間 T（必填）：T−30 開放選秀室、T−10 自動揭曉、T 自動開始
+     * @param pickSeconds 每手秒數；不填用聯盟設定
+     */
+    public record Schedule(OffsetDateTime scheduledAt, Integer pickSeconds) {
     }
 
-    @PostMapping
-    public Map<String, Object> create(@PathVariable long leagueId, @RequestBody Create req) {
+    /** 設定某個半季的選秀（聯盟管理員）：第一次建立，之後修改；揭曉後不能改。 */
+    @PutMapping("/half/{halfNo}")
+    public Map<String, Object> schedule(@PathVariable long leagueId, @PathVariable int halfNo, @RequestBody Schedule req) {
         leagues.requireCommissioner(leagueId, Auth.require());
-        return Map.of("id", drafts.create(leagueId, req.halfNo(), req.order(),
-                req.scheduledAt() == null ? null : req.scheduledAt().toInstant()));
+        return Map.of("id", drafts.schedule(leagueId, halfNo,
+                req.scheduledAt() == null ? null : req.scheduledAt().toInstant(), req.pickSeconds()));
     }
 
     /** 揭曉順位並公開各隊 keeper（聯盟管理員）。 */

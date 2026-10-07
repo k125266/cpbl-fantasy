@@ -99,6 +99,51 @@ public class DraftService {
         return create(leagueId, halfNo, order, null);
     }
 
+    /** 選秀時間至少在現在之後這麼久（方便測試，又不會設在過去）。 */
+    static final Duration MIN_LEAD = Duration.ofMinutes(2);
+
+    /**
+     * 設定一個半季的選秀（聯盟管理員）：第一次設定時建立，之後只修改時間與每手秒數，keeper 與候選清單都保留。
+     * 揭曉後（T−10 起）不能再改。時間到了由 {@link #advanceSchedules} 自動揭曉、開始。
+     */
+    @Transactional
+    public long schedule(long leagueId, int halfNo, Instant scheduledAt, Integer pickSeconds) {
+        if (scheduledAt == null) {
+            throw ApiException.badRequest("請設定選秀時間");
+        }
+        if (scheduledAt.isBefore(clock.now().plus(MIN_LEAD))) {
+            throw ApiException.badRequest("選秀時間至少要在 " + MIN_LEAD.toMinutes() + " 分鐘後");
+        }
+        if (pickSeconds != null && pickSeconds < 15) {
+            throw ApiException.badRequest("每手至少 15 秒");
+        }
+        lock.lock(leagueId);
+        SeasonService.Half half = season.halves(leagueId).stream().filter(h -> h.halfNo() == halfNo).findFirst()
+                .orElseThrow(() -> ApiException.badRequest("請先產生賽程"));
+        Long existing = jdbc.sql("select id from draft where season_half_id = ?").param(half.id()).query(Long.class)
+                .optional().orElse(null);
+        long id;
+        if (existing == null) {
+            id = create(leagueId, halfNo, null, scheduledAt);
+        } else {
+            DraftRow d = draft(existing);
+            if (!"SETUP".equals(d.status()) && !"KEEPERS".equals(d.status())) {
+                throw ApiException.conflict("此半季選秀已開始或已完成");
+            }
+            if (d.revealedAt() != null) {
+                throw ApiException.conflict("順位已揭曉，不能再改選秀時間");
+            }
+            id = existing;
+            jdbc.sql("update draft set scheduled_at = ? where id = ?").params(Timestamp.from(scheduledAt), id).update();
+            notifications.notifyLeague(leagueId, (halfNo == 2 ? "下半季補強選秀" : "上半季選秀") + "時間改為"
+                    + scheduledAt.atZone(clock.zone()).toLocalDateTime().toString().replace('T', ' '));
+        }
+        if (pickSeconds != null) {
+            jdbc.sql("update draft set pick_seconds = ? where id = ?").params(pickSeconds, id).update();
+        }
+        return id;
+    }
+
     /**
      * 上半季：蛇形 draft_rounds 輪，順位在揭曉時隨機抽出（或使用指定順序）。
      * 下半季：補強選秀，每輪同一順序 second_half_rounds 輪，順位在揭曉時依上半季戰績由差到好；建立後進入 keeper 選擇期。
