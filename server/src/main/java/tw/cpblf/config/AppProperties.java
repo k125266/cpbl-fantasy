@@ -10,6 +10,7 @@ public record AppProperties(
         String zone,
         int seasonYear,
         String kindCode,
+        java.util.List<String> postseasonKindCodes,
         String source,
         boolean schedulerEnabled,
         Crawler crawler,
@@ -18,6 +19,18 @@ public record AppProperties(
 
     /** 規則書 10.3：Live Poller 間隔不得低於 60 秒。 */
     public static final int MIN_LIVE_POLL_SECONDS = 60;
+
+    /**
+     * 賽程與即時輪詢追蹤的所有賽事：例行賽在前，接著是季後賽。季後賽只做即時比分，
+     * 不結算、不計入 fantasy（docs/decisions.md「賽季結構」）。
+     */
+    public java.util.List<String> trackedKindCodes() {
+        java.util.List<String> out = new java.util.ArrayList<>(java.util.List.of(kindCode));
+        if (postseasonKindCodes != null) {
+            postseasonKindCodes.stream().filter(k -> !k.isBlank() && !k.equals(kindCode)).forEach(out::add);
+        }
+        return out;
+    }
 
     public ZoneId zoneId() {
         return ZoneId.of(zone);
