@@ -154,6 +154,36 @@ public class DraftController {
         return Map.of("ok", true);
     }
 
+    /** 聯盟管理員：暫停（倒數停住、不能選人）。 */
+    @PostMapping("/{draftId}/pause")
+    public Map<String, Boolean> pause(@PathVariable long leagueId, @PathVariable long draftId) {
+        leagues.requireCommissioner(leagueId, Auth.require());
+        check(leagueId, draftId);
+        drafts.pause(draftId);
+        return Map.of("ok", true);
+    }
+
+    /** 聯盟管理員：繼續（從暫停時剩下的秒數接著倒數）。 */
+    @PostMapping("/{draftId}/resume")
+    public Map<String, Boolean> resume(@PathVariable long leagueId, @PathVariable long draftId) {
+        leagues.requireCommissioner(leagueId, Auth.require());
+        check(leagueId, draftId);
+        drafts.resume(draftId);
+        return Map.of("ok", true);
+    }
+
+    public record PickSeconds(int seconds) {
+    }
+
+    /** 聯盟管理員：調整每手秒數，從下一手生效。 */
+    @PutMapping("/{draftId}/pick-seconds")
+    public Map<String, Boolean> pickSeconds(@PathVariable long leagueId, @PathVariable long draftId, @RequestBody PickSeconds req) {
+        leagues.requireCommissioner(leagueId, Auth.require());
+        check(leagueId, draftId);
+        drafts.setPickSeconds(draftId, req.seconds());
+        return Map.of("ok", true);
+    }
+
     public record Pick(long playerId) {
     }
 

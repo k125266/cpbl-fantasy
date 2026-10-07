@@ -158,7 +158,7 @@ public class DraftService {
                 .optional().orElse(null);
         if (existing != null) {
             String st = draft(existing).status();
-            if ("IN_PROGRESS".equals(st) || "COMPLETED".equals(st)) {
+            if ("IN_PROGRESS".equals(st) || "PAUSED".equals(st) || "COMPLETED".equals(st)) {
                 throw ApiException.conflict("此半季選秀已開始或已完成");
             }
             jdbc.sql("delete from keeper_selection where draft_id = ?").param(existing).update();
@@ -541,6 +541,53 @@ public class DraftService {
         return "IN_PROGRESS".equals(draft(draftId).status());
     }
 
+    // ------------------------------------------------------------------
+    // 聯盟管理員：選秀中暫停／繼續、調整每手秒數
+    // ------------------------------------------------------------------
+
+    /** 暫停：記下這一手剩下的時間；暫停中不能選人，逾時與託管也不動作。 */
+    @Transactional
+    public void pause(long draftId) {
+        DraftRow d = draft(draftId);
+        lock.lock(d.leagueId());
+        if (!"IN_PROGRESS".equals(d.status())) {
+            throw ApiException.conflict("選秀沒有在進行中");
+        }
+        long remaining = d.deadline() == null ? d.pickSeconds() * 1000L
+                : Math.max(0, Duration.between(clock.now(), d.deadline()).toMillis());
+        jdbc.sql("update draft set status = 'PAUSED', paused_remaining_ms = ? where id = ?").params(remaining, draftId).update();
+        notifications.notifyLeague(d.leagueId(), "選秀已暫停");
+    }
+
+    /** 繼續：這一手從暫停時剩下的時間接著倒數。 */
+    @Transactional
+    public void resume(long draftId) {
+        DraftRow d = draft(draftId);
+        lock.lock(d.leagueId());
+        if (!"PAUSED".equals(d.status())) {
+            throw ApiException.conflict("選秀沒有暫停");
+        }
+        Integer remaining = jdbc.sql("select paused_remaining_ms from draft where id = ?").param(draftId).query(Integer.class).single();
+        Instant deadline = clock.now().plusMillis(remaining == null ? d.pickSeconds() * 1000L : remaining);
+        jdbc.sql("update draft set status = 'IN_PROGRESS', current_pick_deadline = ?, paused_remaining_ms = null where id = ?")
+                .params(Timestamp.from(deadline), draftId).update();
+        notifications.notifyLeague(d.leagueId(), "選秀繼續");
+    }
+
+    /** 調整每手秒數（至少 15 秒）：從下一手開始生效，這一手照原本的倒數。 */
+    @Transactional
+    public void setPickSeconds(long draftId, int seconds) {
+        DraftRow d = draft(draftId);
+        lock.lock(d.leagueId());
+        if (seconds < 15) {
+            throw ApiException.badRequest("每手至少 15 秒");
+        }
+        if ("COMPLETED".equals(d.status())) {
+            throw ApiException.conflict("選秀已完成");
+        }
+        jdbc.sql("update draft set pick_seconds = ? where id = ?").params(seconds, draftId).update();
+    }
+
     private void record(DraftRow d, long playerId, boolean auto) {
         jdbc.sql("""
                 update draft_pick set player_id = ?, is_auto = ?, picked_at = ? where draft_id = ? and pick_no = ?
@@ -719,12 +766,15 @@ public class DraftService {
      * @param myKeepers      自己的 keeper（任何時候都看得到）
      * @param keepers        各隊 keeper，揭曉後才公開
      * @param autopilotTeams 開啟託管的隊伍（E18）
+     * @param phase          流程階段：UNSCHEDULED 尚未設定時間、SCHEDULED 已排定、LOBBY 選秀室開放（T−30）、
+     *                       REVEALED 順位已揭曉（T−10 起）、IN_PROGRESS、PAUSED、COMPLETED
+     * @param lobbyAt        選秀室開放時間（T−30）；揭曉時間為 keeperDeadline（T−10），開始為 scheduledAt（T）
      */
     public record DraftView(long id, int halfNo, String status, int rounds, int pickSeconds, int currentPickNo,
                             Long currentTeamId, OffsetDateTime deadline, long secondsLeft, List<Long> order,
                             List<PickView> picks, List<KeeperView> myKeepers, OffsetDateTime scheduledAt,
                             OffsetDateTime keeperDeadline, OffsetDateTime revealedAt, boolean snake, List<TeamKeepers> keepers,
-                            List<Long> autopilotTeams) {
+                            List<Long> autopilotTeams, String phase, OffsetDateTime lobbyAt) {
     }
 
     public List<DraftView> list(long leagueId, Long viewerTeamId) {
@@ -752,8 +802,13 @@ public class DraftService {
             return new PickView(rs.getInt(1), rs.getInt(2), rs.getLong(3), rs.getString(4), rs.getObject(5, Long.class),
                     rs.getString(6), rs.getString(7), rs.getBoolean(8), rs.getBoolean(9), rs.getString(10), rs.getString(11));
         }).list();
-        Long current = "IN_PROGRESS".equals(d.status()) ? currentTeam(d) : null;
-        long secondsLeft = d.deadline() == null ? 0 : Math.max(0, Duration.between(clock.now(), d.deadline()).toSeconds());
+        boolean paused = "PAUSED".equals(d.status());
+        Long current = "IN_PROGRESS".equals(d.status()) || paused ? currentTeam(d) : null;
+        // 暫停中倒數停住：顯示暫停時剩下的秒數
+        Integer pausedMs = paused ? jdbc.sql("select paused_remaining_ms from draft where id = ?").param(draftId)
+                .query(Integer.class).single() : null;
+        long secondsLeft = paused ? (pausedMs == null ? d.pickSeconds() : (pausedMs + 999) / 1000)
+                : d.deadline() == null ? 0 : Math.max(0, Duration.between(clock.now(), d.deadline()).toSeconds());
         List<KeeperView> mine = viewerTeamId == null ? List.of() : jdbc.sql("""
                 select k.player_id, p.name from keeper_selection k join player p on p.id = k.player_id
                 where k.draft_id = ? and k.team_id = ? order by p.name
@@ -773,9 +828,20 @@ public class DraftService {
         }
         List<Long> autopilot = jdbc.sql("select id from fantasy_team where league_id = ? and draft_autopilot order by id")
                 .param(d.leagueId()).query(Long.class).list();
+        Instant lobbyAt = d.scheduledAt() == null ? null : d.scheduledAt().minus(LOBBY_BEFORE);
         return new DraftView(d.id(), d.halfNo(), d.status(), d.rounds(), d.pickSeconds(), d.currentPickNo(), current,
-                odt(d.deadline()), secondsLeft, order, picks, mine, odt(d.scheduledAt()), odt(d.keeperDeadline()),
-                odt(d.revealedAt()), d.snake(), all, autopilot);
+                paused ? null : odt(d.deadline()), secondsLeft, order, picks, mine, odt(d.scheduledAt()), odt(d.keeperDeadline()),
+                odt(d.revealedAt()), d.snake(), all, autopilot, phase(d, lobbyAt), odt(lobbyAt));
+    }
+
+    /** 流程階段（見 DraftView）：已開始後看狀態，開始前看時間與是否已揭曉。 */
+    private String phase(DraftRow d, Instant lobbyAt) {
+        return switch (d.status()) {
+            case "IN_PROGRESS", "PAUSED", "COMPLETED" -> d.status();
+            default -> d.revealedAt() != null ? "REVEALED"
+                    : d.scheduledAt() == null ? "UNSCHEDULED"
+                    : !clock.now().isBefore(lobbyAt) ? "LOBBY" : "SCHEDULED";
+        };
     }
 
     private OffsetDateTime odt(Instant i) {
