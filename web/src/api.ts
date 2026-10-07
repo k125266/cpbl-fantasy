@@ -505,6 +505,10 @@ export interface LiveGame {
   halfInning: { jerseyNumber: string; name: string; result: string | null }[] | null
   /** 進階數據網站的這場比賽（來源標示）；模擬賽季為 null */
   sourceUrl: string | null
+  /** 官網賽事代碼：A 例行賽、E 季後挑戰賽… */
+  kindCode: string
+  /** 季後賽：只看即時比分，不結算、不計入 fantasy */
+  postseason: boolean
 }
 
 /** 一位球員在一場比賽的數據（依 box score 順序） */

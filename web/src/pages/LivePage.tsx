@@ -93,6 +93,9 @@ function outsOf(g: LiveGame): number | null {
   return Math.min(n, 3)
 }
 
+/** 官網賽事代碼的名稱（台灣大賽的代碼公布後補上） */
+const KIND_NAME: Record<string, string> = { E: '季後挑戰賽' }
+
 function gameState(g: LiveGame, lines: LiveLine[]): { inn: string; sub: string; live: boolean } {
   switch (g.status) {
     case 'IN_PROGRESS': {
@@ -100,6 +103,8 @@ function gameState(g: LiveGame, lines: LiveLine[]): { inn: string; sub: string; 
       return { inn: g.inning ?? '進行中', sub: outs == null ? '進行中・非最終' : `${outs} 出局・非最終`, live: true }
     }
     case 'FINAL': {
+      // 季後賽不結算，不會有「結算中 → 比賽結束」的變化
+      if (g.postseason) return { inn: '終', sub: '比賽結束・不計分', live: false }
       const settled = lines.some((l) => l.gameId === g.id && l.settled)
       return { inn: '終', sub: g.statsFinal ? '數據已定版' : settled ? '比賽結束' : '比賽結束・結算中', live: false }
     }
@@ -240,6 +245,7 @@ export default function LivePage() {
     const st = gameState(g, data.lines)
     return (
       <div className="lv-ghead">
+        {g.postseason && <div className="lv-kind">{KIND_NAME[g.kindCode] ?? '季後賽'}・不計入 fantasy</div>}
         <div className="teams">{scoreRows(g)}</div>
         <div className={`state${st.live ? ' live' : ''}`}>
           <span className="inn">{st.live && <i />}{st.inn}</span>

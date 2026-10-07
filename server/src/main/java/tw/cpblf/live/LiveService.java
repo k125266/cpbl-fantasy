@@ -50,7 +50,8 @@ public class LiveService {
     public record LiveGame(long id, int sno, String status, boolean statsFinal, LocalDate scheduledDate, LocalDate playDate,
                            Instant startTime, String homeTeam, String awayTeam, Integer homeScore, Integer awayScore,
                            String inning, Instant fetchedAt, JsonNode lineScore, Long batterId, Long pitcherId,
-                           Integer pitchCount, JsonNode batterResults, JsonNode halfInning, String sourceUrl) {
+                           Integer pitchCount, JsonNode batterResults, JsonNode halfInning, String sourceUrl,
+                           String kindCode, boolean postseason) {
     }
 
     /**
@@ -110,7 +111,9 @@ public class LiveService {
                     live ? (Integer) rs.getObject("pitch_count") : null,
                     live ? json(rs.getString("batter_results")) : null, live ? json(rs.getString("half_inning")) : null,
                     base == null ? null : base + "/schedule/" + rs.getInt("season_year") + "-" + rs.getString("kind_code") + "-"
-                            + rs.getInt("game_sno"));
+                            + rs.getInt("game_sno"),
+                    // 季後賽只看即時比分，不結算（docs/decisions.md「賽季結構」）
+                    rs.getString("kind_code"), !props.kindCode().equals(rs.getString("kind_code")));
         }).list();
     }
 

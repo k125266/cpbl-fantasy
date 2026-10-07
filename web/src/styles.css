@@ -810,6 +810,8 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 .lv-card { display: block; width: 100%; margin-bottom: 10px; padding: 0; text-align: left; border-radius: 12px; background: rgb(21 23 28 / .88); border: 1px solid var(--line); border-top-color: rgb(196 202 212 / .14); overflow: hidden; font-weight: 400; color: var(--text); }
 .lv-card.dimmed { opacity: .78; }
 .lv-ghead { display: grid; grid-template-columns: minmax(0, 1fr) 82px; }
+/* 季後賽：只看即時比分（docs/decisions.md「賽季結構」） */
+.lv-ghead .lv-kind { grid-column: 1 / -1; padding: 8px 14px 0; font: 600 10.5px 'Barlow Condensed', 'Noto Sans TC', sans-serif; letter-spacing: .16em; color: var(--gold); }
 .lv-ghead .teams { display: flex; flex-direction: column; gap: 7px; padding: 12px 14px; }
 .lv-team { display: flex; align-items: center; gap: 9px; color: var(--text); }
 .lv-team .chip, .lv-wside .chip, .lv-big .chip { flex: none; width: 34px; height: 20px; border-radius: 4px; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
