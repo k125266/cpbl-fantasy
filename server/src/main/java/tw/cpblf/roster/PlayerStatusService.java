@@ -28,9 +28,11 @@ public class PlayerStatusService {
     }
 
     private final JdbcClient jdbc;
+    private final tw.cpblf.config.AppProperties props;
 
-    public PlayerStatusService(JdbcClient jdbc) {
+    public PlayerStatusService(JdbcClient jdbc, tw.cpblf.config.AppProperties props) {
         this.jdbc = jdbc;
+        this.props = props;
     }
 
     record Info(long id, String team, boolean foreign, String listed, String registration, String firstTeam,
@@ -62,12 +64,15 @@ public class PlayerStatusService {
             if (i.team() != null && !teamGameDays.containsKey(i.team())) {
                 teamGameDays.put(i.team(), jdbc.sql("""
                         select distinct play_date from game
-                        where status = 'FINAL' and play_date <= ? and (home_team_code = ? or away_team_code = ?)
+                        where status = 'FINAL' and kind_code = ? and play_date <= ? and (home_team_code = ? or away_team_code = ?)
                         order by play_date desc limit ?
-                        """).params(today, i.team(), i.team(), league.hitterIdleGameDays()).query(LocalDate.class).list());
+                        """).params(props.kindCode(), today, i.team(), i.team(), league.hitterIdleGameDays())
+                        .query(LocalDate.class).list());
+                // 只看例行賽：季後賽不結算，沒有出賽紀錄，算進來會把晉級隊伍的打者誤判為沒出賽
                 teamFirstGame.put(i.team(), jdbc.sql("""
-                        select min(play_date) from game where status = 'FINAL' and (home_team_code = ? or away_team_code = ?)
-                        """).params(i.team(), i.team()).query(LocalDate.class).optional().orElse(null));
+                        select min(play_date) from game where status = 'FINAL' and kind_code = ?
+                          and (home_team_code = ? or away_team_code = ?)
+                        """).params(props.kindCode(), i.team(), i.team()).query(LocalDate.class).optional().orElse(null));
             }
         }
 

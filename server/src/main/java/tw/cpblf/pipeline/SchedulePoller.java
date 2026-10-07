@@ -44,10 +44,14 @@ public class SchedulePoller {
 
     @Transactional
     public void poll(JobRunner.JobContext ctx) {
-        List<SourceGame> games = source.fetchSchedule(props.seasonYear(), props.kindCode());
-        if (games.isEmpty()) {
-            alerts.raise(AlertService.Level.WARN, JOB, "賽程回應為空");
-            return;
+        List<SourceGame> games = new java.util.ArrayList<>();
+        for (String kind : props.trackedKindCodes()) {
+            List<SourceGame> some = source.fetchSchedule(props.seasonYear(), kind);
+            // 季後賽在賽程公布前本來就是空的；只有例行賽空才警示
+            if (some.isEmpty() && kind.equals(props.kindCode())) {
+                alerts.raise(AlertService.Level.WARN, JOB, "賽程回應為空");
+            }
+            games.addAll(some);
         }
         for (SourceGame g : games) {
             String home = teams.resolve(g.homeTeamName());

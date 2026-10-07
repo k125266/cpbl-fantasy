@@ -19,6 +19,8 @@ cpblf:
   zone: Asia/Taipei
   season-year: ${CPBLF_SEASON_YEAR:2026}
   kind-code: A
+  # 季後賽（E 一軍季後挑戰賽；台灣大賽的代碼官網公布後加上）：只做即時比分，不結算、不計入 fantasy
+  postseason-kind-codes: ${CPBLF_POSTSEASON_KINDS:E}
   # 資料來源：demo（模擬賽季，本機開發/展示用）、stats（中職進階數據網站）、
   # replay（以封存的真實球季重播，時鐘可調整）或 web（cpbl.com.tw，CDN 擋爬蟲 UA，目前不可用）
   source: ${CPBLF_SOURCE:demo}
