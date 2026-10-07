@@ -3,21 +3,21 @@ import { Link, useLocation } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type DraftView } from '../api'
 import { ErrorBox, Loading, useLoad } from '../components'
-import { useServerNow } from '../hooks'
 import DraftOrderPage from './DraftOrderPage'
 import DraftRoom from './DraftRoomPage'
 import KeeperPage from './KeeperPage'
 
 /**
- * 選秀（Yahoo「Live Standard Draft」，時間驅動，docs/decisions.md「選秀與 keeper」）：
- * 管理員設定選秀時間 T → T−30 選秀室開放 → T−10 自動揭曉順位 → T 自動開始 → 選完。
+ * 選秀（Yahoo「Live Standard Draft」，docs/decisions.md「選秀與 keeper」）：
+ * 準備中（排候選、選 keeper）→ 管理員按「開始選秀」→ 馬上揭曉順位 → 動畫播完自動開始 → 選完。
+ * 沒有預設選秀時間：玩家自己討論時間，管理員到時候按開始。
  *
- * /draft 依階段決定：揭曉前是時間軸首頁；揭曉後是順位頁（大家一起看翻牌）；開始後是選秀室。
+ * /draft 依階段決定：準備中是首頁；揭曉後是順位頁（大家一起看翻牌）；開始後是選秀室。
  * /draft/keepers、/draft/order、/draft/room 可以直接進。
  */
 export default function DraftPage() {
   const { leagueId, league, reloadLeague, reloadSystem } = useApp()
-  // 選秀的倒數、揭曉動畫都以伺服器時間計算（useServerNow）。App 只在開啟時對時一次，伺服器重啟、
+  // 每手倒數、揭曉動畫都以伺服器時間計算（useServerNow）。App 只在開啟時對時一次，伺服器重啟、
   // demo 快轉後會不準，所以進入選秀頁時重新對時，之後每 60 秒再對一次
   useEffect(() => {
     reloadSystem()
@@ -58,9 +58,8 @@ export default function DraftPage() {
         : pathname.startsWith('/draft/room') ? 'room'
           : phase === 'REVEALED' ? 'order'
             : live || phase === 'COMPLETED' ? 'room' : 'hub'
-  // 管理員要設定的半季：還沒揭曉的那場；上半季選完而下半季還沒設定時是下半季
-  const setupHalf = active && (phase === 'UNSCHEDULED' || phase === 'SCHEDULED' || phase === 'LOBBY') ? active.halfNo
-    : !active ? 1 : phase === 'COMPLETED' && active.halfNo === 1 ? 2 : null
+  // 管理員按「開始選秀」的那一場：準備中的選秀
+  const preparing = active && phase === 'PREPARING' ? active : null
   return (
     <div className="stack">
       <ErrorBox error={err || drafts.error} />
@@ -70,149 +69,94 @@ export default function DraftPage() {
         : <p className="muted">上半季沒有 keeper。</p>)}
       {active && view === 'order' && <DraftOrderPage draft={active} onChange={changed} />}
       {active && view === 'room' && <DraftRoom draft={active} onChange={changed} />}
-      {league?.commissioner && view === 'hub' && setupHalf != null && (
-        <DraftSetup halfNo={setupHalf} draft={active?.halfNo === setupHalf ? active : null} call={call} />
-      )}
+      {league?.commissioner && view === 'hub' && preparing && <DraftBegin draft={preparing} call={call} />}
       {league?.commissioner && active && view === 'room' && phase !== 'COMPLETED' && <DraftTools draft={active} call={call} />}
     </div>
   )
 }
 
 // ------------------------------------------------------------------
-// 時間軸首頁（揭曉前）
+// 選秀首頁（準備中）：四步流程
 // ------------------------------------------------------------------
 
-const fmtWhen = (iso: string | null | undefined) => iso
-  ? new Date(iso).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
-  : '—'
-
-function fmtLeft(ms: number) {
-  if (ms <= 0) return '即將'
-  const s = Math.ceil(ms / 1000)
-  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), r = s % 60
-  if (d > 0) return `${d} 天 ${h} 小時`
-  if (h > 0) return `${h} 小時 ${m} 分`
-  return `${m}:${String(r).padStart(2, '0')}`
-}
-
-/** 五個階段；目前在第幾步 */
+/** 四個階段；目前在第幾步 */
 const STEP_OF: Record<DraftView['phase'], number> = {
-  UNSCHEDULED: 0, SCHEDULED: 1, LOBBY: 2, REVEALED: 3, IN_PROGRESS: 4, PAUSED: 4, COMPLETED: 5,
+  PREPARING: 0, REVEALED: 1, IN_PROGRESS: 2, PAUSED: 2, COMPLETED: 3,
 }
 
 function DraftHub({ draft }: { draft: DraftView | null }) {
-  const now = useServerNow(1000)
-  const { league } = useApp()
   if (!draft) {
     return (
       <div className="card dl-hub">
         <span className="lv-kicker gold">DRAFT</span>
         <h1>選秀</h1>
-        <p className="dl-msg">{league?.commissioner
-          ? '還沒設定選秀。在下方設定選秀時間，時間到會自動揭曉順位、自動開始。'
-          : '聯盟管理員還沒設定選秀時間。'}</p>
+        <p className="dl-msg">選秀還沒準備好：要先產生賽程，而且聯盟至少要有 2 隊。</p>
       </div>
     )
   }
   const second = draft.halfNo === 2
   const step = STEP_OF[draft.phase]
   const steps = [
-    { t: '設定選秀時間', at: draft.scheduledAt ? `每手 ${draft.pickSeconds} 秒` : '等管理員設定', time: null as string | null },
-    { t: '選秀室開放', at: '可以進選秀室、排候選清單', time: draft.lobbyAt },
-    { t: second ? '順位揭曉・公開 keeper' : '順位抽籤揭曉', at: second ? 'keeper 截止；依上半季戰績由差到好' : '全聯盟同步翻牌', time: draft.keeperDeadline },
-    { t: '開始選秀', at: second ? `補強選秀 ${draft.rounds} 輪・每輪同順序` : `蛇形 ${draft.rounds} 輪`, time: draft.scheduledAt },
-    { t: '選秀完成', at: '名單生效，沒被選的球員回到自由球員', time: null },
+    { t: '準備', at: second ? '排候選清單、選 keeper；等管理員按開始' : '排候選清單；等管理員按開始' },
+    { t: second ? '順位揭曉・公開 keeper' : '順位抽籤揭曉', at: '管理員按開始後馬上進行，約 10 秒，全聯盟同步翻牌' },
+    { t: '選秀', at: `${second ? `補強選秀 ${draft.rounds} 輪・每輪同順序` : `蛇形 ${draft.rounds} 輪`}・每手 ${draft.pickSeconds} 秒` },
+    { t: '完成', at: '名單生效，沒被選的球員回到自由球員' },
   ]
-  // 目前這一步要等到的時間
-  const nextAt = [null, draft.lobbyAt, draft.keeperDeadline, draft.scheduledAt][step] ?? null
-  const msg = draft.phase === 'UNSCHEDULED' ? '還沒設定選秀時間。'
-    : draft.phase === 'SCHEDULED' ? `選秀室 ${fmtWhen(draft.lobbyAt)} 開放。候選清單現在就能先排。`
-      : `選秀室已開放。${fmtWhen(draft.keeperDeadline)} 自動揭曉順位，${fmtWhen(draft.scheduledAt)} 開始。`
   return (
     <div className="card dl-hub">
       <span className="lv-kicker gold">{second ? 'DRAFT · 下半季補強選秀' : 'DRAFT · 上半季選秀'}</span>
-      <h1>{draft.scheduledAt ? fmtWhen(draft.scheduledAt) : '選秀時間未定'}</h1>
+      <h1>等管理員按下開始</h1>
       <ol className="dl-steps">
         {steps.map((s, i) => (
           <li key={s.t} className={i < step ? 'done' : i === step ? 'now' : ''}>
             <i>{i < step ? '✓' : i + 1}</i>
             <div>
               <b>{s.t}</b>
-              <small>{s.time ? `${fmtWhen(s.time)}・` : ''}{s.at}</small>
-              {i === step && nextAt && <em>還有 {fmtLeft(Date.parse(nextAt) - now)}</em>}
+              <small>{s.at}</small>
             </div>
           </li>
         ))}
       </ol>
-      <p className="dl-msg">{msg}</p>
+      <p className="dl-msg">
+        選秀時間由玩家自己討論，說好的時間到了，管理員按下「開始選秀」。現在可以先排候選清單{second ? '、選 keeper（按下開始時鎖定）' : ''}。
+      </p>
       <div className="row">
-        {second && draft.phase !== 'UNSCHEDULED' && (
-          <Link className="dl-btn" to="/draft/keepers">選擇 Keeper（{fmtWhen(draft.keeperDeadline)} 截止）</Link>
-        )}
-        {draft.phase !== 'UNSCHEDULED' && (
-          <Link className={`dl-btn${draft.phase === 'LOBBY' ? ' on' : ''}`} to="/draft/room">
-            {draft.phase === 'LOBBY' ? '進入選秀室' : '先排候選清單'}
-          </Link>
-        )}
+        {second && <Link className="dl-btn" to="/draft/keepers">選擇 Keeper</Link>}
+        <Link className="dl-btn on" to="/draft/room">進入選秀室・排候選清單</Link>
       </div>
     </div>
   )
 }
 
 // ------------------------------------------------------------------
-// 聯盟管理員：設定選秀（揭曉前）、選秀中工具
+// 聯盟管理員：開始選秀（準備中）、選秀中工具
 // ------------------------------------------------------------------
 
 const SECONDS = [30, 45, 60, 90, 120]
 
-/** datetime-local 的值（台北時間） */
-function localValue(iso: string | null) {
-  if (!iso) return ''
-  return new Date(Date.parse(iso) + 8 * 3600_000).toISOString().slice(0, 16)
-}
-
-/** 伺服器現在 + 幾分鐘，轉成 datetime-local 的值（台北時間；demo 的模擬時鐘也照伺服器算） */
-function afterMinutes(serverNowMs: number, minutes: number) {
-  return new Date(serverNowMs + minutes * 60_000 + 8 * 3600_000).toISOString().slice(0, 16)
-}
-
-function DraftSetup({ halfNo, draft, call }: { halfNo: number; draft: DraftView | null; call: (fn: () => Promise<unknown>) => void }) {
-  const { leagueId, league, system } = useApp()
-  const now = useServerNow(30_000)
-  const [when, setWhen] = useState(localValue(draft?.scheduledAt ?? null))
-  const [secs, setSecs] = useState(draft?.pickSeconds ?? league?.league.draftPickSeconds ?? 60)
-  useEffect(() => {
-    setWhen(localValue(draft?.scheduledAt ?? null))
-    if (draft) setSecs(draft.pickSeconds)
-  }, [draft?.scheduledAt, draft?.pickSeconds]) // eslint-disable-line react-hooks/exhaustive-deps
+function DraftBegin({ draft, call }: { draft: DraftView; call: (fn: () => Promise<unknown>) => void }) {
+  const { leagueId } = useApp()
+  const second = draft.halfNo === 2
+  const [secs, setSecs] = useState(draft.pickSeconds)
+  useEffect(() => setSecs(draft.pickSeconds), [draft.pickSeconds])
+  const go = () => {
+    const warn = `按下後${second ? ' keeper 鎖定、' : ''}馬上揭曉順位，約 10 秒後自動開始選秀，不能取消。請確認大家都在線上，要開始嗎？`
+    if (window.confirm(warn)) {
+      call(() => api.post(`/api/leagues/${leagueId}/drafts/${draft.id}/begin`, { pickSeconds: secs }))
+    }
+  }
   return (
     <div className="card">
-      <h2>聯盟管理員・{halfNo === 2 ? '下半季補強選秀' : '上半季選秀'}</h2>
+      <h2>聯盟管理員・開始{second ? '下半季補強選秀' : '上半季選秀'}</h2>
       <p className="muted" style={{ marginTop: 0 }}>
-        設定選秀時間 T 之後全部自動進行：T−30 開放選秀室、T−10 {halfNo === 2 ? 'keeper 截止並' : ''}揭曉順位、T 開始。揭曉前都能改。
+        選秀時間由玩家自己討論，不用預先設定。說好的時間到了就按「開始選秀」{second ? '（keeper 會在這一刻鎖定）' : ''}。
       </p>
       <div className="row">
-        <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} aria-label="選秀時間" />
         <select value={secs} onChange={(e) => setSecs(Number(e.target.value))} aria-label="每手秒數">
           {[...new Set([...SECONDS, secs])].sort((a, b) => a - b).map((s) => <option key={s} value={s}>每手 {s} 秒</option>)}
         </select>
-        <button type="button" className="primary" disabled={!when}
-          onClick={() => call(() => api.put(`/api/leagues/${leagueId}/drafts/half/${halfNo}`, { scheduledAt: `${when}:00+08:00`, pickSeconds: secs }))}>
-          {draft?.scheduledAt ? '儲存' : '設定選秀'}
-        </button>
+        <button type="button" className="primary" onClick={go}>開始選秀</button>
       </div>
-      <p className="muted" style={{ margin: '8px 0 0' }}>
-        伺服器現在是 {fmtWhen(new Date(now).toISOString())}
-        {system?.demo ? '（demo 模擬時鐘，不是真實日期；選秀時間要以這個時鐘為準）'
-          : system?.source === 'replay' ? '（重播模式的模擬時鐘，不是真實日期）' : ''}
-      </p>
-      <div className="row" style={{ marginTop: 8 }}>
-        <span className="muted">快速選時間（從伺服器現在起算）：</span>
-        {[3, 15, 60].map((m) => (
-          <button key={m} type="button" className="dl-quick" onClick={() => setWhen(afterMinutes(now, m))}>{m} 分鐘後</button>
-        ))}
-      </div>
-      {!when && <p className="muted" style={{ margin: '8px 0 0' }}>先選好日期時間（至少 2 分鐘後），「設定選秀」才能按。</p>}
     </div>
   )
 }

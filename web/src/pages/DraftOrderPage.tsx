@@ -61,17 +61,16 @@ export default function DraftOrderPage({ draft }: { draft: DraftView; onChange?:
     ? (short ? `每輪第 ${p} 個選` : `R1–R${draft.rounds} 每輪第 ${p} 個選`)
     : (short ? `R1 #${p}・R2 #${n + 1 - p}・蛇形` : `R1 第 ${p} 手・R2 第 ${n + 1 - p} 手・蛇形 ${draft.rounds} 輪`)
 
-  // 揭曉由時間驅動（T−10 自動揭曉，docs/decisions.md「選秀與 keeper」），這裡沒有揭曉按鈕
-  const revealAt = draft.keeperDeadline ? fmt(draft.keeperDeadline) : null
+  // 揭曉由管理員按「開始選秀」觸發（docs/decisions.md「選秀與 keeper」），這裡沒有揭曉按鈕
   const play = !revealed
-    ? { label: revealAt ? `${revealAt} 自動揭曉` : '等管理員設定選秀時間', on: false, go: () => {} }
+    ? { label: '等管理員按下開始選秀', on: false, go: () => {} }
     : playing ? { label: '揭曉中…', on: false, go: () => {} }
       : { label: '重新播放', on: true, go: () => setReplayAt(now) }
 
   const status = done ? (second ? '順位確定，各隊 keeper 已公開' : '順位確定')
     : current != null ? `第 ${current} 順位・${teamAt(current)?.name ?? ''}`
       : playing ? '準備翻牌…'
-        : second ? '順序依上半季戰績，由差到好' : `選秀前 10 分鐘自動抽籤，從第 ${n} 順位翻起`
+        : second ? '順序依上半季戰績，由差到好' : `管理員按下開始選秀後，從第 ${n} 順位翻起`
   const curTeam = current != null ? teamAt(current) : null
   const glow = curTeam ? alpha(color(curTeam), 0.14) : 'rgba(196,202,212,.05)'
 
@@ -79,7 +78,7 @@ export default function DraftOrderPage({ draft }: { draft: DraftView; onChange?:
   const title = second ? '選秀順位揭曉' : '選秀順位抽籤'
   const when = draft.scheduledAt ? fmt(draft.scheduledAt) : ''
   const sub = second ? `開始補強選秀・${draft.rounds} 輪` : `開始選秀・蛇形 ${draft.rounds} 輪`
-  const who = second ? '順序依上半季戰績，選秀前 10 分鐘全聯盟同步揭曉' : '順序由系統隨機產生，選秀前 10 分鐘全聯盟同步揭曉'
+  const who = second ? '順序依上半季戰績，管理員按下開始選秀後全聯盟同步揭曉' : '順序由系統隨機產生，管理員按下開始選秀後全聯盟同步揭曉'
 
   // 一張順位卡（背面「?」，翻開後是隊伍）
   const card = (p: number, size: 'p' | 'w') => {
