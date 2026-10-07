@@ -195,8 +195,8 @@ export function RoomHeader({ draft, queueLen = 0, onReport, onChange }: { draft:
             return (
               <div key={p.pickNo} className={`s${now_ ? ' cur' : ''}${me ? ' me' : ''}${p.playerId ? ' done' : ''}`}>
                 <div className="l"><span>{pickLabel(p.pickNo, n)}</span><i style={{ background: color(p.teamId) }} /></div>
-                <div className="t">{short(p.teamId)}{auto(p.teamId) ? '・託管' : ''}</div>
-                <div className="p">{p.playerName ?? (now_ ? '選擇中' : '—')}</div>
+                <div className="t">{short(p.teamId)}</div>
+                <div className="p">{p.playerName ?? (now_ ? '選擇中' : auto(p.teamId) ? '託管' : '—')}</div>
               </div>
             )
           })}
