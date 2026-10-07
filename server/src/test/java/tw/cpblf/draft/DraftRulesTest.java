@@ -143,6 +143,8 @@ class DraftRulesTest extends IntegrationTest {
         assertThat(cands).hasSize(rosterOf(me).size());
         assertThat(cands).allSatisfy(c -> assertThat(c.via()).startsWith("選秀第 ").endsWith(" 輪"));
         assertThat(cands).extracting(DraftService.KeeperCandidate::rank).doesNotContainNull().isSorted();
+        // 每位候選附本季（上半季）數據，給 Keeper 頁的數據欄
+        assertThat(cands).allSatisfy(c -> assertThat(c.stats()).isNotNull());
     }
 
     @Test
