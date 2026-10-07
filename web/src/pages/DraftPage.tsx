@@ -177,7 +177,7 @@ function afterMinutes(serverNowMs: number, minutes: number) {
 }
 
 function DraftSetup({ halfNo, draft, call }: { halfNo: number; draft: DraftView | null; call: (fn: () => Promise<unknown>) => void }) {
-  const { leagueId, league } = useApp()
+  const { leagueId, league, system } = useApp()
   const now = useServerNow(30_000)
   const [when, setWhen] = useState(localValue(draft?.scheduledAt ?? null))
   const [secs, setSecs] = useState(draft?.pickSeconds ?? league?.league.draftPickSeconds ?? 60)
@@ -201,8 +201,13 @@ function DraftSetup({ halfNo, draft, call }: { halfNo: number; draft: DraftView 
           {draft?.scheduledAt ? '儲存' : '設定選秀'}
         </button>
       </div>
+      <p className="muted" style={{ margin: '8px 0 0' }}>
+        伺服器現在是 {fmtWhen(new Date(now).toISOString())}
+        {system?.demo ? '（demo 模擬時鐘，不是真實日期；選秀時間要以這個時鐘為準）'
+          : system?.source === 'replay' ? '（重播模式的模擬時鐘，不是真實日期）' : ''}
+      </p>
       <div className="row" style={{ marginTop: 8 }}>
-        <span className="muted">快速選時間（伺服器時間起算）：</span>
+        <span className="muted">快速選時間（從伺服器現在起算）：</span>
         {[3, 15, 60].map((m) => (
           <button key={m} type="button" className="dl-quick" onClick={() => setWhen(afterMinutes(now, m))}>{m} 分鐘後</button>
         ))}
