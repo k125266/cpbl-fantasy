@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type DraftView } from '../api'
 import { ErrorBox, Loading, useLoad } from '../components'
+import { useServerNow } from '../hooks'
 import DraftOrderPage from './DraftOrderPage'
 import DraftRoom from './DraftRoomPage'
 import KeeperPage from './KeeperPage'
+
+/** 揭曉動畫的長度，與後端 DraftService.REVEAL_SECONDS 一致 */
+const REVEAL_MS = 10_000
 
 /**
  * 選秀入口：/draft/keepers（Keeper）、/draft/order（順位抽籤／揭曉）、/draft/room（選秀室）。
@@ -21,6 +25,7 @@ export default function DraftPage() {
     return () => clearInterval(t)
   }, [reloadSystem])
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const drafts = useLoad(() => api.get<DraftView[]>(`/api/leagues/${leagueId}/drafts`), [leagueId])
   const [err, setErr] = useState<unknown>(null)
   const [halfNo, setHalfNo] = useState(1)
@@ -28,6 +33,9 @@ export default function DraftPage() {
   const active = (drafts.data || []).find((d) => d.status !== 'COMPLETED') ?? (drafts.data || []).slice(-1)[0]
   const live = active?.status === 'IN_PROGRESS'
   const before = active?.status === 'SETUP' || active?.status === 'KEEPERS'
+  // 不能跳過揭曉：揭曉後動畫（10 秒）播完才能開始選秀（後端同樣檢查）
+  const now = useServerNow(1000)
+  const revealShown = !!active?.revealedAt && now >= Date.parse(active.revealedAt) + REVEAL_MS
 
   // v1 以輪詢同步（SSE / WebSocket 列在工程待辦 E8）：進行中 2 秒；開始前 3 秒，讓揭曉動畫各裝置同步開始
   useEffect(() => {
@@ -77,10 +85,16 @@ export default function DraftPage() {
             <button type="button" onClick={() => call(() => api.post(`/api/leagues/${leagueId}/drafts`,
               { halfNo, scheduledAt: when ? `${when}:00+08:00` : null }))}>建立選秀</button>
             {active && (active.status === 'SETUP' || active.status === 'KEEPERS') && !active.revealedAt && (
-              <button type="button" onClick={() => call(() => api.post(`/api/leagues/${leagueId}/drafts/${active.id}/reveal`))}>揭曉順位</button>
+              <button type="button" onClick={async () => {
+                await call(() => api.post(`/api/leagues/${leagueId}/drafts/${active.id}/reveal`))
+                navigate('/draft/order') // 揭曉的人也要看到抽籤動畫
+              }}>揭曉順位</button>
             )}
-            {active && (active.status === 'SETUP' || active.status === 'KEEPERS') && (
-              <button type="button" className="primary" onClick={() => call(() => api.post(`/api/leagues/${leagueId}/drafts/${active.id}/start`))}>開始選秀</button>
+            {active && before && active.revealedAt && (
+              <button type="button" className="primary" disabled={!revealShown}
+                onClick={() => call(() => api.post(`/api/leagues/${leagueId}/drafts/${active.id}/start`))}>
+                {revealShown ? '開始選秀' : '揭曉中…'}
+              </button>
             )}
             {active && live && (
               <button type="button" onClick={() => call(() => api.post(`/api/leagues/${leagueId}/drafts/${active.id}/auto-complete`))}>剩餘全部自動選取</button>
