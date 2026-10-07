@@ -10,7 +10,7 @@ import { Medal } from './KeeperPage'
 
 /**
  * 選秀室 v3（設計稿「選秀室 v3」3a 網頁、3b 手機）。與設計稿的差異見 docs/decisions.md「介面與設計稿」：
- * 輪數照聯盟設定、10 類別用聯盟的類別、缺位照名單結構、「ADP」改為「排名」、不做託管與快轉。
+ * 輪數照聯盟設定、10 類別用聯盟的類別、缺位照名單結構、「ADP」改為「排名」、不做快轉（託管見 E18）。
  */
 
 /** 順位標籤：輪.輪內順位（例 1.03） */
@@ -68,8 +68,16 @@ function buzz(p: number | number[]) {
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /** 計時票根、標題、上一個選擇與接下來的順位橫條。 */
-export function RoomHeader({ draft, queueLen = 0, onReport }: { draft: DraftView; queueLen?: number; onReport?: () => void }) {
-  const { league, system } = useApp()
+export function RoomHeader({ draft, queueLen = 0, onReport, onChange }: { draft: DraftView; queueLen?: number; onReport?: () => void; onChange?: () => void }) {
+  const { leagueId, league, system } = useApp()
+  // 託管（E18）：輪到就在 3 秒內照候選 → 補缺位 → 排名自動選
+  const auto = (id: number | null | undefined) => id != null && draft.autopilotTeams.includes(id)
+  const myAuto = auto(league?.myTeamId)
+  const toggleAuto = async () => {
+    if (league?.myTeamId == null) return
+    await api.put(`/api/leagues/${leagueId}/drafts/${draft.id}/autopilot`, { teamId: league.myTeamId, on: !myAuto })
+    onChange?.()
+  }
   const wide = useWide()
   const now = useServerNow(250)
   const teams = league?.teams ?? []
@@ -91,7 +99,7 @@ export function RoomHeader({ draft, queueLen = 0, onReport }: { draft: DraftView
   const label = cur ? pickLabel(cur.pickNo, n) : '—'
   const note = done ? '看成績單 ›'
     : !live ? '尚未開始'
-      : mine ? (queueLen > 0 ? '時間到選候選第 1 位' : '時間到自動補缺位')
+      : mine ? (myAuto ? '託管中・3 秒內自動選' : queueLen > 0 ? '時間到選候選第 1 位' : '時間到自動補缺位')
         : nextMe ? `再 ${nextMe.pickNo - draft.currentPickNo} 順位輪到你（${pickLabel(nextMe.pickNo, n)}）` : '你已選完'
 
   const idx = cur ? slots.indexOf(cur) : slots.length
@@ -146,7 +154,7 @@ export function RoomHeader({ draft, queueLen = 0, onReport }: { draft: DraftView
             <div className="who">
               <i style={{ background: done ? 'var(--gold)' : team ? color(team.id) : 'var(--line-2)' }} />
               <b>{done ? '選秀結束' : team?.name ?? '—'}</b>
-              <small>{done ? `${slots.length} 個順位全部選完` : team ? `${team.owner}・${mine ? '選一位球員' : '思考中…'}` : ''}</small>
+              <small>{done ? `${slots.length} 個順位全部選完` : team ? `${team.owner}・${auto(team.id) ? '託管・3 秒內自動選' : mine ? '選一位球員' : '思考中…'}` : ''}</small>
             </div>
             <div className="time">{done || !live ? '0:00' : fmtClock(rem)}</div>
           </div>
@@ -169,6 +177,12 @@ export function RoomHeader({ draft, queueLen = 0, onReport }: { draft: DraftView
             </svg>
             音效 {sound ? '開' : '關'}
           </button>
+          {!done && league?.myTeamId != null && (
+            <button type="button" className={`dr-sound dr-auto${myAuto ? ' on' : ''}`} onClick={toggleAuto} aria-pressed={myAuto}
+              title="開啟後輪到你就在 3 秒內自動選：候選清單 → 補缺位 → 排名">
+              託管 {myAuto ? '開' : '關'}
+            </button>
+          )}
         </div>
         <div className="dr-last">
           <span className="eb">LAST PICK</span>
@@ -182,7 +196,7 @@ export function RoomHeader({ draft, queueLen = 0, onReport }: { draft: DraftView
               <div key={p.pickNo} className={`s${now_ ? ' cur' : ''}${me ? ' me' : ''}${p.playerId ? ' done' : ''}`}>
                 <div className="l"><span>{pickLabel(p.pickNo, n)}</span><i style={{ background: color(p.teamId) }} /></div>
                 <div className="t">{short(p.teamId)}</div>
-                <div className="p">{p.playerName ?? (now_ ? '選擇中' : '—')}</div>
+                <div className="p">{p.playerName ?? (now_ ? '選擇中' : auto(p.teamId) ? '託管' : '—')}</div>
               </div>
             )
           })}
@@ -835,7 +849,7 @@ export default function DraftRoom({ draft, onChange }: { draft: DraftView; onCha
   if (done && report && !rv) {
     return <div className="dr"><DraftReportView draft={draft} onClose={() => setReport(false)} /></div>
   }
-  const header = <RoomHeader draft={draft} queueLen={queue.ids.length} onReport={() => setReport(true)} />
+  const header = <RoomHeader draft={draft} queueLen={queue.ids.length} onReport={() => setReport(true)} onChange={onChange} />
 
   if (wide) {
     return (
