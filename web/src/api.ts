@@ -398,7 +398,7 @@ export interface DraftReport {
 export interface DraftView {
   id: number
   halfNo: number
-  status: 'SETUP' | 'KEEPERS' | 'IN_PROGRESS' | 'COMPLETED'
+  status: 'SETUP' | 'KEEPERS' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED'
   rounds: number
   pickSeconds: number
   currentPickNo: number
@@ -421,6 +421,13 @@ export interface DraftView {
   keepers: { teamId: number; players: { playerId: number; name: string }[] }[]
   /** 開啟託管的隊伍：輪到就在 3 秒內自動選（E18） */
   autopilotTeams: number[]
+  /**
+   * 流程階段（時間驅動）：UNSCHEDULED 尚未設定時間、SCHEDULED 已排定、LOBBY 選秀室開放（T−30）、
+   * REVEALED 順位已揭曉（T−10 起）、IN_PROGRESS、PAUSED、COMPLETED
+   */
+  phase: 'UNSCHEDULED' | 'SCHEDULED' | 'LOBBY' | 'REVEALED' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED'
+  /** 選秀室開放時間（T−30）；揭曉 = keeperDeadline（T−10）、開始 = scheduledAt（T） */
+  lobbyAt: string | null
 }
 
 export interface Trade {
