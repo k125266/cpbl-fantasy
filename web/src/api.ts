@@ -555,6 +555,8 @@ export interface LiveLine {
   changedAt: string | null
   fantasyTeamId: number | null
   rosterSlot: SlotName | null
+  /** 比賽當天在本聯盟名單上的隊伍（不是今天的名單）；季後賽紀念卡依這個發卡 */
+  gameDayTeamId: number | null
 }
 
 export interface LiveStarter {
