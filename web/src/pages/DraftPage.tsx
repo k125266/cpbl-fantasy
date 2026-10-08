@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type DraftView } from '../api'
 import { ErrorBox, Loading, useLoad } from '../components'
@@ -14,6 +14,8 @@ import KeeperPage from './KeeperPage'
  *
  * /draft 依階段決定：準備中是首頁；揭曉後是順位頁（大家一起看翻牌）；開始後是選秀室。
  * /draft/keepers、/draft/order、/draft/room 可以直接進。
+ * ?half=1|2 指定要看哪一場（已完成的選秀留作紀錄，選秀首頁的「選秀紀錄」連到這裡）；沒指定時是還沒選完的那一場，
+ * 都選完就是最後一場。
  */
 export default function DraftPage() {
   const { leagueId, league, reloadLeague, reloadSystem } = useApp()
@@ -25,9 +27,12 @@ export default function DraftPage() {
     return () => clearInterval(t)
   }, [reloadSystem])
   const { pathname } = useLocation()
+  const [params] = useSearchParams()
+  const half = Number(params.get('half')) || null
   const drafts = useLoad(() => api.get<DraftView[]>(`/api/leagues/${leagueId}/drafts`), [leagueId])
   const [err, setErr] = useState<unknown>(null)
-  const active = (drafts.data || []).find((d) => d.status !== 'COMPLETED') ?? (drafts.data || []).slice(-1)[0]
+  const all = drafts.data || []
+  const active = (half ? all.find((d) => d.halfNo === half) : undefined) ?? all.find((d) => d.status !== 'COMPLETED') ?? all.slice(-1)[0]
   const phase = active?.phase
   const live = phase === 'IN_PROGRESS' || phase === 'PAUSED'
 
@@ -64,10 +69,12 @@ export default function DraftPage() {
     <div className="stack">
       <ErrorBox error={err || drafts.error} />
       {view === 'hub' && <DraftHub draft={active && phase !== 'COMPLETED' ? active : null} />}
+      {view === 'hub' && <DraftRecords drafts={all} currentId={active?.id} />}
       {active && view === 'keepers' && (active.halfNo === 2
         ? <KeeperPage draft={active} onChange={changed} />
         : <p className="muted">上半季沒有 keeper。</p>)}
       {active && view === 'order' && <DraftOrderPage draft={active} onChange={changed} />}
+      {active && view === 'room' && phase === 'COMPLETED' && <DraftRecords drafts={all} currentId={active.id} compact />}
       {active && view === 'room' && <DraftRoom draft={active} onChange={changed} />}
       {league?.commissioner && view === 'hub' && preparing && <DraftBegin draft={preparing} call={call} />}
       {league?.commissioner && active && view === 'room' && phase !== 'COMPLETED' && <DraftTools draft={active} call={call} />}
@@ -124,6 +131,29 @@ function DraftHub({ draft }: { draft: DraftView | null }) {
         {second && <Link className="dl-btn" to="/draft/keepers">選擇 Keeper</Link>}
         <Link className="dl-btn on" to="/draft/room">進入選秀室・排候選清單</Link>
       </div>
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------
+// 選秀紀錄：已完成的選秀留作紀錄，隨時可以回去看選秀板與成績單
+// ------------------------------------------------------------------
+
+function DraftRecords({ drafts, currentId, compact }: { drafts: DraftView[]; currentId?: number; compact?: boolean }) {
+  const done = drafts.filter((d) => d.phase === 'COMPLETED')
+  // 室內的小列只在有兩場以上時才有切換的意義
+  if (done.length === 0 || (compact && drafts.length < 2)) return null
+  return (
+    <div className={`card dl-rec${compact ? ' compact' : ''}`}>
+      {compact ? <span className="muted">選秀紀錄</span> : <h2>選秀紀錄</h2>}
+      <div className="row">
+        {done.map((d) => (
+          <Link key={d.id} className={`dl-btn${d.id === currentId ? ' on' : ''}`} to={`/draft/room?half=${d.halfNo}`}>
+            {d.halfNo === 2 ? '下半季補強選秀' : '上半季選秀'}・{d.picks.length} 手
+          </Link>
+        ))}
+      </div>
+      {!compact && <p className="muted" style={{ margin: '8px 0 0' }}>已完成的選秀：看選秀板、每一手的結果與成績單。</p>}
     </div>
   )
 }
