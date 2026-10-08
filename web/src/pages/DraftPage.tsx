@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type DraftView } from '../api'
+import { useConfirm } from '../Confirm'
 import { ErrorBox, Loading, useLoad } from '../components'
 import DraftOrderPage from './DraftOrderPage'
 import DraftRoom from './DraftRoomPage'
@@ -139,12 +140,16 @@ function DraftBegin({ draft, call }: { draft: DraftView; call: (fn: () => Promis
   const second = draft.halfNo === 2
   const [secs, setSecs] = useState(draft.pickSeconds)
   useEffect(() => setSecs(draft.pickSeconds), [draft.pickSeconds])
-  const go = () => {
-    const warn = `按下後${second ? ' keeper 鎖定、' : ''}馬上揭曉順位，約 10 秒後自動開始選秀，不能取消。請確認大家都在線上，要開始嗎？`
-    if (window.confirm(warn)) {
-      call(() => api.post(`/api/leagues/${leagueId}/drafts/${draft.id}/begin`, { pickSeconds: secs }))
-    }
-  }
+  const confirm = useConfirm()
+  const go = () => call(() => confirm({
+    title: `開始${second ? '下半季補強' : '上半季'}選秀？`,
+    lead: `按下後，${second ? 'keeper 鎖定、' : ''}馬上揭曉順位，約 10 秒後自動開始選秀。`,
+    points: [...(second ? ['keeper 在這一刻鎖定'] : []), '全聯盟同步看揭曉', '約 10 秒後自動開始，不能取消'],
+    note: '請確認大家都在線上。',
+    confirmText: '開始選秀',
+    busyText: '開始中…',
+    run: () => api.post(`/api/leagues/${leagueId}/drafts/${draft.id}/begin`, { pickSeconds: secs }),
+  }))
   return (
     <div className="card">
       <h2>聯盟管理員・開始{second ? '下半季補強選秀' : '上半季選秀'}</h2>
@@ -165,6 +170,24 @@ function DraftTools({ draft, call }: { draft: DraftView; call: (fn: () => Promis
   const { leagueId, league } = useApp()
   const base = `/api/leagues/${leagueId}/drafts/${draft.id}`
   const live = draft.phase === 'IN_PROGRESS' || draft.phase === 'PAUSED'
+  const confirm = useConfirm()
+  const pause = () => call(() => confirm({
+    title: '暫停選秀？',
+    lead: '暫停後倒數停住，大家都不能選人，直到你按繼續。',
+    confirmText: '暫停',
+    busyText: '暫停中…',
+    run: () => api.post(`${base}/pause`),
+  }))
+  const autoAll = () => call(() => confirm({
+    label: 'DANGER · TEST ONLY',
+    title: '剩餘全部自動選（測試用）',
+    lead: '剩下的順位會全部由系統代選，無法復原。',
+    note: '按下後立即執行，無法復原。',
+    confirmText: '全部自動選',
+    busyText: '代選中…',
+    danger: true,
+    run: () => api.post(`${base}/auto-complete`),
+  }))
   return (
     <div className="card">
       <h2>聯盟管理員</h2>
@@ -172,12 +195,12 @@ function DraftTools({ draft, call }: { draft: DraftView; call: (fn: () => Promis
         <div className="row">
           {draft.phase === 'PAUSED'
             ? <button type="button" className="primary" onClick={() => call(() => api.post(`${base}/resume`))}>繼續選秀</button>
-            : <button type="button" onClick={() => call(() => api.post(`${base}/pause`))}>暫停選秀</button>}
+            : <button type="button" onClick={pause}>暫停選秀</button>}
           <select value={draft.pickSeconds} aria-label="每手秒數"
             onChange={(e) => call(() => api.put(`${base}/pick-seconds`, { seconds: Number(e.target.value) }))}>
             {[...new Set([...SECONDS, draft.pickSeconds])].sort((a, b) => a - b).map((s) => <option key={s} value={s}>每手 {s} 秒（下一手起）</option>)}
           </select>
-          <button type="button" onClick={() => call(() => api.post(`${base}/auto-complete`))}>剩餘全部自動選（測試用）</button>
+          <button type="button" onClick={autoAll}>剩餘全部自動選（測試用）</button>
         </div>
       )}
       <p className="muted" style={{ margin: '12px 0 6px' }}>託管：輪到就在 3 秒內自動選（候選清單 → 補缺位 → 排名）。電腦隊伍或缺席的人可以替他開。</p>
