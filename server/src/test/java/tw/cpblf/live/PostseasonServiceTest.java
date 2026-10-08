@@ -136,4 +136,23 @@ class PostseasonServiceTest extends IntegrationTest {
         assertThat(s.lines()).allMatch(l -> !l.settled());
         assertThat(s.lines()).extracting(l -> l.gameId()).contains(g1, g2);
     }
+
+    @Test
+    void gameDayRosterIsSeparateFromTodaysRoster() {
+        long g1 = game("E", 1, -1, "BRO", "UNI", "FINAL", 5, 3); // 昨天
+        long g2 = game("E", 2, 0, "UNI", "BRO", "FINAL", 4, 2); // 今天
+        long late = player("P9", "後來才加入", "UNI");
+        liveStat(g1, late, "UNI", 0, 2);
+        liveStat(g2, late, "UNI", 0, 2);
+        // 今天才進名單：昨天那場當天不在名單上，今天這場在
+        jdbc.sql("insert into roster_entry (team_id, player_id, slot, valid_from, acquired_via) values (?, ?, 'OF', ?, 'WAIVER')")
+                .params(myTeam, late, today).update();
+
+        var lines = postseason.view(league, user).series().get(0).lines();
+        var yesterday = lines.stream().filter(l -> l.gameId() == g1).findFirst().orElseThrow();
+        var todayLine = lines.stream().filter(l -> l.gameId() == g2).findFirst().orElseThrow();
+        assertThat(yesterday.fantasyTeamId()).isEqualTo(myTeam);
+        assertThat(yesterday.gameDayTeamId()).isNull();
+        assertThat(todayLine.gameDayTeamId()).isEqualTo(myTeam);
+    }
 }

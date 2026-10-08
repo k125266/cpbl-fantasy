@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type Matchup, type PostseasonView, type StandingRow } from '../api'
 import { ErrorBox, ICONS, Loading, useLoad } from '../components'
+import { deriveCards, loadSeen } from '../postseason/cards'
 
 interface Standings {
   half1: StandingRow[]
@@ -33,6 +34,11 @@ export default function LeagueHubPage() {
   const ms = useLoad(() => api.get<Matchup[]>(`/api/leagues/${leagueId}/matchups`), [leagueId])
   // 季後賽專區的入口：有季後賽賽程才出現（錯誤時當作沒有，不影響聯盟首頁）
   const post = useLoad(() => api.get<PostseasonView>(`/api/postseason?leagueId=${leagueId}`).catch(() => null), [leagueId])
+  // 季後賽專區入口的提示：還沒打開的紀念卡張數（看過的卡存在這個瀏覽器）
+  const newCards = post.data ? (() => {
+    const seen = loadSeen(leagueId, user.id)
+    return deriveCards(post.data, post.data.myTeamId, '').flat.filter((c) => !seen.has(c.id)).length
+  })() : 0
   const [half, setHalf] = useState<1 | 2>((league?.currentPeriod?.halfNo as 1 | 2) ?? 1)
   if (st.loading && !st.data) return <Loading />
   if (st.error || !st.data) return <ErrorBox error={st.error} />
@@ -65,7 +71,9 @@ export default function LeagueHubPage() {
         {post.data && post.data.series.length > 0 && (
           <Link to="/postseason" className="hub-post">
             {ICONS.trophy}季後賽專區
-            {post.data.series.some((s) => s.games.some((g) => g.status === 'IN_PROGRESS')) && <i className="hub-dot" aria-label="比賽進行中" />}
+            {newCards > 0
+              ? <i className="hub-count" aria-label={`${newCards} 張新紀念卡`}>{newCards}</i>
+              : post.data.series.some((s) => s.games.some((g) => g.status === 'IN_PROGRESS')) && <i className="hub-dot" aria-label="比賽進行中" />}
           </Link>
         )}
         <Link to="/league/settings">{ICONS.gear}聯盟設定</Link>

@@ -63,12 +63,13 @@ public class LiveService {
      * @param changedAt  數據最後一次變動的時間（「剛更新」）；正式數據為 null
      * @param fantasyTeamId 在本聯盟名單上的隊伍，不在名單上為 null
      * @param rosterSlot 名單位置（IF、OF、UTIL、SP、RP、BN、NA）
+     * @param gameDayTeamId 比賽「當天」在本聯盟名單上的隊伍（不是今天的名單）；季後賽紀念卡依這個發卡
      */
     public record LiveLine(long gameId, long playerId, String name, String jerseyNumber, String cpblTeam,
                            String listedPosition, boolean home, boolean batted, boolean pitched, Integer lineupSlot,
                            boolean sub, int seq, int pa, int ab, int h, int r, int hr, int bb, int outs, int pH, int pBb,
                            int pEr, int pK, int w, int sv, boolean settled, Instant changedAt, Long fantasyTeamId,
-                           String rosterSlot) {
+                           String rosterSlot, Long gameDayTeamId) {
     }
 
     /** 聯盟各隊今天的先發（不含 BN、NA）。 */
@@ -148,11 +149,14 @@ public class LiveService {
                     where (%1$s)
                 )
                 select src.*, src.team_code = g.home_team_code as home, p.name, p.jersey_number, p.listed_position,
-                       re.team_id as fantasy_team_id, re.slot as roster_slot
+                       re.team_id as fantasy_team_id, re.slot as roster_slot, rg.team_id as game_day_team_id
                 from src join game g on g.id = src.game_id join player p on p.id = src.player_id
                 left join (roster_entry re join fantasy_team t on t.id = re.team_id and t.league_id = :league)
                        on re.player_id = src.player_id and re.valid_from <= :rosterDate
                       and (re.valid_to is null or re.valid_to > :rosterDate)
+                left join (roster_entry rg join fantasy_team tg on tg.id = rg.team_id and tg.league_id = :league)
+                       on rg.player_id = src.player_id and rg.valid_from <= g.play_date
+                      and (rg.valid_to is null or rg.valid_to > g.play_date)
                 order by g.start_time nulls last, src.game_id, src.team_code = g.home_team_code, not src.batted, src.box_seq,
                          p.name
                 """.formatted(where)).params(params).param("rosterDate", rosterDate).param("league", leagueId)
@@ -163,7 +167,7 @@ public class LiveService {
                 rs.getInt("pa"), rs.getInt("ab"), rs.getInt("h"), rs.getInt("r"), rs.getInt("hr"), rs.getInt("bb"),
                 rs.getInt("outs"), rs.getInt("p_h"), rs.getInt("p_bb"), rs.getInt("p_er"), rs.getInt("p_k"), rs.getInt("w"),
                 rs.getInt("sv"), rs.getBoolean("settled"), instant(rs.getTimestamp("changed_at")),
-                (Long) rs.getObject("fantasy_team_id"), rs.getString("roster_slot"))).list();
+                (Long) rs.getObject("fantasy_team_id"), rs.getString("roster_slot"), (Long) rs.getObject("game_day_team_id"))).list();
     }
 
     List<Starter> starters(long leagueId, LocalDate d) {
