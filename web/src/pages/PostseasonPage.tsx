@@ -4,11 +4,11 @@ import { useApp } from '../App'
 import { api, type LiveGame, type LiveLine, type PostseasonView, type SeriesView } from '../api'
 import { ErrorBox, Loading } from '../components'
 import { useWide } from '../hooks'
-import { ip } from '../live'
 import {
-  aggregate, avg, batText, bestBatter, bestPitcher, byOrder, eraText, leaderboards, linesOf,
+  batText, bestBatter, bestPitcher, byOrder, leaderboards, linesOf,
   pitText, standingAfter, winnerOf, type BatAgg, type Board, type PitAgg,
 } from '../postseason'
+import MinePanel from '../postseason/MinePanel'
 import SeriesCard from '../postseason/SeriesCard'
 import TodayCard from '../postseason/TodayCard'
 import { buildCtx, mdw } from '../postseason/shared'
@@ -24,8 +24,6 @@ import { cpblTeam, fantasyTeamColor } from '../teams'
 
 const REFRESH = 60
 const SERVED = (g: LiveGame) => g.status !== 'POSTPONED' && g.status !== 'CANCELLED'
-const SER_HEADS_BAT = ['G', 'PA', 'AB', 'H', 'R', 'HR', 'BB', 'AVG']
-const SER_HEADS_PIT = ['G', 'IP', 'H', 'BB', 'ER', 'K', '勝/救', 'ERA']
 
 type Group = 'bat' | 'pit'
 
@@ -44,7 +42,6 @@ export default function PostseasonPage() {
   const [kind, setKind] = useState<string | null>(null)
   const [group, setGroup] = useState<Group>('bat')
   const [recapIdx, setRecapIdx] = useState<number | null>(null)
-  const [mineAll, setMineAll] = useState(false)
 
   const load = useCallback(() => {
     api.get<PostseasonView>(`/api/postseason?leagueId=${leagueId}`)
@@ -163,61 +160,6 @@ export default function PostseasonPage() {
       )
     })
 
-  // ---------------- 你的球員 ----------------
-  const agg = aggregate(s.lines)
-  const myBats = agg.bats.filter((x) => x.fantasyTeamId === data.myTeamId && data.myTeamId != null)
-  const myPits = agg.pits.filter((x) => x.fantasyTeamId === data.myTeamId && data.myTeamId != null)
-  const mineCount = myBats.length + myPits.length
-  const todayLine = (id: number) => (todayGame ? linesOf(s, todayGame).find((l) => l.playerId === id) : undefined)
-  const myCard = (p: BatAgg | PitAgg, isBat: boolean) => {
-    const l = todayLine(p.playerId)
-    const nowBat = !!todayGame && todayGame.status === 'IN_PROGRESS' && todayGame.batterId === p.playerId
-    const nowPit = !!todayGame && todayGame.status === 'IN_PROGRESS' && todayGame.pitcherId === p.playerId
-    const text = !todayGame ? '休息日，沒有比賽' : !l ? '今天沒有上場' : isBat ? batText(l) : pitText(l)
-    const heads = isBat ? SER_HEADS_BAT : SER_HEADS_PIT
-    const b = p as BatAgg, t = p as PitAgg
-    const cells = isBat
-      ? [b.g, b.pa, b.ab, b.h, b.r, b.hr, b.bb, avg(b.h, b.ab)]
-      : [t.g, ip(t.outs), t.h, t.bb, t.er, t.k, `${t.w}/${t.sv}`, eraText(t)]
-    return (
-      <div key={`${isBat ? 'b' : 'p'}${p.playerId}`} className="ps-mycard">
-        <div className="row1">
-          {num(p.team, p.jersey)}
-          <Link to={`/players/${p.playerId}`} className="n">{p.name}</Link>
-          {mark(p.fantasyTeamId, 14)}
-          <span className="ts">{team(p.team).short}・{p.pos}</span>
-          <span className="sp" />
-          {(nowBat || nowPit) && <span className="tag live">{nowBat ? '打擊中' : '投球中'}</span>}
-        </div>
-        <div className="row2"><span>{todayGame ? (live ? '今天・進行中' : '今天') : '今天'}</span><b>{text}</b></div>
-        <div className="ps-cum">
-          {heads.map((h) => <span key={h} className="h">{h}</span>)}
-          {cells.map((v, i) => <span key={i} className="v">{v}</span>)}
-        </div>
-      </div>
-    )
-  }
-  const minePanel = (
-    <div className="ps-card">
-      <div className="ps-ctitle"><span>你的球員</span><span className="sp" /><span className="muted">只標示，不計分</span></div>
-      {mineCount === 0
-        ? <div className="lv-empty">你的名單上沒有人在打{s.name}。</div>
-        : (() => {
-          // 名單上在打的人多時先收合，只列前 3 位
-          const all = [...myBats.map((p) => ({ p, bat: true })), ...myPits.map((p) => ({ p, bat: false }))]
-          const shown = mineAll ? all : all.slice(0, 3)
-          return (
-            <>
-              {shown.map((x) => myCard(x.p, x.bat))}
-              {all.length > 3 && (
-                <button type="button" className="ps-more" onClick={() => setMineAll(!mineAll)}>{mineAll ? '收合' : `顯示全部 ${all.length} 位`}</button>
-              )}
-            </>
-          )
-        })()}
-    </div>
-  )
-
   // ---------------- 系列戰排行 ----------------
   const played = finished.length + (games.some((g) => g.status === 'IN_PROGRESS') ? 1 : 0)
   const boards = leaderboards(s.lines, Math.max(played, 1))
@@ -335,7 +277,7 @@ export default function PostseasonPage() {
       {switcher}
       <SeriesCard ctx={ctx} />
       <TodayCard ctx={ctx} />
-      <div className="pv-two">{minePanel}{leadersPanel}</div>
+      <div className="pv-two"><MinePanel ctx={ctx} />{leadersPanel}</div>
       {recaps}
       <p className="lv-note">{data.notice}</p>
     </div>
