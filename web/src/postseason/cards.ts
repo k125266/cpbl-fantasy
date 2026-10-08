@@ -304,7 +304,7 @@ function champCard(s: SeriesView, games: LiveGame[], t: number, runAfter: (i: nu
     fullTitle, vs: side(lose).s, dateL: mdw(lastG.scheduledDate),
     team: { s: tm.short, n: tm.name, bg: tm.bg, fg: tm.fg, deep: DEEP[win] ?? darken(tm.bg), glow: `${tm.bg}80` },
     score, scoreNote: s.advantageTeam ? '含保送 1 勝' : format, games: boxes, glist, hasBye: !!s.advantageTeam,
-    byeT: s.advantageTeam ? `${side(s.advantageTeam).s}保送 1 勝，系列戰從 1：0 開始` : '', mvp,
+    byeT: s.advantageTeam ? `${side(s.advantageTeam).s}保送 1 勝，從 1：0 開打` : '', mvp,
     cap1: `${tm.short} ${fullTitle}`, cap2: `${mdw(lastG.scheduledDate)}・${s.name}系列戰 ${score}`,
     desc: `${tm.name}以 ${score} ${isFinals ? `拿下 ${year} 台灣大賽總冠軍` : '贏下季後挑戰賽，晉級台灣大賽'}。系列戰 MVP 是${mvp.n}，依系列戰數據自動選出。聯盟裡每位玩家都會收到這張。`,
   }

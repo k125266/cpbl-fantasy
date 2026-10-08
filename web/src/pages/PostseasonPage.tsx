@@ -2,12 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useApp } from '../App'
 import { api, type PostseasonView, type SeriesView } from '../api'
 import { ErrorBox, Loading } from '../components'
+import { deriveCards } from '../postseason/cards'
+import CardsSection from '../postseason/CardsSection'
 import Leaders from '../postseason/Leaders'
 import MinePanel from '../postseason/MinePanel'
 import Recaps from '../postseason/Recaps'
 import SeriesCard from '../postseason/SeriesCard'
 import { buildCtx, mdw, SERVED } from '../postseason/shared'
 import TodayCard from '../postseason/TodayCard'
+import { useSeenCards } from '../postseason/useSeenCards'
 
 /**
  * 季後賽專區（設計稿「台灣大賽專區 v2」精簡＋收合）：季後挑戰賽、台灣大賽的系列戰比分、今天這一戰、
@@ -25,7 +28,7 @@ function clock(d: Date) {
 }
 
 export default function PostseasonPage() {
-  const { leagueId, league } = useApp()
+  const { leagueId, league, user } = useApp()
   const [data, setData] = useState<PostseasonView | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [upd, setUpd] = useState('')
@@ -46,6 +49,11 @@ export default function PostseasonPage() {
   }, [])
 
   const teams = useMemo(() => league?.teams ?? [], [league])
+  const { seen, mark } = useSeenCards(leagueId, user.id)
+  const cards = useMemo(() => {
+    if (!data) return null
+    return deriveCards(data, data.myTeamId, teams.find((t) => t.id === data.myTeamId)?.name ?? '')
+  }, [data, teams])
 
   // 預設系列：已開打的最後一個；都還沒開打就是第一個
   const series: SeriesView | null = useMemo(() => {
@@ -74,6 +82,7 @@ export default function PostseasonPage() {
   const anyLive = data.series.some((x) => x.games.some((g) => g.status === 'IN_PROGRESS'))
   const games = s.winsNeeded * 2 - 1 - (s.advantageTeam ? 1 : 0)
   const format = games === 7 ? '七戰四勝' : `${games} 戰${s.winsNeeded} 勝`
+  const newCards = cards ? cards.flat.filter((c) => !seen.has(c.id)).length : 0
   const ring = `conic-gradient(var(--gold) ${Math.round((sec / REFRESH) * 360)}deg, var(--line) 0)`
 
   return (
@@ -97,6 +106,11 @@ export default function PostseasonPage() {
           </div>
         )}
       </div>
+      {newCards > 0 && (
+        <button type="button" className="pv-newcards" onClick={() => document.getElementById('cards')?.scrollIntoView({ behavior: 'smooth' })}>
+          <i />{newCards} 張新紀念卡 ↓
+        </button>
+      )}
       {data.series.length > 1 && (
         <div className="lv-seg pv-switch" role="tablist">
           {data.series.map((x) => (
@@ -108,6 +122,7 @@ export default function PostseasonPage() {
       <TodayCard ctx={ctx} />
       <div className="pv-two"><MinePanel ctx={ctx} /><Leaders ctx={ctx} /></div>
       <Recaps ctx={ctx} />
+      {cards && <CardsSection cards={cards} seen={seen} mark={mark} />}
       <p className="pv-note">{data.notice}</p>
     </div>
   )
