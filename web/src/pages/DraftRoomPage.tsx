@@ -68,6 +68,22 @@ function buzz(p: number | number[]) {
 }
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
+/**
+ * 輪到你的提醒階段：還有 2 手（預告）→ 下一手 → 輪到你。
+ * away＝距離我的下一個順位還有幾手（0 就是現在）；沒有下一個順位為 null。
+ */
+export type Cue = 'soon' | 'next' | 'now'
+export function cueOf(away: number | null): Cue | null {
+  return away === 0 ? 'now' : away === 1 ? 'next' : away === 2 ? 'soon' : null
+}
+/** 三個階段的聲音與震動不同：預告一個輕的單音、下一手兩個音（低到高）、輪到你三個高音 */
+function playCue(c: Cue) {
+  if (c === 'soon') { beep([660], 0.2, 0.1, 'sine', 0.12); buzz(40) }
+  else if (c === 'next') { beep([523, 784], 0.22, 0.13, 'triangle', 0.17); buzz([80, 50, 80]) }
+  else { beep([784, 1047, 1319], 0.26, 0.12, 'triangle', 0.2); buzz([140, 70, 140]) }
+}
+const CUE_TITLE: Record<Cue, string> = { soon: '⏳ 再 2 手輪到你', next: '⏳ 下一手是你', now: '🔔 輪到你了！' }
+
 /** 計時票根、標題、上一個選擇與接下來的順位橫條。 */
 export function RoomHeader({ draft, queueLen = 0, onReport, onChange }: { draft: DraftView; queueLen?: number; onReport?: () => void; onChange?: () => void }) {
   const { leagueId, league, system } = useApp()
@@ -111,26 +127,37 @@ export function RoomHeader({ draft, queueLen = 0, onReport, onChange }: { draft:
   const idx = cur ? slots.indexOf(cur) : slots.length
   const strip = slots.slice(Math.max(0, idx - 3), Math.min(slots.length, idx + (wide ? 8 : 7)))
 
-  // 輪到你：橫幅、三連音、震動；最後 5 秒每秒嗶一聲
+  // 輪到你的提醒：預告（還有 2 手）、下一手、輪到你，各有不同的聲音、震動與畫面；最後 5 秒每秒嗶一聲。
+  // 以「目前順位變了」觸發：連續兩手都是我時，第二手也會提醒；剛進來時已經在進行中的不響
+  const away = live && nextMe ? nextMe.pickNo - draft.currentPickNo : null
+  const cue = cueOf(away)
   const [sound, setSound] = useState(soundOn)
   const [banner, setBanner] = useState(false)
-  const wasMine = useRef(mine)
+  const alerted = useRef<number>(live ? draft.currentPickNo : -1)
   const lastTick = useRef(0)
   useEffect(() => {
     document.addEventListener('pointerdown', unlockAudio)
     return () => document.removeEventListener('pointerdown', unlockAudio)
   }, [])
   useEffect(() => {
-    if (mine && !wasMine.current) {
-      buzz([140, 70, 140])
-      beep([784, 1047, 1319], 0.26, 0.12, 'triangle', 0.2)
-      setBanner(true)
-      const t = setTimeout(() => setBanner(false), 2800)
-      wasMine.current = mine
-      return () => clearTimeout(t)
-    }
-    wasMine.current = mine
-  }, [mine])
+    if (!live || alerted.current === draft.currentPickNo) return
+    alerted.current = draft.currentPickNo
+    setBanner(false)
+    if (!cue) return
+    playCue(cue)
+    if (cue !== 'now') return
+    setBanner(true)
+    const t = setTimeout(() => setBanner(false), 2800)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, draft.currentPickNo])
+  // 網頁標題跟著階段變，離開或階段結束時還原
+  useEffect(() => {
+    if (!cue) return
+    const orig = document.title
+    document.title = CUE_TITLE[cue]
+    return () => { document.title = orig }
+  }, [cue])
   useEffect(() => {
     if (mine && rem <= 5 && rem > 0 && rem !== lastTick.current) {
       lastTick.current = rem
@@ -147,9 +174,17 @@ export function RoomHeader({ draft, queueLen = 0, onReport, onChange }: { draft:
 
   return (
     <div className="dr-head">
+      {cue === 'now' && <div className={`dr-glow${urgent ? ' urgent' : ''}`} aria-hidden />}
+      {cue === 'now' && <div className={`dr-stick${urgent ? ' urgent' : ''}`} role="status"><b>輪到你了</b><span>剩 {fmtClock(rem)}</span></div>}
       <div className={`dr-banner${banner ? ' on' : ''}`} aria-live="polite">
         <div><i /><b>輪到你了</b><span>PICK {label} · {draft.pickSeconds} 秒</span></div>
       </div>
+      {(cue === 'soon' || cue === 'next') && (
+        <div className={`dr-cue ${cue}`} role="status">
+          <i />{cue === 'soon' ? '再 2 手輪到你' : '下一手就是你，準備好'}
+          {nextMe && <span>PICK {pickLabel(nextMe.pickNo, n)}</span>}
+        </div>
+      )}
       <div className={`dr-ticket ${state}`}>
         <div className="in">
           <div className="top">
@@ -804,6 +839,51 @@ function DraftReportView({ draft, onClose }: { draft: DraftView; onClose: () => 
 }
 
 // ------------------------------------------------------------------
+// 選秀結束畫面：人在選秀室、看著選秀結束時出現一次（之後從「選秀紀錄」回來看選秀板與成績單）
+// ------------------------------------------------------------------
+
+function DraftFinish({ draft, mine, onReport, onClose }: { draft: DraftView; mine: DraftPick[]; onReport: () => void; onClose: () => void }) {
+  const { leagueId, league, system } = useApp()
+  const r = useLoad(() => api.get<DraftReport>(`/api/leagues/${leagueId}/drafts/${draft.id}/report`), [leagueId, draft.id])
+  const me = r.data?.teams.find((t) => t.teamId === league?.myTeamId)
+  const n = draft.order.length || 1
+  useEffect(() => {
+    beep([523, 659, 784, 1047, 1319], 0.22, 0.09, 'triangle', 0.16)
+    buzz([60, 40, 90, 40, 140])
+  }, [])
+  // 成績單 A 級才放彩帶
+  useEffect(() => { if (me?.grade.startsWith('A')) setTimeout(boom, 300) }, [me?.grade])
+  return (
+    <div className="dr-fin" role="dialog" aria-modal="true" aria-label="選秀結束">
+      <div className="box">
+        <span className="kick">DRAFT COMPLETE · {system?.seasonYear}</span>
+        <h2>選秀結束</h2>
+        <p className="sub">
+          {draft.halfNo === 2 ? '下半季補強選秀' : '上半季選秀'}・共 {draftSlots(draft).length} 手
+          {me && <>・你的成績單 <b className={`g ${gradeTone(me.grade)}`}>{me.grade}</b></>}
+        </p>
+        <div className="mine">
+          <div className="mh">你的陣容 · {mine.length} 人</div>
+          <ol>
+            {mine.map((p) => (
+              <li key={p.pickNo}>
+                <span className="no">{pickLabel(p.pickNo, n)}</span>
+                <b>{p.playerName}</b>
+                <em>{p.playerPosition ?? ''}</em>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <div className="btns">
+          <button type="button" className="ghost" onClick={onClose}>看選秀板</button>
+          <button type="button" className="gold" onClick={onReport}>看成績單</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------
 // 選秀室
 // ------------------------------------------------------------------
 
@@ -866,9 +946,18 @@ export default function DraftRoom({ draft, onChange }: { draft: DraftView; onCha
   const needs = board.data && <Needs needs={board.data.needs} count={myPicks.length} rounds={draft.rounds} />
   const keeperNote = draft.status === 'KEEPERS' && !draft.revealedAt && <p className="muted">Keeper 選擇期：<Link to="/draft/keepers">前往選擇 Keeper</Link></p>
 
-  // 選完後打開成績單（剛好是自己的最後一個選擇時，等選中動畫關掉再開）
-  const [report, setReport] = useState(done)
-  useEffect(() => { if (done) setReport(true) }, [done])
+  // 成績單由「看成績單」打開；人在選秀室、看著選秀結束時，先出現一次結束畫面
+  // （剛好是自己的最後一個選擇時，等選中動畫關掉再出現）
+  const [report, setReport] = useState(false)
+  const mountedLive = useRef(!done)
+  const finishShown = useRef(false)
+  const [finish, setFinish] = useState(false)
+  useEffect(() => {
+    if (done && mountedLive.current && !finishShown.current) { finishShown.current = true; setFinish(true) }
+  }, [done])
+  const finishEl = finish && !rv && (
+    <DraftFinish draft={draft} mine={[...myPicks].reverse()} onClose={() => setFinish(false)} onReport={() => { setFinish(false); setReport(true) }} />
+  )
   const reportBtn = done && <button type="button" className="dr-report-btn" onClick={() => setReport(true)}>看選秀成績單</button>
   if (done && report && !rv) {
     return <div className="dr"><DraftReportView draft={draft} onClose={() => setReport(false)} /></div>
@@ -899,6 +988,7 @@ export default function DraftRoom({ draft, onChange }: { draft: DraftView; onCha
           </div>
         </div>
         {reveal}
+        {finishEl}
       </div>
     )
   }
@@ -922,6 +1012,7 @@ export default function DraftRoom({ draft, onChange }: { draft: DraftView; onCha
         <BottomSheet label={selP.name} onClose={() => setSel(null)}>{panel(selP)}</BottomSheet>
       )}
       {reveal}
+      {finishEl}
     </div>
   )
 }

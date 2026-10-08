@@ -1,5 +1,6 @@
 package tw.cpblf.draft;
 
+import java.security.SecureRandom;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -11,7 +12,6 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.Set;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -312,6 +312,18 @@ public class DraftService {
         revealInternal(d);
     }
 
+    private static final SecureRandom LOTTERY = new SecureRandom();
+
+    /**
+     * 上半季的順位抽籤。用 SecureRandom：以前用「時間毫秒」當種子，兩次抽籤的時間很接近時結果會一樣，
+     * 玩家覺得「每次都一樣」。
+     */
+    static List<Long> lotteryOrder(List<Long> teams) {
+        List<Long> out = new ArrayList<>(teams);
+        Collections.shuffle(out, LOTTERY);
+        return out;
+    }
+
     private void revealInternal(DraftRow d) {
         List<Long> preset = jdbc.sql("select team_id from draft_slot where draft_id = ? order by draft_position").param(d.id())
                 .query(Long.class).list();
@@ -325,7 +337,7 @@ public class DraftService {
             } else {
                 order = new ArrayList<>(jdbc.sql("select id from fantasy_team where league_id = ? order by id").param(d.leagueId())
                         .query(Long.class).list());
-                Collections.shuffle(order, new Random(clock.now().toEpochMilli()));
+                order = lotteryOrder(order);
             }
             for (int i = 0; i < order.size(); i++) {
                 jdbc.sql("insert into draft_slot (draft_id, team_id, draft_position) values (?, ?, ?)").params(d.id(), order.get(i), i + 1).update();
