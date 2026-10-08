@@ -7,8 +7,10 @@ import { useWide } from '../hooks'
 import { ip, OUTS_HINT, outsOf } from '../live'
 import {
   aggregate, avg, batText, bestBatter, bestPitcher, byOrder, eraText, isBatLine, isPitLine, leaderboards, linesOf,
-  maxGames, pitText, standingAfter, winnerOf, type BatAgg, type Board, type PitAgg,
+  pitText, standingAfter, winnerOf, type BatAgg, type Board, type PitAgg,
 } from '../postseason'
+import SeriesCard from '../postseason/SeriesCard'
+import { buildCtx, mdw } from '../postseason/shared'
 import { TeamIcon } from '../teamIdentity'
 import { cpblTeam, fantasyTeamColor } from '../teams'
 
@@ -20,7 +22,6 @@ import { cpblTeam, fantasyTeamColor } from '../teams'
  */
 
 const REFRESH = 60
-const WEEK = ['日', '一', '二', '三', '四', '五', '六']
 const SERVED = (g: LiveGame) => g.status !== 'POSTPONED' && g.status !== 'CANCELLED'
 const BAT_HEADS = ['PA', 'AB', 'H', 'R', 'HR', 'BB']
 const PIT_HEADS = ['IP', 'H', 'BB', 'ER', 'K', '勝/救']
@@ -38,12 +39,6 @@ function clock(d: Date) {
 /** 開賽時間：24 小時制（"18:35"），小格子裡不會換行 */
 function hm(iso: string): string {
   return new Date(iso).toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false, hour: '2-digit', minute: '2-digit' })
-}
-
-/** "2026-10-17" → "10/17 週六" */
-function mdw(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number)
-  return `${m}/${d} 週${WEEK[new Date(y, m - 1, d).getDay()]}`
 }
 
 export default function PostseasonPage() {
@@ -98,6 +93,7 @@ export default function PostseasonPage() {
   }
 
   const s = series
+  const ctx = buildCtx(data, s, teams)
   const games = [...s.games].sort(byOrder)
   const [tA, tB] = s.teams
   const team = (code: string) => cpblTeam(code)
@@ -115,13 +111,6 @@ export default function PostseasonPage() {
   const ring = `conic-gradient(var(--gold) ${Math.round((sec / REFRESH) * 360)}deg, var(--line) 0)`
   const noOf = (g: LiveGame) => games.indexOf(g) + 1
 
-  const lead = (() => {
-    const a = s.wins[tA] ?? 0, b = s.wins[tB] ?? 0
-    if (decided) return `${team(s.winner as string).short}${isFinals ? '奪冠' : '晉級'}`
-    return a === b ? '系列戰平手' : `${team(a > b ? tA : tB).short}領先`
-  })()
-  const advantageNote = s.advantageTeam ? `（${team(s.advantageTeam).short}保送 1 勝）` : ''
-
   const mark = (fantasyTeamId: number | null, size = 13) => {
     if (fantasyTeamId == null || fantasyTeamId !== data.myTeamId || !myTeam) return null
     return <span className="ps-mine" title="你的球員" style={{ color: fantasyTeamColor(myTeam.id, teams) }}><TeamIcon icon={myTeam.icon} size={size} /></span>
@@ -134,73 +123,6 @@ export default function PostseasonPage() {
     const t = team(code)
     return <span className="chip" style={{ background: t.bg, color: t.fg }}>{t.short}</span>
   }
-
-  // ---------------- 系列戰卡 ----------------
-  const stripCell = (i: number) => {
-    const g = games[i]
-    if (!g) {
-      const t = decided ? '未舉行' : '若需要'
-      return { key: `x${i}`, top: `第 ${i + 1} 戰`, meta: '', main: '—', mainDim: true, tag: t, dot: 'transparent', flag: '', cls: '' }
-    }
-    const meta = mdw(g.scheduledDate)
-    const isToday = g.playDate === data.today
-    if (g.status === 'FINAL') {
-      const w = winnerOf(g)
-      const hi = Math.max(g.homeScore ?? 0, g.awayScore ?? 0), lo = Math.min(g.homeScore ?? 0, g.awayScore ?? 0)
-      return { key: g.id, top: `第 ${i + 1} 戰`, meta, main: `${hi}:${lo}`, mainDim: false, tag: w ? `${team(w).short}勝` : '和局', dot: w ? team(w).bg : 'transparent', flag: isToday ? '今天' : '', cls: isToday ? 'today' : '' }
-    }
-    if (g.status === 'IN_PROGRESS') {
-      const sc = (c: string) => (c === g.homeTeam ? g.homeScore : g.awayScore) ?? 0
-      return { key: g.id, top: `第 ${i + 1} 戰`, meta, main: `${sc(tA)}:${sc(tB)}`, mainDim: false, tag: `進行中・${g.inning ?? ''}`, dot: '#ff4d4f', flag: '今天', cls: 'live' }
-    }
-    const isNext = g === nextGame && !todayGame
-    return { key: g.id, top: `第 ${i + 1} 戰`, meta, main: g.startTime ? hm(g.startTime) : '—', mainDim: false, tag: g.status === 'POSTPONED' ? '延賽' : decided ? '未舉行' : '', dot: 'transparent', flag: isNext ? '下一戰' : '', cls: isNext ? 'next' : '' }
-  }
-  const slots = Math.max(maxGames(s), games.length)
-
-  const statusText = (() => {
-    if (decided) {
-      const w = s.winner as string, o = w === tA ? tB : tA
-      return `${team(w).short}以 ${s.wins[w]}：${s.wins[o]} ${isFinals ? `奪得 ${year} 總冠軍` : '晉級台灣大賽'}`
-    }
-    if (live && todayNo) return `第 ${todayNo} 戰進行中`
-    if (todayGame && todayGame.status === 'FINAL' && todayNo) {
-      const w = winnerOf(todayGame)
-      return `第 ${todayNo} 戰 ${w ? `${team(w).short}獲勝` : '平手'}。` + (nextGame ? `下一戰 第 ${noOf(nextGame)} 戰 ${mdw(nextGame.scheduledDate)}${nextGame.startTime ? ` ${hm(nextGame.startTime)}` : ''}` : '')
-    }
-    if (nextGame) return `今天休息。第 ${noOf(nextGame)} 戰 ${mdw(nextGame.scheduledDate)}${nextGame.startTime ? ` ${hm(nextGame.startTime)}` : ''} 開打`
-    return '還沒有排定的比賽'
-  })()
-
-  const seriesCard = (
-    <div className="ps-card ps-series">
-      <div className="ps-left">
-      <div className="ps-score">
-        <div className="side">{chip(tA)}<span className="nm">{team(tA).name}</span></div>
-        <div className="big">
-          <span className={(s.wins[tA] ?? 0) >= (s.wins[tB] ?? 0) ? '' : 'trail'}>{s.wins[tA] ?? 0}</span>
-          <i>:</i>
-          <span className={(s.wins[tB] ?? 0) >= (s.wins[tA] ?? 0) ? '' : 'trail'}>{s.wins[tB] ?? 0}</span>
-        </div>
-        <div className="side r">{chip(tB)}<span className="nm">{team(tB).name}</span></div>
-      </div>
-      <div className="ps-lead">{lead}・先拿 {s.winsNeeded} 勝{isFinals ? '奪冠' : '晉級'}{advantageNote}</div>
-      </div>
-      <div className="ps-right">
-      <div className="ps-strip">
-        {Array.from({ length: slots }, (_, i) => stripCell(i)).map((c) => (
-          <div key={c.key} className={`ps-cell ${c.cls}`}>
-            <div className="top"><span>{c.top}</span><em>{c.flag}</em></div>
-            <div className={`main${c.mainDim ? ' dim' : ''}`}>{c.main}</div>
-            <div className="tag"><i style={{ background: c.dot }} />{c.tag}</div>
-            <div className="meta">{c.meta}</div>
-          </div>
-        ))}
-      </div>
-      <div className="ps-status">{statusText}</div>
-      </div>
-    </div>
-  )
 
   // ---------------- 今天這一戰 ----------------
   const sideRows = (g: LiveGame, home: boolean) => linesOf(s, g).filter((l) => l.home === home)
@@ -565,28 +487,30 @@ export default function PostseasonPage() {
 
   // ---------------- 頁首 ----------------
   const anyLive = data.series.some((x) => x.games.some((g) => g.status === 'IN_PROGRESS'))
+  const format = `${s.winsNeeded * 2 - 1 - (s.advantageTeam ? 1 : 0) === 7 ? '七戰四勝' : `${s.winsNeeded * 2 - 1 - (s.advantageTeam ? 1 : 0)} 戰${s.winsNeeded} 勝`}`
   const header = (
-    <div className="lv-head">
+    <div className="pv-head">
       <div className="t">
         {live || anyLive
-          ? <div className="lv-kicker"><i />LIVE · 非最終數據</div>
-          : <div className="lv-kicker gold">{isFinals ? `TAIWAN SERIES · ${year}` : `POSTSEASON · ${year}`}</div>}
-        <h1>{s.name}專區</h1>
-        <div className="upd">
-          {s.winsNeeded === 4 ? '七戰四勝' : `${s.winsNeeded * 2 - 1 - (s.advantageTeam ? 1 : 0)} 戰${s.winsNeeded} 勝`}・季後賽不計入 fantasy
-          {active && <>・上次更新 {upd}</>}
+          ? <div className="pv-kick"><i />LIVE · 非最終數據</div>
+          : <div className="pv-kick gold">{isFinals ? `TAIWAN SERIES · ${year}` : `POSTSEASON · ${year}`}</div>}
+        <div className="pv-title">
+          <h1>{s.name}專區</h1>
+          <span className="sub">{wide ? `${mdw(data.today)}・` : ''}{format}・季後賽不計入 fantasy</span>
         </div>
       </div>
-      {active && <div className="ps-refresh"><div><b>{sec}</b> 秒後更新</div><small>上次 {upd}</small></div>}
       {active && (
-        <button type="button" className="lv-ring" style={{ background: ring }} title="立即更新" aria-label={`${sec} 秒後更新，點一下立即更新`} onClick={load}>
-          <span><b>{sec}</b><small>秒</small></span>
-        </button>
+        <div className="pv-refresh">
+          <div className="txt"><div><b>{sec}</b> 秒後更新</div><small>上次 {upd}</small></div>
+          <button type="button" className="lv-ring" style={{ background: ring }} title="立即更新" aria-label={`${sec} 秒後更新，點一下立即更新`} onClick={load}>
+            <span><b>{sec}</b><small>秒</small><i className="ico">↻</i></span>
+          </button>
+        </div>
       )}
     </div>
   )
   const switcher = data.series.length > 1 && (
-    <div className="lv-seg ps-switch" role="tablist">
+    <div className="lv-seg pv-switch" role="tablist">
       {data.series.map((x) => (
         <button key={x.kind} type="button" role="tab" aria-selected={x.kind === s.kind} onClick={() => { setKind(x.kind); setTab('all'); setRecapIdx(null) }}>{x.name}</button>
       ))}
@@ -594,10 +518,10 @@ export default function PostseasonPage() {
   )
 
   return (
-    <div className="lv ps">
+    <div className="lv ps pv">
       {header}
       {switcher}
-      {seriesCard}
+      <SeriesCard ctx={ctx} />
       <div className="ps-cols">
         <div className="ps-main">{todayCard}</div>
         <div className="ps-side">{minePanel}{leadersPanel}</div>
