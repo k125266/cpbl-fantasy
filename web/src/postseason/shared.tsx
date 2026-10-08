@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import type { LiveGame, PostseasonView, SeriesView, TeamView } from '../api'
 import { TeamIcon } from '../teamIdentity'
 import { cpblTeam, fantasyTeamColor } from '../teams'
@@ -108,4 +108,55 @@ export function Section({ title, note, children, className }: { title: string; n
 export function resultText(g: LiveGame): string {
   const w = winnerOf(g)
   return w ? `${cpblTeam(w).short}獲勝` : '平手'
+}
+
+// ---------------------------------------------------------------------------
+// 逐局比分
+// ---------------------------------------------------------------------------
+
+/** 進行中的半局：官網的局數文字「五上」「七下」「十一下」→ { i: 4, top: true }；解析不了就不標 */
+export function curHalf(g: LiveGame): { i: number; top: boolean } | null {
+  if (g.status !== 'IN_PROGRESS' || !g.inning) return null
+  const m = /^([一二三四五六七八九十]+)(上|下)/.exec(g.inning)
+  if (!m) return null
+  const d = '一二三四五六七八九'
+  const t = m[1]
+  const n = t === '十' ? 10 : t.startsWith('十') ? 10 + d.indexOf(t[1]) + 1 : t.endsWith('十') ? (d.indexOf(t[0]) + 1) * 10 : d.indexOf(t) + 1
+  return n > 0 ? { i: n - 1, top: m[2] === '上' } : null
+}
+
+/** 逐局比分表（兩隊色塊簡稱、每局得分、R、H）；進行中的半局標紅。沒有逐局資料時不顯示。 */
+export function LineScore({ g, size = 'md' }: { g: LiveGame; size?: 'md' | 'sm' }) {
+  const ls = g.lineScore
+  if (!ls) return null
+  const cur = curHalf(g)
+  const n = Math.max(9, ls.away.length, ls.home.length)
+  const rows = [
+    { code: g.awayTeam, runs: ls.away, rhe: ls.awayRhe, top: true, other: ls.homeRhe },
+    { code: g.homeTeam, runs: ls.home, rhe: ls.homeRhe, top: false, other: ls.awayRhe },
+  ]
+  return (
+    <div className={`pv-ls ${size}`} style={{ '--n': n } as CSSProperties} role="table" aria-label="逐局比分">
+      <div className="r h">
+        <span />
+        {Array.from({ length: n }, (_, i) => <span key={i} className={cur && cur.i === i ? 'cur' : ''}>{i + 1}</span>)}
+        <span>R</span><span>H</span>
+      </div>
+      {rows.map((x) => {
+        const R = x.rhe[0], oR = x.other[0]
+        return (
+          <div key={x.code} className="r b">
+            <span className="tc"><Chip code={x.code} className="sm" /></span>
+            {Array.from({ length: n }, (_, i) => {
+              const v = x.runs[i]
+              const on = !!cur && cur.top === x.top && cur.i === i
+              return <span key={i} className={`v${on ? ' cur' : ''}${v == null || v === 0 ? ' z' : ''}`}>{v ?? ''}</span>
+            })}
+            <span className={`R${R != null && oR != null && R < oR ? ' lose' : ''}`}>{R ?? ''}</span>
+            <span className="H">{x.rhe[1] ?? ''}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
 }

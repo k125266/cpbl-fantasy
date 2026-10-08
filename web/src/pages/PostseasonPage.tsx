@@ -1,15 +1,16 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type LiveGame, type LiveLine, type PostseasonView, type SeriesView } from '../api'
 import { ErrorBox, Loading } from '../components'
 import { useWide } from '../hooks'
-import { ip, OUTS_HINT, outsOf } from '../live'
+import { ip } from '../live'
 import {
-  aggregate, avg, batText, bestBatter, bestPitcher, byOrder, eraText, isBatLine, isPitLine, leaderboards, linesOf,
+  aggregate, avg, batText, bestBatter, bestPitcher, byOrder, eraText, leaderboards, linesOf,
   pitText, standingAfter, winnerOf, type BatAgg, type Board, type PitAgg,
 } from '../postseason'
 import SeriesCard from '../postseason/SeriesCard'
+import TodayCard from '../postseason/TodayCard'
 import { buildCtx, mdw } from '../postseason/shared'
 import { TeamIcon } from '../teamIdentity'
 import { cpblTeam, fantasyTeamColor } from '../teams'
@@ -23,22 +24,14 @@ import { cpblTeam, fantasyTeamColor } from '../teams'
 
 const REFRESH = 60
 const SERVED = (g: LiveGame) => g.status !== 'POSTPONED' && g.status !== 'CANCELLED'
-const BAT_HEADS = ['PA', 'AB', 'H', 'R', 'HR', 'BB']
-const PIT_HEADS = ['IP', 'H', 'BB', 'ER', 'K', '勝/救']
 const SER_HEADS_BAT = ['G', 'PA', 'AB', 'H', 'R', 'HR', 'BB', 'AVG']
 const SER_HEADS_PIT = ['G', 'IP', 'H', 'BB', 'ER', 'K', '勝/救', 'ERA']
 
-type Tab = 'all' | 'away' | 'home'
 type Group = 'bat' | 'pit'
 
 function clock(d: Date) {
   const p = (n: number) => String(n).padStart(2, '0')
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
-}
-
-/** 開賽時間：24 小時制（"18:35"），小格子裡不會換行 */
-function hm(iso: string): string {
-  return new Date(iso).toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false, hour: '2-digit', minute: '2-digit' })
 }
 
 export default function PostseasonPage() {
@@ -49,7 +42,6 @@ export default function PostseasonPage() {
   const [upd, setUpd] = useState('')
   const [sec, setSec] = useState(REFRESH)
   const [kind, setKind] = useState<string | null>(null)
-  const [tab, setTab] = useState<Tab>('all')
   const [group, setGroup] = useState<Group>('bat')
   const [recapIdx, setRecapIdx] = useState<number | null>(null)
   const [mineAll, setMineAll] = useState(false)
@@ -102,14 +94,8 @@ export default function PostseasonPage() {
   const todayGames = games.filter((g) => g.playDate === data.today && SERVED(g))
   const todayGame = todayGames.find((g) => g.status === 'IN_PROGRESS') ?? todayGames[todayGames.length - 1] ?? null
   const live = todayGame?.status === 'IN_PROGRESS'
-  const todayNo = todayGame ? games.indexOf(todayGame) + 1 : null
-  const upcoming = games.filter((g) => g.status === 'SCHEDULED' && g !== todayGame)
-  const nextGame = upcoming[0] ?? null
-  const lastFinal = [...games].reverse().find((g) => g.status === 'FINAL') ?? null
   const finished = games.filter((g) => g.status === 'FINAL')
-  const decided = s.winner != null
   const ring = `conic-gradient(var(--gold) ${Math.round((sec / REFRESH) * 360)}deg, var(--line) 0)`
-  const noOf = (g: LiveGame) => games.indexOf(g) + 1
 
   const mark = (fantasyTeamId: number | null, size = 13) => {
     if (fantasyTeamId == null || fantasyTeamId !== data.myTeamId || !myTeam) return null
@@ -125,43 +111,6 @@ export default function PostseasonPage() {
   }
 
   // ---------------- 今天這一戰 ----------------
-  const sideRows = (g: LiveGame, home: boolean) => linesOf(s, g).filter((l) => l.home === home)
-  const boxTable = (g: LiveGame, home: boolean) => {
-    const rows = sideRows(g, home)
-    const bats = rows.filter(isBatLine), pits = rows.filter(isPitLine)
-    const nameBits = (l: LiveLine) => (
-      <div className="who">
-        <Link to={`/players/${l.playerId}`} className="n">{l.name}</Link>
-        {mark(l.fantasyTeamId)}
-        <span className="pos">{l.listedPosition}</span>
-        {g.batterId === l.playerId && <span className="tag live">打擊中</span>}
-        {g.pitcherId === l.playerId && <span className="tag live">投球中</span>}
-      </div>
-    )
-    const cell = (v: number | string, hi?: boolean) => <span className={`r${v === 0 || v === '–' ? ' dim' : hi ? ' gold' : ''}`}>{v}</span>
-    return (
-      <div className="ps-box">
-        <div className="ps-boxhead"><span /><span>打者</span>{BAT_HEADS.map((h) => <span key={h} className="r">{h}</span>)}</div>
-        {bats.map((l) => (
-          <div key={l.playerId} className={`ps-boxrow${l.fantasyTeamId === data.myTeamId && data.myTeamId != null ? ' me' : ''}`}>
-            {num(l.cpblTeam, l.jerseyNumber)}{nameBits(l)}
-            {[l.pa, l.ab, l.h, l.r].map((v, i) => <Fragment key={i}>{cell(v)}</Fragment>)}{cell(l.hr, true)}{cell(l.bb)}
-          </div>
-        ))}
-        {bats.length === 0 && <div className="lv-empty">還沒有打者數據</div>}
-        <div className="ps-boxhead"><span /><span>投手</span>{PIT_HEADS.map((h) => <span key={h} className="r">{h}</span>)}</div>
-        {pits.map((l) => (
-          <div key={l.playerId} className={`ps-boxrow${l.fantasyTeamId === data.myTeamId && data.myTeamId != null ? ' me' : ''}`}>
-            {num(l.cpblTeam, l.jerseyNumber)}{nameBits(l)}
-            <span className="r">{ip(l.outs)}</span>{cell(l.pH)}{cell(l.pBb)}{cell(l.pEr)}{cell(l.pK)}
-            <span className={`r${l.w || l.sv ? ' gold' : ' dim'}`}>{l.w ? 'W' : l.sv ? 'SV' : '–'}</span>
-          </div>
-        ))}
-        {pits.length === 0 && <div className="lv-empty">還沒有投手數據</div>}
-      </div>
-    )
-  }
-
   const personRow = (label: string, l: LiveLine, text: string, tone: 'live' | 'best') => (
     <div className={`ps-person ${tone}`} key={label}>
       <span className="lab">{label}</span>
@@ -213,143 +162,6 @@ export default function PostseasonPage() {
         </div>
       )
     })
-
-  const todayInfo = (g: LiveGame) => {
-    if (g.status === 'IN_PROGRESS') {
-      const outs = outsOf(g)
-      return { inn: g.inning ?? '進行中', sub: outs == null ? '進行中・非最終' : `${outs} 出局・非最終`, live: true }
-    }
-    if (g.status === 'FINAL') return { inn: '終場', sub: `${winnerOf(g) ? team(winnerOf(g) as string).short + '勝' : '平手'}・比賽結束`, live: false }
-    return { inn: g.startTime ? hm(g.startTime) : '—', sub: '尚未開始', live: false }
-  }
-
-  /** 網頁版的大比分列：客隊「色塊 隊名 客 … 分數」、局數、主隊「分數 … 主 隊名 色塊」 */
-  const bigScore = (g: LiveGame) => {
-    const info = todayInfo(g)
-    const side = (code: string, sc: number | null, other: number | null, label: string, home: boolean) => {
-      const t = team(code)
-      const lead = sc != null && other != null && sc > other
-      const who = <>{chip(code)}<b className={lead ? 'lead' : ''}>{t.name}</b><span className="m">{label}</span></>
-      const score = <span className={`sc${lead ? ' lead' : ''}`}>{sc ?? ''}</span>
-      return <div className={`side${home ? ' h' : ''}`}>{home ? <>{score}<span className="sp" />{who}</> : <>{who}<span className="sp" />{score}</>}</div>
-    }
-    return (
-      <div className="ps-big">
-        {side(g.awayTeam, g.awayScore, g.homeScore, '客', false)}
-        <div className={`mid${info.live ? ' live' : ''}`}><span className="inn">{info.live && <i />}{info.inn}</span><span className="sub">{info.sub}</span></div>
-        {side(g.homeTeam, g.homeScore, g.awayScore, '主', true)}
-      </div>
-    )
-  }
-
-  const todayBody = (g: LiveGame) => {
-    const lines = linesOf(s, g)
-    const batter = g.batterId != null ? lines.find((l) => l.playerId === g.batterId) : undefined
-    const pitcher = g.pitcherId != null ? lines.find((l) => l.playerId === g.pitcherId) : undefined
-    if (tab !== 'all') return boxTable(g, tab === 'home')
-    const batterP = batter && personRow('打擊中', batter, `今天 ${batter.ab} 打數 ${batter.h} 安` + (batter.bb ? ` ${batter.bb} 保送` : ''), 'live')
-    const pitcherP = pitcher && personRow('投球中', pitcher, `今天 ${ip(pitcher.outs)} 局 ${pitcher.pH} 安 ${pitcher.pK} K` + (pitcher.pEr ? ` 失 ${pitcher.pEr} 分` : ''), 'live')
-    if (wide) {
-      const half = g.halfInning && g.halfInning.length > 0 ? (
-        <div className="ps-half">
-          <span className="lab" title={OUTS_HINT}>本半局</span>
-          <b>{outsOf(g)} 出局</b>
-          <div className="seq">{g.halfInning.map((pa, i) => <span key={i} className={pa.result == null ? 'now' : ''}>{i > 0 && <em>→</em>}{pa.name} {pa.result ?? '對決中'}</span>)}</div>
-        </div>
-      ) : <div className="ps-half"><span className="lab">本半局</span><b>—</b></div>
-      const b = g.status === 'FINAL' ? bestBatter(lines) : null, p = g.status === 'FINAL' ? bestPitcher(lines) : null
-      return (
-        <>
-          <div className="lv-detail ps-wls">{lineScore(g, true)}</div>
-          {g.status === 'IN_PROGRESS' && <div className="ps-now">{half}{batterP}{pitcherP}</div>}
-          {g.status === 'FINAL' && (b || p) && (
-            <div className="ps-now two">
-              {b && personRow('最佳打者', b, batText(b), 'best')}
-              {p && personRow('最佳投手', p, pitText(p), 'best')}
-            </div>
-          )}
-          {g.sourceUrl && <a className="lv-src ps-src" href={g.sourceUrl} target="_blank" rel="noopener noreferrer">到進階數據網站看這場 ↗</a>}
-        </>
-      )
-    }
-    return (
-      <>
-        <div className="lv-detail">
-          {lineScore(g)}
-          {g.halfInning && g.halfInning.length > 0 && (
-            <div className="lv-half">
-              <span className="lab" title={OUTS_HINT}>本半局・{outsOf(g)} 出局</span>
-              {g.halfInning.map((pa, i) => <span key={i} className={pa.result == null ? 'now' : ''}>{i > 0 && <em>→</em>}{pa.name} {pa.result ?? '對決中'}</span>)}
-            </div>
-          )}
-        </div>
-        {g.status === 'IN_PROGRESS' && (
-          <>
-            {batter && personRow('打擊中', batter, `今天 ${batter.ab} 打數 ${batter.h} 安` + (batter.bb ? ` ${batter.bb} 保送` : ''), 'live')}
-            {pitcher && personRow('投球中', pitcher, `今天 ${ip(pitcher.outs)} 局 ${pitcher.pH} 安 ${pitcher.pK} K` + (pitcher.pEr ? ` 失 ${pitcher.pEr} 分` : ''), 'live')}
-          </>
-        )}
-        {g.status === 'FINAL' && (() => {
-          const b = bestBatter(lines), p = bestPitcher(lines)
-          return <>{b && personRow('最佳打者', b, batText(b), 'best')}{p && personRow('最佳投手', p, pitText(p), 'best')}</>
-        })()}
-        {g.sourceUrl && <a className="lv-src ps-src" href={g.sourceUrl} target="_blank" rel="noopener noreferrer">到進階數據網站看這場 ↗</a>}
-      </>
-    )
-  }
-
-  const restCard = (
-    <div className="ps-rest">
-      <div className="h">{decided ? '系列戰已結束' : '今天休息'}</div>
-      <p>
-        {decided
-          ? `${team(s.winner as string).short}${isFinals ? `奪得 ${year} 總冠軍` : '晉級台灣大賽'}。每一戰的戰況在下方。`
-          : nextGame
-            ? `第 ${noOf(nextGame)} 戰 ${mdw(nextGame.scheduledDate)}${nextGame.startTime ? ` ${hm(nextGame.startTime)}` : ''} 開打。`
-            : '下一戰還沒有排定。'}
-      </p>
-      {!decided && nextGame && (
-        <div className="ps-next">
-          {chip(nextGame.awayTeam)}<span className="m">客</span>
-          <b>{nextGame.startTime ? hm(nextGame.startTime) : '—'}</b>
-          <span className="m">主</span>{chip(nextGame.homeTeam)}
-        </div>
-      )}
-      {lastFinal && <p className="m">前一戰：第 {noOf(lastFinal)} 戰 {winnerOf(lastFinal) ? `${team(winnerOf(lastFinal) as string).short}獲勝` : '平手'} {Math.max(lastFinal.homeScore ?? 0, lastFinal.awayScore ?? 0)}：{Math.min(lastFinal.homeScore ?? 0, lastFinal.awayScore ?? 0)}，戰況卡在下方。</p>}
-    </div>
-  )
-
-  const tabs: { k: Tab; t: string }[] = todayGame
-    ? [{ k: 'all', t: '全場' }, { k: 'away', t: team(todayGame.awayTeam).short }, { k: 'home', t: team(todayGame.homeTeam).short }]
-    : []
-  const todayCard = (
-    <div className="ps-card">
-      <div className="ps-ctitle">
-        <span>今天這一戰{todayNo ? ` · 第 ${todayNo} 戰` : ''}</span>
-        {live && <span className="lv-badge">非最終數據</span>}
-        <span className="sp" />
-        {todayGame && (
-          <div className="lv-seg" role="tablist">
-            {tabs.map((x) => <button key={x.k} type="button" role="tab" aria-selected={tab === x.k} onClick={() => setTab(x.k)}>{x.t}</button>)}
-          </div>
-        )}
-      </div>
-      {todayGame ? (
-        <>
-          {wide ? bigScore(todayGame) : (
-            <div className="lv-ghead">
-              <div className="teams">{todayScoreRows(todayGame)}</div>
-              <div className={`state${todayInfo(todayGame).live ? ' live' : ''}`}>
-                <span className="inn">{todayInfo(todayGame).live && <i />}{todayInfo(todayGame).inn}</span>
-                <span className="sub">{todayInfo(todayGame).sub}</span>
-              </div>
-            </div>
-          )}
-          {todayBody(todayGame)}
-        </>
-      ) : restCard}
-    </div>
-  )
 
   // ---------------- 你的球員 ----------------
   const agg = aggregate(s.lines)
@@ -512,7 +324,7 @@ export default function PostseasonPage() {
   const switcher = data.series.length > 1 && (
     <div className="lv-seg pv-switch" role="tablist">
       {data.series.map((x) => (
-        <button key={x.kind} type="button" role="tab" aria-selected={x.kind === s.kind} onClick={() => { setKind(x.kind); setTab('all'); setRecapIdx(null) }}>{x.name}</button>
+        <button key={x.kind} type="button" role="tab" aria-selected={x.kind === s.kind} onClick={() => { setKind(x.kind); setRecapIdx(null) }}>{x.name}</button>
       ))}
     </div>
   )
@@ -522,10 +334,8 @@ export default function PostseasonPage() {
       {header}
       {switcher}
       <SeriesCard ctx={ctx} />
-      <div className="ps-cols">
-        <div className="ps-main">{todayCard}</div>
-        <div className="ps-side">{minePanel}{leadersPanel}</div>
-      </div>
+      <TodayCard ctx={ctx} />
+      <div className="pv-two">{minePanel}{leadersPanel}</div>
       {recaps}
       <p className="lv-note">{data.notice}</p>
     </div>
