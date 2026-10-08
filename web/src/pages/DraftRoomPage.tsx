@@ -68,6 +68,22 @@ function buzz(p: number | number[]) {
 }
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
+/**
+ * 輪到你的提醒階段：還有 2 手（預告）→ 下一手 → 輪到你。
+ * away＝距離我的下一個順位還有幾手（0 就是現在）；沒有下一個順位為 null。
+ */
+export type Cue = 'soon' | 'next' | 'now'
+export function cueOf(away: number | null): Cue | null {
+  return away === 0 ? 'now' : away === 1 ? 'next' : away === 2 ? 'soon' : null
+}
+/** 三個階段的聲音與震動不同：預告一個輕的單音、下一手兩個音（低到高）、輪到你三個高音 */
+function playCue(c: Cue) {
+  if (c === 'soon') { beep([660], 0.2, 0.1, 'sine', 0.12); buzz(40) }
+  else if (c === 'next') { beep([523, 784], 0.22, 0.13, 'triangle', 0.17); buzz([80, 50, 80]) }
+  else { beep([784, 1047, 1319], 0.26, 0.12, 'triangle', 0.2); buzz([140, 70, 140]) }
+}
+const CUE_TITLE: Record<Cue, string> = { soon: '⏳ 再 2 手輪到你', next: '⏳ 下一手是你', now: '🔔 輪到你了！' }
+
 /** 計時票根、標題、上一個選擇與接下來的順位橫條。 */
 export function RoomHeader({ draft, queueLen = 0, onReport, onChange }: { draft: DraftView; queueLen?: number; onReport?: () => void; onChange?: () => void }) {
   const { leagueId, league, system } = useApp()
@@ -111,26 +127,37 @@ export function RoomHeader({ draft, queueLen = 0, onReport, onChange }: { draft:
   const idx = cur ? slots.indexOf(cur) : slots.length
   const strip = slots.slice(Math.max(0, idx - 3), Math.min(slots.length, idx + (wide ? 8 : 7)))
 
-  // 輪到你：橫幅、三連音、震動；最後 5 秒每秒嗶一聲
+  // 輪到你的提醒：預告（還有 2 手）、下一手、輪到你，各有不同的聲音、震動與畫面；最後 5 秒每秒嗶一聲。
+  // 以「目前順位變了」觸發：連續兩手都是我時，第二手也會提醒；剛進來時已經在進行中的不響
+  const away = live && nextMe ? nextMe.pickNo - draft.currentPickNo : null
+  const cue = cueOf(away)
   const [sound, setSound] = useState(soundOn)
   const [banner, setBanner] = useState(false)
-  const wasMine = useRef(mine)
+  const alerted = useRef<number>(live ? draft.currentPickNo : -1)
   const lastTick = useRef(0)
   useEffect(() => {
     document.addEventListener('pointerdown', unlockAudio)
     return () => document.removeEventListener('pointerdown', unlockAudio)
   }, [])
   useEffect(() => {
-    if (mine && !wasMine.current) {
-      buzz([140, 70, 140])
-      beep([784, 1047, 1319], 0.26, 0.12, 'triangle', 0.2)
-      setBanner(true)
-      const t = setTimeout(() => setBanner(false), 2800)
-      wasMine.current = mine
-      return () => clearTimeout(t)
-    }
-    wasMine.current = mine
-  }, [mine])
+    if (!live || alerted.current === draft.currentPickNo) return
+    alerted.current = draft.currentPickNo
+    setBanner(false)
+    if (!cue) return
+    playCue(cue)
+    if (cue !== 'now') return
+    setBanner(true)
+    const t = setTimeout(() => setBanner(false), 2800)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, draft.currentPickNo])
+  // 網頁標題跟著階段變，離開或階段結束時還原
+  useEffect(() => {
+    if (!cue) return
+    const orig = document.title
+    document.title = CUE_TITLE[cue]
+    return () => { document.title = orig }
+  }, [cue])
   useEffect(() => {
     if (mine && rem <= 5 && rem > 0 && rem !== lastTick.current) {
       lastTick.current = rem
@@ -147,9 +174,17 @@ export function RoomHeader({ draft, queueLen = 0, onReport, onChange }: { draft:
 
   return (
     <div className="dr-head">
+      {cue === 'now' && <div className={`dr-glow${urgent ? ' urgent' : ''}`} aria-hidden />}
+      {cue === 'now' && <div className={`dr-stick${urgent ? ' urgent' : ''}`} role="status"><b>輪到你了</b><span>剩 {fmtClock(rem)}</span></div>}
       <div className={`dr-banner${banner ? ' on' : ''}`} aria-live="polite">
         <div><i /><b>輪到你了</b><span>PICK {label} · {draft.pickSeconds} 秒</span></div>
       </div>
+      {(cue === 'soon' || cue === 'next') && (
+        <div className={`dr-cue ${cue}`} role="status">
+          <i />{cue === 'soon' ? '再 2 手輪到你' : '下一手就是你，準備好'}
+          {nextMe && <span>PICK {pickLabel(nextMe.pickNo, n)}</span>}
+        </div>
+      )}
       <div className={`dr-ticket ${state}`}>
         <div className="in">
           <div className="top">
