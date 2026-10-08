@@ -1752,6 +1752,74 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .ps-recaps .ps-card { margin-top: 0; }
 }
 
+/* 目前進行的半局（逐局比分標紅） */
+.lv-ls .cur { background: rgb(255 77 79 / .12); border-radius: 4px; color: #ff8a8c; }
+.lv-ls .r.h .cur { background: transparent; }
+
+/* 網頁版對照設計稿 1b：系列戰卡左右並排、大比分列、寬版逐局比分、三欄賽況、排行雙欄 */
+@media (min-width: 1024px) {
+  .ps-series { display: grid; grid-template-columns: 420px minmax(0, 1fr); }
+  .ps-left { display: flex; flex-direction: column; justify-content: center; padding: 20px 24px; border-right: 1px solid #1d2027; }
+  .ps-left .ps-score { padding: 0; gap: 16px; }
+  .ps-left .ps-lead { margin-top: 12px; padding: 0; }
+  .ps-right { display: flex; flex-direction: column; gap: 10px; padding: 16px 18px; min-width: 0; }
+  .ps-right .ps-strip { padding: 0; border-top: 0; background: transparent; }
+  .ps-right .ps-status { padding: 0; border-top: 0; }
+
+  .ps-big { display: grid; grid-template-columns: minmax(0, 1fr) 150px minmax(0, 1fr); align-items: center; gap: 20px; padding: 18px 24px; border-top: 1px solid #1d2027; background: rgb(14 16 20 / .35); }
+  .ps-big .side { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .ps-big .chip { flex: none; width: 44px; height: 26px; border-radius: 5px; font-size: 12.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .ps-big b { font-size: 16px; font-weight: 400; color: var(--silver); white-space: nowrap; }
+  .ps-big b.lead { font-weight: 600; color: var(--text); }
+  .ps-big .m { font-size: 11.5px; color: var(--silver-lo); }
+  .ps-big .sc { font: 700 50px/1 var(--font-num); color: var(--silver); }
+  .ps-big .sc.lead { color: var(--text); }
+  .ps-big .mid { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .ps-big .mid .inn { display: flex; align-items: center; gap: 6px; font: 700 22px/1 var(--font-mix); color: var(--text); }
+  .ps-big .mid .inn i { width: 6px; height: 6px; border-radius: 50%; background: #ff4d4f; }
+  .ps-big .mid .sub { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+  .ps-big .mid.live .sub { color: #ff8a8c; }
+
+  .ps-wls { padding: 6px 24px 12px; }
+  .lv-ls.big { gap: 0; font-size: 18px; overflow: visible; }
+  .lv-ls.big .r { grid-template-columns: 190px; grid-auto-columns: minmax(0, 1fr); gap: 0; align-items: center; min-height: 44px; border-top: 1px solid #1d2027; }
+  .lv-ls.big .r.h { min-height: 32px; border-top: 0; font-size: 12px; letter-spacing: .06em; }
+  .lv-ls.big .r > span { height: 32px; line-height: 32px; margin: 0 3px; border-radius: 5px; }
+  .lv-ls.big .r.h > span { height: auto; line-height: normal; margin: 0; }
+  .lv-ls.big .t { display: flex; align-items: center; gap: 10px; margin: 0; text-align: left; }
+  .lv-ls.big .t .chip { flex: none; width: 36px; height: 22px; border-radius: 4px; font: 700 11.5px/22px 'Noto Sans TC', sans-serif; text-align: center; }
+  .lv-ls.big .t em { font: 500 13.5px 'Noto Sans TC', sans-serif; font-style: normal; color: var(--silver); white-space: nowrap; }
+  .lv-ls.big .tot { font-size: 22px; font-weight: 700; }
+
+  .ps-now { display: grid; grid-template-columns: 300px minmax(0, 1fr) minmax(0, 1fr); border-top: 1px solid #1d2027; background: rgb(14 16 20 / .35); }
+  .ps-now.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ps-now .ps-person { grid-template-columns: 32px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 12px; row-gap: 2px; align-content: center; min-height: 0; padding: 16px 24px; border-top: 0; border-left: 1px solid #1d2027; }
+  .ps-now .ps-person:first-child { border-left: 0; }
+  .ps-now .ps-person .lab { grid-column: 2; grid-row: 1; }
+  .ps-now .ps-person .ps-num { grid-column: 1; grid-row: 1 / span 2; align-self: center; }
+  .ps-now .ps-person .b { grid-column: 2; grid-row: 2; }
+  .ps-half { display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 16px 24px; }
+  .ps-half .lab { font-size: 11px; color: var(--silver-lo); }
+  .ps-half b { font-size: 14px; font-weight: 400; color: var(--text); }
+  .ps-half .seq { display: flex; flex-wrap: wrap; gap: 2px 6px; font-size: 12px; color: var(--silver); }
+  .ps-half .seq em { font-style: normal; color: var(--dim); margin-right: 6px; }
+  .ps-half .seq .now { color: #ff8a8c; }
+
+  .ps-boards { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+  .ps-boards .gt { grid-column: 1 / -1; margin-bottom: -4px; }
+  .ps-board .br { gap: 7px; padding: 0 10px; }
+}
+
+.ps-more { display: block; width: 100%; height: 40px; border: 0; border-top: 1px solid #1d2027; border-radius: 0; background: transparent; color: var(--silver); font-size: 12.5px; font-weight: 400; }
+.ps-refresh { display: none; }
+.ps-ctitle .lv-badge { display: none; white-space: nowrap; }
+@media (min-width: 1024px) {
+  .ps-ctitle .lv-badge { display: inline; }
+  .ps-refresh { display: block; text-align: right; font-size: 12px; line-height: 1.4; color: var(--muted); }
+  .ps-refresh b { font: 600 14px var(--font-num); color: var(--text); }
+  .ps-refresh small { display: block; font-size: 11px; color: var(--silver-lo); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

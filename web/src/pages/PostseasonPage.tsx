@@ -57,6 +57,7 @@ export default function PostseasonPage() {
   const [tab, setTab] = useState<Tab>('all')
   const [group, setGroup] = useState<Group>('bat')
   const [recapIdx, setRecapIdx] = useState<number | null>(null)
+  const [mineAll, setMineAll] = useState(false)
 
   const load = useCallback(() => {
     api.get<PostseasonView>(`/api/postseason?leagueId=${leagueId}`)
@@ -173,6 +174,7 @@ export default function PostseasonPage() {
 
   const seriesCard = (
     <div className="ps-card ps-series">
+      <div className="ps-left">
       <div className="ps-score">
         <div className="side">{chip(tA)}<span className="nm">{team(tA).name}</span></div>
         <div className="big">
@@ -183,6 +185,8 @@ export default function PostseasonPage() {
         <div className="side r">{chip(tB)}<span className="nm">{team(tB).name}</span></div>
       </div>
       <div className="ps-lead">{lead}・先拿 {s.winsNeeded} 勝{isFinals ? '奪冠' : '晉級'}{advantageNote}</div>
+      </div>
+      <div className="ps-right">
       <div className="ps-strip">
         {Array.from({ length: slots }, (_, i) => stripCell(i)).map((c) => (
           <div key={c.key} className={`ps-cell ${c.cls}`}>
@@ -194,6 +198,7 @@ export default function PostseasonPage() {
         ))}
       </div>
       <div className="ps-status">{statusText}</div>
+      </div>
     </div>
   )
 
@@ -246,16 +251,27 @@ export default function PostseasonPage() {
     </div>
   )
 
-  const lineScore = (g: LiveGame) => {
+  /** 進行中的半局：官網的局數文字「五上」「七下」→ { inning: 5, top: true }；解析不了就不標 */
+  const curHalf = (g: LiveGame): { i: number; top: boolean } | null => {
+    if (g.status !== 'IN_PROGRESS' || !g.inning) return null
+    const m = /^([一二三四五六七八九十]+)(上|下)/.exec(g.inning)
+    if (!m) return null
+    const d = '一二三四五六七八九'
+    const n = m[1] === '十' ? 10 : m[1].startsWith('十') ? 10 + d.indexOf(m[1][1]) + 1 : m[1].endsWith('十') ? (d.indexOf(m[1][0]) + 1) * 10 : d.indexOf(m[1]) + 1
+    return n > 0 ? { i: n - 1, top: m[2] === '上' } : null
+  }
+
+  const lineScore = (g: LiveGame, big = false) => {
     const ls = g.lineScore
     if (!ls) return null
+    const cur = curHalf(g)
     return (
-      <div className="lv-ls" role="table" aria-label="逐局比分">
-        <div className="r h"><span />{ls.away.map((_, i) => <span key={i}>{i + 1}</span>)}<span>R</span><span>H</span><span>E</span></div>
-        {[{ code: g.awayTeam, runs: ls.away, rhe: ls.awayRhe }, { code: g.homeTeam, runs: ls.home, rhe: ls.homeRhe }].map((x) => (
+      <div className={`lv-ls${big ? ' big' : ''}`} role="table" aria-label="逐局比分">
+        <div className="r h"><span />{ls.away.map((_, i) => <span key={i} className={cur && cur.i === i ? 'cur' : ''}>{i + 1}</span>)}<span>R</span><span>H</span><span>E</span></div>
+        {[{ code: g.awayTeam, runs: ls.away, rhe: ls.awayRhe, top: true }, { code: g.homeTeam, runs: ls.home, rhe: ls.homeRhe, top: false }].map((x) => (
           <div key={x.code} className="r">
-            <span className="t">{team(x.code).short}</span>
-            {x.runs.map((v, i) => <span key={i}>{v ?? ''}</span>)}
+            <span className="t">{big ? <>{chip(x.code)}<em>{team(x.code).name}</em></> : team(x.code).short}</span>
+            {x.runs.map((v, i) => <span key={i} className={cur && cur.top === x.top && cur.i === i ? 'cur' : ''}>{v ?? ''}</span>)}
             {x.rhe.map((v, i) => <span key={`t${i}`} className="tot">{v ?? ''}</span>)}
           </div>
         ))}
@@ -285,11 +301,55 @@ export default function PostseasonPage() {
     return { inn: g.startTime ? hm(g.startTime) : '—', sub: '尚未開始', live: false }
   }
 
+  /** 網頁版的大比分列：客隊「色塊 隊名 客 … 分數」、局數、主隊「分數 … 主 隊名 色塊」 */
+  const bigScore = (g: LiveGame) => {
+    const info = todayInfo(g)
+    const side = (code: string, sc: number | null, other: number | null, label: string, home: boolean) => {
+      const t = team(code)
+      const lead = sc != null && other != null && sc > other
+      const who = <>{chip(code)}<b className={lead ? 'lead' : ''}>{t.name}</b><span className="m">{label}</span></>
+      const score = <span className={`sc${lead ? ' lead' : ''}`}>{sc ?? ''}</span>
+      return <div className={`side${home ? ' h' : ''}`}>{home ? <>{score}<span className="sp" />{who}</> : <>{who}<span className="sp" />{score}</>}</div>
+    }
+    return (
+      <div className="ps-big">
+        {side(g.awayTeam, g.awayScore, g.homeScore, '客', false)}
+        <div className={`mid${info.live ? ' live' : ''}`}><span className="inn">{info.live && <i />}{info.inn}</span><span className="sub">{info.sub}</span></div>
+        {side(g.homeTeam, g.homeScore, g.awayScore, '主', true)}
+      </div>
+    )
+  }
+
   const todayBody = (g: LiveGame) => {
     const lines = linesOf(s, g)
     const batter = g.batterId != null ? lines.find((l) => l.playerId === g.batterId) : undefined
     const pitcher = g.pitcherId != null ? lines.find((l) => l.playerId === g.pitcherId) : undefined
     if (tab !== 'all') return boxTable(g, tab === 'home')
+    const batterP = batter && personRow('打擊中', batter, `今天 ${batter.ab} 打數 ${batter.h} 安` + (batter.bb ? ` ${batter.bb} 保送` : ''), 'live')
+    const pitcherP = pitcher && personRow('投球中', pitcher, `今天 ${ip(pitcher.outs)} 局 ${pitcher.pH} 安 ${pitcher.pK} K` + (pitcher.pEr ? ` 失 ${pitcher.pEr} 分` : ''), 'live')
+    if (wide) {
+      const half = g.halfInning && g.halfInning.length > 0 ? (
+        <div className="ps-half">
+          <span className="lab" title={OUTS_HINT}>本半局</span>
+          <b>{outsOf(g)} 出局</b>
+          <div className="seq">{g.halfInning.map((pa, i) => <span key={i} className={pa.result == null ? 'now' : ''}>{i > 0 && <em>→</em>}{pa.name} {pa.result ?? '對決中'}</span>)}</div>
+        </div>
+      ) : <div className="ps-half"><span className="lab">本半局</span><b>—</b></div>
+      const b = g.status === 'FINAL' ? bestBatter(lines) : null, p = g.status === 'FINAL' ? bestPitcher(lines) : null
+      return (
+        <>
+          <div className="lv-detail ps-wls">{lineScore(g, true)}</div>
+          {g.status === 'IN_PROGRESS' && <div className="ps-now">{half}{batterP}{pitcherP}</div>}
+          {g.status === 'FINAL' && (b || p) && (
+            <div className="ps-now two">
+              {b && personRow('最佳打者', b, batText(b), 'best')}
+              {p && personRow('最佳投手', p, pitText(p), 'best')}
+            </div>
+          )}
+          {g.sourceUrl && <a className="lv-src ps-src" href={g.sourceUrl} target="_blank" rel="noopener noreferrer">到進階數據網站看這場 ↗</a>}
+        </>
+      )
+    }
     return (
       <>
         <div className="lv-detail">
@@ -354,13 +414,15 @@ export default function PostseasonPage() {
       </div>
       {todayGame ? (
         <>
-          <div className="lv-ghead">
-            <div className="teams">{todayScoreRows(todayGame)}</div>
-            <div className={`state${todayInfo(todayGame).live ? ' live' : ''}`}>
-              <span className="inn">{todayInfo(todayGame).live && <i />}{todayInfo(todayGame).inn}</span>
-              <span className="sub">{todayInfo(todayGame).sub}</span>
+          {wide ? bigScore(todayGame) : (
+            <div className="lv-ghead">
+              <div className="teams">{todayScoreRows(todayGame)}</div>
+              <div className={`state${todayInfo(todayGame).live ? ' live' : ''}`}>
+                <span className="inn">{todayInfo(todayGame).live && <i />}{todayInfo(todayGame).inn}</span>
+                <span className="sub">{todayInfo(todayGame).sub}</span>
+              </div>
             </div>
-          </div>
+          )}
           {todayBody(todayGame)}
         </>
       ) : restCard}
@@ -406,7 +468,19 @@ export default function PostseasonPage() {
       <div className="ps-ctitle"><span>你的球員</span><span className="sp" /><span className="muted">只標示，不計分</span></div>
       {mineCount === 0
         ? <div className="lv-empty">你的名單上沒有人在打{s.name}。</div>
-        : <>{myBats.map((p) => myCard(p, true))}{myPits.map((p) => myCard(p, false))}</>}
+        : (() => {
+          // 名單上在打的人多時先收合，只列前 3 位
+          const all = [...myBats.map((p) => ({ p, bat: true })), ...myPits.map((p) => ({ p, bat: false }))]
+          const shown = mineAll ? all : all.slice(0, 3)
+          return (
+            <>
+              {shown.map((x) => myCard(x.p, x.bat))}
+              {all.length > 3 && (
+                <button type="button" className="ps-more" onClick={() => setMineAll(!mineAll)}>{mineAll ? '收合' : `顯示全部 ${all.length} 位`}</button>
+              )}
+            </>
+          )
+        })()}
     </div>
   )
 
@@ -503,6 +577,7 @@ export default function PostseasonPage() {
           {active && <>・上次更新 {upd}</>}
         </div>
       </div>
+      {active && <div className="ps-refresh"><div><b>{sec}</b> 秒後更新</div><small>上次 {upd}</small></div>}
       {active && (
         <button type="button" className="lv-ring" style={{ background: ring }} title="立即更新" aria-label={`${sec} 秒後更新，點一下立即更新`} onClick={load}>
           <span><b>{sec}</b><small>秒</small></span>
