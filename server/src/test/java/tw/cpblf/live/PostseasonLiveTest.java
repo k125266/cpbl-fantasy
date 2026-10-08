@@ -30,7 +30,21 @@ class PostseasonLiveTest extends IntegrationTest {
 
     @Test
     void trackedKindsAreTheRegularSeasonThenThePostseason() {
-        assertThat(props.trackedKindCodes()).containsExactly("A", "E");
+        assertThat(props.trackedKindCodes()).containsExactly("A", "E", "C");
+    }
+
+    @Test
+    void seriesFormatComesFromConfig() {
+        var challenge = props.series("E");
+        assertThat(challenge.name()).isEqualTo("季後挑戰賽");
+        assertThat(challenge.winsNeeded()).isEqualTo(3);
+        assertThat(challenge.advantageTeam()).isEqualTo("BRO");
+        var finals = props.series("C");
+        assertThat(finals.name()).isEqualTo("台灣大賽");
+        assertThat(finals.winsNeeded()).isEqualTo(4);
+        assertThat(finals.advantageTeam()).isNull();
+        // 沒設定的代碼退回預設
+        assertThat(props.series("Z").winsNeeded()).isEqualTo(4);
     }
 
     @Test

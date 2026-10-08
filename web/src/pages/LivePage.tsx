@@ -94,7 +94,7 @@ function outsOf(g: LiveGame): number | null {
 }
 
 /** 官網賽事代碼的名稱（台灣大賽的代碼公布後補上） */
-const KIND_NAME: Record<string, string> = { E: '季後挑戰賽' }
+const KIND_NAME: Record<string, string> = { E: '季後挑戰賽', C: '台灣大賽' }
 
 function gameState(g: LiveGame, lines: LiveLine[]): { inn: string; sub: string; live: boolean } {
   switch (g.status) {
