@@ -4,6 +4,7 @@ import { useApp } from '../App'
 import { api, type LiveGame, type LiveLine, type LiveStarter, type LiveView, type TeamView } from '../api'
 import { ErrorBox, fmtTime, Loading } from '../components'
 import { useWide } from '../hooks'
+import { ip, KIND_NAME, OUTS_HINT, outsOf } from '../live'
 import { TeamIcon } from '../teamIdentity'
 import { cpblTeam, fantasyTeamColor } from '../teams'
 
@@ -28,8 +29,6 @@ function clock(d: Date) {
   const p = (n: number) => String(n).padStart(2, '0')
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
 }
-
-const ip = (outs: number) => `${Math.floor(outs / 3)}.${outs % 3}`
 
 /** 畫面上的一列：上場球員（line）或還沒上場的先發（line 為 null） */
 interface Row {
@@ -78,23 +77,6 @@ function cells(r: Row): { v: string | number; c?: string }[] {
   if (r.isBat) return [v(l.pa), v(l.ab), v(l.h), v(l.r), v(l.hr, true), v(l.bb)]
   return [{ v: ip(l.outs) }, v(l.pH), v(l.pBb), v(l.pEr), v(l.pK), { v: l.w ? 'W' : l.sv ? 'SV' : '–', c: l.w || l.sv ? 'gold' : 'dim' }]
 }
-
-/** 官網沒有出局數，從本半局的打席結果代碼推算；盜壘刺、牽制出局不在打席結果裡，可能少算 */
-const OUTS_HINT = '出局數依本半局打席結果推算，不含盜壘刺與牽制出局'
-function outsOf(g: LiveGame): number | null {
-  if (!g.halfInning || g.halfInning.length === 0) return null
-  let n = 0
-  for (const { result: r } of g.halfInning) {
-    if (r == null) continue
-    if (r === '三殺') n += 3
-    else if (r === '雙殺') n += 2
-    else if (r === '三振' || r === '犧短' || r === '犧飛' || /^[投捕一二三游左中右](飛|滾|平|界飛|短)$/.test(r)) n += 1
-  }
-  return Math.min(n, 3)
-}
-
-/** 官網賽事代碼的名稱（台灣大賽的代碼公布後補上） */
-const KIND_NAME: Record<string, string> = { E: '季後挑戰賽', C: '台灣大賽' }
 
 function gameState(g: LiveGame, lines: LiveLine[]): { inn: string; sub: string; live: boolean } {
   switch (g.status) {
