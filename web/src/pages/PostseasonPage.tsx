@@ -5,9 +5,10 @@ import { api, type LiveGame, type LiveLine, type PostseasonView, type SeriesView
 import { ErrorBox, Loading } from '../components'
 import { useWide } from '../hooks'
 import {
-  batText, bestBatter, bestPitcher, byOrder, leaderboards, linesOf,
-  pitText, standingAfter, winnerOf, type BatAgg, type Board, type PitAgg,
+  batText, bestBatter, bestPitcher, byOrder, linesOf,
+  pitText, standingAfter, winnerOf,
 } from '../postseason'
+import Leaders from '../postseason/Leaders'
 import MinePanel from '../postseason/MinePanel'
 import SeriesCard from '../postseason/SeriesCard'
 import TodayCard from '../postseason/TodayCard'
@@ -25,7 +26,6 @@ import { cpblTeam, fantasyTeamColor } from '../teams'
 const REFRESH = 60
 const SERVED = (g: LiveGame) => g.status !== 'POSTPONED' && g.status !== 'CANCELLED'
 
-type Group = 'bat' | 'pit'
 
 function clock(d: Date) {
   const p = (n: number) => String(n).padStart(2, '0')
@@ -40,7 +40,6 @@ export default function PostseasonPage() {
   const [upd, setUpd] = useState('')
   const [sec, setSec] = useState(REFRESH)
   const [kind, setKind] = useState<string | null>(null)
-  const [group, setGroup] = useState<Group>('bat')
   const [recapIdx, setRecapIdx] = useState<number | null>(null)
 
   const load = useCallback(() => {
@@ -160,44 +159,6 @@ export default function PostseasonPage() {
       )
     })
 
-  // ---------------- 系列戰排行 ----------------
-  const played = finished.length + (games.some((g) => g.status === 'IN_PROGRESS') ? 1 : 0)
-  const boards = leaderboards(s.lines, Math.max(played, 1))
-  const board = <T extends BatAgg | PitAgg>(b: Board<T>) => (
-    <div key={b.key} className="ps-board">
-      <div className="bh"><b>{b.title}</b><span className="k">{b.key}</span><span className="sp" /><span className="note">{b.note}</span></div>
-      {b.rows.map((r) => (
-        <div key={r.who.playerId} className="br">
-          <span className="rk">{r.rank}</span>
-          {num(r.who.team, r.who.jersey)}
-          <div className="who">
-            <div className="nm"><Link to={`/players/${r.who.playerId}`}>{r.who.name}</Link>{mark(r.who.fantasyTeamId, 12)}</div>
-            <div className="sub">{team(r.who.team).short}・{r.sub}</div>
-          </div>
-          <span className="v">{r.value}</span>
-        </div>
-      ))}
-      {b.rows.length === 0 && <div className="lv-empty">{b.emptyText || '還沒有數據'}</div>}
-    </div>
-  )
-  const leadersPanel = (
-    <div className="ps-card">
-      <div className="ps-ctitle">
-        <span>系列戰排行</span><span className="sp" />
-        {!wide && (
-          <div className="lv-seg" role="tablist">
-            {([['bat', '打者'], ['pit', '投手']] as [Group, string][]).map(([k, t]) => (
-              <button key={k} type="button" role="tab" aria-selected={group === k} onClick={() => setGroup(k)}>{t}</button>
-            ))}
-          </div>
-        )}
-        {wide && <span className="muted">{live ? '含進行中的比賽・非最終' : `${played} 場累計`}</span>}
-      </div>
-      {(wide || group === 'bat') && <div className="ps-boards">{wide && <div className="gt">打者</div>}{boards.bat.map((b) => board(b))}</div>}
-      {(wide || group === 'pit') && <div className="ps-boards">{wide && <div className="gt">投手</div>}{boards.pit.map((b) => board(b))}</div>}
-    </div>
-  )
-
   // ---------------- 戰況卡 ----------------
   const recapGames = finished
   const ri = Math.min(recapIdx ?? recapGames.length - 1, recapGames.length - 1)
@@ -277,7 +238,7 @@ export default function PostseasonPage() {
       {switcher}
       <SeriesCard ctx={ctx} />
       <TodayCard ctx={ctx} />
-      <div className="pv-two"><MinePanel ctx={ctx} />{leadersPanel}</div>
+      <div className="pv-two"><MinePanel ctx={ctx} /><Leaders ctx={ctx} /></div>
       {recaps}
       <p className="lv-note">{data.notice}</p>
     </div>

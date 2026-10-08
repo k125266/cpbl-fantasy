@@ -2068,6 +2068,36 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .pv-cum .h { font-size: 10.5px; }
   .pv-cum .v { font-size: 15px; line-height: 24px; }
 }
+/* 系列戰排行 */
+.pv-ld { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pv-ld .b { min-width: 0; padding: 10px 12px; }
+.pv-ld .b:nth-child(n+3) { border-top: 1px solid #1d2027; }
+.pv-ld .b:nth-child(even) { border-left: 1px solid #1d2027; }
+.pv-ld .bh { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+.pv-ld .bh b { font-size: 12px; font-weight: 600; }
+.pv-ld .bh .k { font: 600 10px var(--font-num); letter-spacing: .08em; color: var(--silver-lo); }
+.pv-ld .bh .note { margin-left: auto; font-size: 10px; color: var(--silver-lo); }
+.pv-ld .empty { margin-top: 8px; font-size: 11.5px; color: var(--silver-lo); }
+.pv-ld .r { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 7px; align-items: center; min-height: 36px; margin-top: 4px; }
+.pv-ld .r .pv-num { width: 22px; height: 22px; border-radius: 5px; font-size: 12px; line-height: 22px; }
+.pv-ld .who { min-width: 0; }
+.pv-ld .nm { display: flex; align-items: center; gap: 4px; }
+.pv-ld .nm a { font-size: 12.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pv-ld .ts { font-size: 10px; color: var(--silver-lo); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pv-ld .v { font: 700 15px var(--font-num); color: var(--silver); }
+.pv-ld .r.first .v { font-size: 18px; color: #ecdfc4; }
+
+@media (min-width: 1024px) {
+  .pv-ld { grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid #1d2027; }
+  .pv-ld .b:nth-child(n+3) { border-top: 0; }
+  .pv-ld .b:nth-child(even) { border-left: 0; }
+  .pv-ld .b + .b { border-left: 1px solid #1d2027; }
+  .pv-ld .bh .note { display: none; }
+  .pv-ld .r { grid-template-columns: 20px minmax(0, 1fr) auto; gap: 6px; min-height: 34px; margin-top: 6px; }
+  .pv-ld .r .pv-num { width: 20px; height: 20px; font-size: 11px; line-height: 20px; }
+  .pv-ld .nm a { font-size: 12px; }
+  .pv-ld .ts { display: none; }
+}
 /* ===== pv:end ===== */
 
 @media (prefers-reduced-motion: reduce) {
