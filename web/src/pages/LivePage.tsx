@@ -227,7 +227,13 @@ export default function LivePage() {
     const st = gameState(g, data.lines)
     return (
       <div className="lv-ghead">
-        {g.postseason && <div className="lv-kind">{KIND_NAME[g.kindCode] ?? '季後賽'}・不計入 fantasy</div>}
+        {g.postseason && (
+          <div className="lv-kind">
+            {KIND_NAME[g.kindCode] ?? '季後賽'}・不計入 fantasy
+            {/* 卡片本身在網頁版是按鈕，連結不能包在按鈕裡，所以只在手機版（卡片是 div）顯示 */}
+            {!wide && <Link className="lv-kind-link" to="/postseason">季後賽專區 →</Link>}
+          </div>
+        )}
         <div className="teams">{scoreRows(g)}</div>
         <div className={`state${st.live ? ' live' : ''}`}>
           <span className="inn">{st.live && <i />}{st.inn}</span>
@@ -433,7 +439,7 @@ export default function LivePage() {
           {noGameBlock}
         </div>
         <div className="lv-panel">
-          <div className="lv-ptop"><span className="lv-label-t">本場即時數據</span><span className="lv-badge">非最終數據</span><span className="sp" />{seg}</div>
+          <div className="lv-ptop"><span className="lv-label-t">本場即時數據</span><span className="lv-badge">非最終數據</span>{sel?.postseason && <Link className="lv-kind-link" to="/postseason">季後賽專區 →</Link>}<span className="sp" />{seg}</div>
           {sel ? (
             <>
               <div className="lv-big">

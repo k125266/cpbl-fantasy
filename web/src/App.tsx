@@ -10,6 +10,7 @@ import TransactionsPage from './pages/TransactionsPage'
 import DraftPage from './pages/DraftPage'
 import LeagueHubPage from './pages/LeagueHubPage'
 import LivePage from './pages/LivePage'
+import PostseasonPage from './pages/PostseasonPage'
 import LeaguePage from './pages/LeaguePage'
 import AdminPage from './pages/AdminPage'
 import PrivacyPage from './pages/PrivacyPage'
@@ -42,7 +43,7 @@ export default function App() {
   const navigate = useNavigate()
   // 即時比分、選秀在寬螢幕是多欄版面，外框放寬（其他頁面維持 480px）
   const { pathname } = useLocation()
-  const widePage = pathname === '/live' || pathname.startsWith('/draft')
+  const widePage = pathname === '/live' || pathname === '/postseason' || pathname.startsWith('/draft')
 
   const reloadSystem = useCallback(() => {
     api.get<SystemInfo>('/api/system').then(setSystem).catch(() => setSystem(null))
@@ -133,6 +134,7 @@ export default function App() {
             <Route path="/standings" element={<Navigate to="/league" />} />
             <Route path="/transactions" element={<TransactionsPage />} />
             <Route path="/live" element={<LivePage />} />
+            <Route path="/postseason" element={<PostseasonPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/admin" element={user.admin ? <AdminPage /> : <Navigate to="/" />} />
             <Route path="/privacy" element={<PrivacyPage />} />
