@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
-import type { LiveGame, PostseasonView, SeriesView, TeamView } from '../api'
+import { Link } from 'react-router-dom'
+import type { LiveGame, LiveLine, PostseasonView, SeriesView, TeamView } from '../api'
 import { TeamIcon } from '../teamIdentity'
 import { cpblTeam, fantasyTeamColor } from '../teams'
 import { byOrder, winnerOf } from '../postseason'
@@ -157,6 +158,24 @@ export function LineScore({ g, size = 'md' }: { g: LiveGame; size?: 'md' | 'sm' 
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// 球員一行
+// ---------------------------------------------------------------------------
+
+/** 一位球員一行：標籤（打擊中／投球中／最佳打者…）、背號、名字、一句數據 */
+export function Person({ ctx, label, l, text, tone, deskOnly }: { ctx: PsCtx; label: string; l: LiveLine; text: string; tone: 'live' | 'best'; deskOnly?: boolean }) {
+  return (
+    <div className={`pv-person ${tone}${deskOnly ? ' d-only' : ''}`}>
+      <span className="lab">{label}</span>
+      <Num code={l.cpblTeam} jersey={l.jerseyNumber} />
+      <div className="b">
+        <div className="nm"><Link to={`/players/${l.playerId}`}>{l.name}</Link><Mine ctx={ctx} fantasyTeamId={l.fantasyTeamId} /><span className="ts">{team(l.cpblTeam).short}</span></div>
+        <div className="tx">{text}</div>
+      </div>
     </div>
   )
 }

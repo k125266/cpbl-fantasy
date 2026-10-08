@@ -4,7 +4,7 @@ import type { LiveGame, LiveLine } from '../api'
 import { ip, OUTS_HINT, outsOf } from '../live'
 import { batText, bestBatter, bestPitcher, isBatLine, isPitLine, linesOf, pitText, winnerOf } from '../postseason'
 import { fantasyTeamColor } from '../teams'
-import { Chip, hm, LineScore, mdw, Mine, Num, resultText, Section, team, type PsCtx } from './shared'
+import { Chip, hm, LineScore, mdw, Mine, Num, Person, resultText, Section, team, type PsCtx } from './shared'
 
 /**
  * 今天這一戰：比分、逐局比分、場上狀況（進行中）或本場最佳（結束後）；
@@ -15,20 +15,6 @@ import { Chip, hm, LineScore, mdw, Mine, Num, resultText, Section, team, type Ps
 
 const BAT_HEADS = ['PA', 'AB', 'H', 'R', 'HR', 'BB']
 const PIT_HEADS = ['IP', 'H', 'BB', 'ER', 'K', '勝救']
-
-/** 一位球員一行：標籤（打擊中／投球中／最佳打者…）、背號、名字、一句數據 */
-function Person({ ctx, label, l, text, tone, deskOnly }: { ctx: PsCtx; label: string; l: LiveLine; text: string; tone: 'live' | 'best'; deskOnly?: boolean }) {
-  return (
-    <div className={`pv-person ${tone}${deskOnly ? ' d-only' : ''}`}>
-      <span className="lab">{label}</span>
-      <Num code={l.cpblTeam} jersey={l.jerseyNumber} />
-      <div className="b">
-        <div className="nm"><Link to={`/players/${l.playerId}`}>{l.name}</Link><Mine ctx={ctx} fantasyTeamId={l.fantasyTeamId} /><span className="ts">{team(l.cpblTeam).short}</span></div>
-        <div className="tx">{text}</div>
-      </div>
-    </div>
-  )
-}
 
 /** 一隊的打者與投手數據 */
 function Box({ ctx, g, home, className }: { ctx: PsCtx; g: LiveGame; home: boolean; className: string }) {
