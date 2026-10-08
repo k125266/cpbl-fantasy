@@ -804,6 +804,51 @@ function DraftReportView({ draft, onClose }: { draft: DraftView; onClose: () => 
 }
 
 // ------------------------------------------------------------------
+// 選秀結束畫面：人在選秀室、看著選秀結束時出現一次（之後從「選秀紀錄」回來看選秀板與成績單）
+// ------------------------------------------------------------------
+
+function DraftFinish({ draft, mine, onReport, onClose }: { draft: DraftView; mine: DraftPick[]; onReport: () => void; onClose: () => void }) {
+  const { leagueId, league, system } = useApp()
+  const r = useLoad(() => api.get<DraftReport>(`/api/leagues/${leagueId}/drafts/${draft.id}/report`), [leagueId, draft.id])
+  const me = r.data?.teams.find((t) => t.teamId === league?.myTeamId)
+  const n = draft.order.length || 1
+  useEffect(() => {
+    beep([523, 659, 784, 1047, 1319], 0.22, 0.09, 'triangle', 0.16)
+    buzz([60, 40, 90, 40, 140])
+  }, [])
+  // 成績單 A 級才放彩帶
+  useEffect(() => { if (me?.grade.startsWith('A')) setTimeout(boom, 300) }, [me?.grade])
+  return (
+    <div className="dr-fin" role="dialog" aria-modal="true" aria-label="選秀結束">
+      <div className="box">
+        <span className="kick">DRAFT COMPLETE · {system?.seasonYear}</span>
+        <h2>選秀結束</h2>
+        <p className="sub">
+          {draft.halfNo === 2 ? '下半季補強選秀' : '上半季選秀'}・共 {draftSlots(draft).length} 手
+          {me && <>・你的成績單 <b className={`g ${gradeTone(me.grade)}`}>{me.grade}</b></>}
+        </p>
+        <div className="mine">
+          <div className="mh">你的陣容 · {mine.length} 人</div>
+          <ol>
+            {mine.map((p) => (
+              <li key={p.pickNo}>
+                <span className="no">{pickLabel(p.pickNo, n)}</span>
+                <b>{p.playerName}</b>
+                <em>{p.playerPosition ?? ''}</em>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <div className="btns">
+          <button type="button" className="ghost" onClick={onClose}>看選秀板</button>
+          <button type="button" className="gold" onClick={onReport}>看成績單</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------
 // 選秀室
 // ------------------------------------------------------------------
 
@@ -866,9 +911,18 @@ export default function DraftRoom({ draft, onChange }: { draft: DraftView; onCha
   const needs = board.data && <Needs needs={board.data.needs} count={myPicks.length} rounds={draft.rounds} />
   const keeperNote = draft.status === 'KEEPERS' && !draft.revealedAt && <p className="muted">Keeper 選擇期：<Link to="/draft/keepers">前往選擇 Keeper</Link></p>
 
-  // 選完後打開成績單（剛好是自己的最後一個選擇時，等選中動畫關掉再開）
-  const [report, setReport] = useState(done)
-  useEffect(() => { if (done) setReport(true) }, [done])
+  // 成績單由「看成績單」打開；人在選秀室、看著選秀結束時，先出現一次結束畫面
+  // （剛好是自己的最後一個選擇時，等選中動畫關掉再出現）
+  const [report, setReport] = useState(false)
+  const mountedLive = useRef(!done)
+  const finishShown = useRef(false)
+  const [finish, setFinish] = useState(false)
+  useEffect(() => {
+    if (done && mountedLive.current && !finishShown.current) { finishShown.current = true; setFinish(true) }
+  }, [done])
+  const finishEl = finish && !rv && (
+    <DraftFinish draft={draft} mine={[...myPicks].reverse()} onClose={() => setFinish(false)} onReport={() => { setFinish(false); setReport(true) }} />
+  )
   const reportBtn = done && <button type="button" className="dr-report-btn" onClick={() => setReport(true)}>看選秀成績單</button>
   if (done && report && !rv) {
     return <div className="dr"><DraftReportView draft={draft} onClose={() => setReport(false)} /></div>
@@ -899,6 +953,7 @@ export default function DraftRoom({ draft, onChange }: { draft: DraftView; onCha
           </div>
         </div>
         {reveal}
+        {finishEl}
       </div>
     )
   }
@@ -922,6 +977,7 @@ export default function DraftRoom({ draft, onChange }: { draft: DraftView; onCha
         <BottomSheet label={selP.name} onClose={() => setSel(null)}>{panel(selP)}</BottomSheet>
       )}
       {reveal}
+      {finishEl}
     </div>
   )
 }
