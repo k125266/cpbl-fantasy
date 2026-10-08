@@ -8,7 +8,7 @@ import { cpblTeam } from '../teams'
 
 /**
  * 選擇 Keeper（設計稿「Keeper 與選秀抽籤」1a 手機、1b 網頁）。E14：下半季至多 keeper_limit 人、不佔輪次；
- * 選秀前 10 分鐘截止；揭曉前只有自己看得到。
+ * 管理員按下開始選秀時鎖定；揭曉前只有自己看得到。
  */
 
 export interface KeeperCandidate {
@@ -108,7 +108,7 @@ export default function KeeperPage({ draft, onChange }: { draft: DraftView; onCh
   const saveTone = note ? 'warn' : locked ? 'muted' : dirty ? '' : 'ok'
   // 揭曉或選秀開始後也算截止（例：管理員提早揭曉），不再顯示倒數
   const sub = locked ? `Keeper 已截止${draft.revealedAt ? '・順位已揭曉' : ''}`
-    : draft.keeperDeadline ? `截止 ${fmtDeadline(draft.keeperDeadline)}・${remain((deadline ?? 0) - now)}` : '順位揭曉前都能改'
+    : draft.keeperDeadline ? `截止 ${fmtDeadline(draft.keeperDeadline)}・${remain((deadline ?? 0) - now)}` : '管理員按下開始選秀時鎖定'
 
   const slots = Array.from({ length: limit }, (_, i) => kept[i])
   const strip = Array.from({ length: rosterSize }, (_, i) => (i < n ? 'K' : i < n + rounds ? 'D' : ''))

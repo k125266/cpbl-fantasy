@@ -1,6 +1,5 @@
 package tw.cpblf.api;
 
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -37,6 +36,7 @@ public class DraftController {
     public List<DraftService.DraftView> list(@PathVariable long leagueId) {
         CurrentUser u = Auth.require();
         leagues.requireMember(leagueId, u);
+        drafts.ensureDrafts(leagueId); // 選秀自動進入「準備中」，不需要管理員建立
         return drafts.list(leagueId, leagues.teamOf(leagueId, u.id()).orElse(null));
     }
 
@@ -48,15 +48,20 @@ public class DraftController {
         return drafts.view(draftId, leagues.teamOf(leagueId, u.id()).orElse(null));
     }
 
-    /** @param scheduledAt 選秀時間（keeper 在前 10 分鐘截止）；可不填 */
-    public record Create(int halfNo, List<Long> order, OffsetDateTime scheduledAt) {
+    /** @param pickSeconds 每手秒數；不填維持目前設定 */
+    public record Begin(Integer pickSeconds) {
     }
 
-    @PostMapping
-    public Map<String, Object> create(@PathVariable long leagueId, @RequestBody Create req) {
+    /**
+     * 聯盟管理員按「開始選秀」：keeper 鎖定、馬上揭曉順位，動畫播完後自動開始第一手。
+     * 沒有預設選秀時間——玩家自己討論好時間，管理員到時候按開始。
+     */
+    @PostMapping("/{draftId}/begin")
+    public Map<String, Boolean> begin(@PathVariable long leagueId, @PathVariable long draftId, @RequestBody Begin req) {
         leagues.requireCommissioner(leagueId, Auth.require());
-        return Map.of("id", drafts.create(leagueId, req.halfNo(), req.order(),
-                req.scheduledAt() == null ? null : req.scheduledAt().toInstant()));
+        check(leagueId, draftId);
+        drafts.begin(draftId, req.pickSeconds());
+        return Map.of("ok", true);
     }
 
     /** 揭曉順位並公開各隊 keeper（聯盟管理員）。 */
@@ -146,6 +151,36 @@ public class DraftController {
         check(leagueId, draftId);
         drafts.requireRevealShown(draftId);
         drafts.start(draftId);
+        return Map.of("ok", true);
+    }
+
+    /** 聯盟管理員：暫停（倒數停住、不能選人）。 */
+    @PostMapping("/{draftId}/pause")
+    public Map<String, Boolean> pause(@PathVariable long leagueId, @PathVariable long draftId) {
+        leagues.requireCommissioner(leagueId, Auth.require());
+        check(leagueId, draftId);
+        drafts.pause(draftId);
+        return Map.of("ok", true);
+    }
+
+    /** 聯盟管理員：繼續（從暫停時剩下的秒數接著倒數）。 */
+    @PostMapping("/{draftId}/resume")
+    public Map<String, Boolean> resume(@PathVariable long leagueId, @PathVariable long draftId) {
+        leagues.requireCommissioner(leagueId, Auth.require());
+        check(leagueId, draftId);
+        drafts.resume(draftId);
+        return Map.of("ok", true);
+    }
+
+    public record PickSeconds(int seconds) {
+    }
+
+    /** 聯盟管理員：調整每手秒數，從下一手生效。 */
+    @PutMapping("/{draftId}/pick-seconds")
+    public Map<String, Boolean> pickSeconds(@PathVariable long leagueId, @PathVariable long draftId, @RequestBody PickSeconds req) {
+        leagues.requireCommissioner(leagueId, Auth.require());
+        check(leagueId, draftId);
+        drafts.setPickSeconds(draftId, req.seconds());
         return Map.of("ok", true);
     }
 

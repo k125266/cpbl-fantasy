@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type DraftView, type StandingRow, type TeamView } from '../api'
-import { ErrorBox, useLoad } from '../components'
+import { useLoad } from '../components'
 import { useServerNow, useWide } from '../hooks'
 import { alpha, TeamIcon } from '../teamIdentity'
 import { fantasyTeamColor } from '../teams'
@@ -25,12 +25,11 @@ function fmt(iso: string, withDate = true) {
   })
 }
 
-export default function DraftOrderPage({ draft, onChange }: { draft: DraftView; onChange: () => void }) {
+export default function DraftOrderPage({ draft }: { draft: DraftView; onChange?: () => void }) {
   const { leagueId, league } = useApp()
   const wide = useWide()
   const now = useServerNow(200)
   const [replayAt, setReplayAt] = useState<number | null>(null)
-  const [err, setErr] = useState<unknown>(null)
   const second = draft.halfNo === 2
   const standings = useLoad(() => api.get<{ half1: StandingRow[] }>(`/api/leagues/${leagueId}/standings`), [leagueId])
 
@@ -62,27 +61,16 @@ export default function DraftOrderPage({ draft, onChange }: { draft: DraftView; 
     ? (short ? `每輪第 ${p} 個選` : `R1–R${draft.rounds} 每輪第 ${p} 個選`)
     : (short ? `R1 #${p}・R2 #${n + 1 - p}・蛇形` : `R1 第 ${p} 手・R2 第 ${n + 1 - p} 手・蛇形 ${draft.rounds} 輪`)
 
-  const reveal = async () => {
-    setErr(null)
-    try {
-      await api.post(`/api/leagues/${leagueId}/drafts/${draft.id}/reveal`)
-      // 按下的人從現在開始播，不受對時誤差影響
-      setReplayAt(now)
-      onChange()
-    } catch (e) {
-      setErr(e)
-    }
-  }
-  const isCommish = !!league?.commissioner
+  // 揭曉由管理員按「開始選秀」觸發（docs/decisions.md「選秀與 keeper」），這裡沒有揭曉按鈕
   const play = !revealed
-    ? (isCommish ? { label: second ? '開始揭曉' : '開始抽籤', on: true, go: reveal } : { label: '等待管理員揭曉', on: false, go: () => {} })
+    ? { label: '等管理員按下開始選秀', on: false, go: () => {} }
     : playing ? { label: '揭曉中…', on: false, go: () => {} }
       : { label: '重新播放', on: true, go: () => setReplayAt(now) }
 
   const status = done ? (second ? '順位確定，各隊 keeper 已公開' : '順位確定')
     : current != null ? `第 ${current} 順位・${teamAt(current)?.name ?? ''}`
       : playing ? '準備翻牌…'
-        : second ? '順序依上半季戰績，由差到好' : `按下開始，從第 ${n} 順位翻起`
+        : second ? '順序依上半季戰績，由差到好' : `管理員按下開始選秀後，從第 ${n} 順位翻起`
   const curTeam = current != null ? teamAt(current) : null
   const glow = curTeam ? alpha(color(curTeam), 0.14) : 'rgba(196,202,212,.05)'
 
@@ -90,7 +78,7 @@ export default function DraftOrderPage({ draft, onChange }: { draft: DraftView; 
   const title = second ? '選秀順位揭曉' : '選秀順位抽籤'
   const when = draft.scheduledAt ? fmt(draft.scheduledAt) : ''
   const sub = second ? `開始補強選秀・${draft.rounds} 輪` : `開始選秀・蛇形 ${draft.rounds} 輪`
-  const who = second ? '順序依上半季戰績，管理員按下後全聯盟同步播放' : '順序由系統隨機產生，管理員按下後全聯盟同步播放'
+  const who = second ? '順序依上半季戰績，管理員按下開始選秀後全聯盟同步揭曉' : '順序由系統隨機產生，管理員按下開始選秀後全聯盟同步揭曉'
 
   // 一張順位卡（背面「?」，翻開後是隊伍）
   const card = (p: number, size: 'p' | 'w') => {
@@ -148,7 +136,6 @@ export default function DraftOrderPage({ draft, onChange }: { draft: DraftView; 
           <h1>{title}</h1>
           <div className="sub">{when && `${when}・`}{sub}</div>
         </div>
-        <ErrorBox error={err} />
         {pool}
         <div className="lot-deck">
           {deck.map((p, i) => {
@@ -195,7 +182,6 @@ export default function DraftOrderPage({ draft, onChange }: { draft: DraftView; 
         <span className="who">{who}</span>
         {playBtn}
       </div>
-      <ErrorBox error={err} />
       <div className="lot-cols">
         <div className="lot-stage">
           {pool}

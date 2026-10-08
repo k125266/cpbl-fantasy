@@ -100,6 +100,57 @@ public class DraftService {
     }
 
     /**
+     * 選秀自動進入「準備中」（使用者決定：不預設選秀時間，管理員要開始就按開始，玩家自己討論時間）：
+     * 上半季在賽程產生後（至少 2 隊）、下半季在上半季選秀完成後，沒有選秀就建立一場。已有的不動，所以可以重複呼叫。
+     */
+    @Transactional
+    public void ensureDrafts(long leagueId) {
+        List<SeasonService.Half> halves = season.halves(leagueId);
+        if (halves.isEmpty()) {
+            return;
+        }
+        lock.lock(leagueId);
+        for (SeasonService.Half h : halves.stream().sorted(Comparator.comparingInt(SeasonService.Half::halfNo)).toList()) {
+            Long existing = jdbc.sql("select id from draft where season_half_id = ?").param(h.id()).query(Long.class)
+                    .optional().orElse(null);
+            if (existing == null) {
+                int teams = jdbc.sql("select count(*) from fantasy_team where league_id = ?").param(leagueId)
+                        .query(Integer.class).single();
+                if (teams >= 2) {
+                    create(leagueId, h.halfNo(), null, null);
+                }
+                return;
+            }
+            if (!"COMPLETED".equals(draft(existing).status())) {
+                return; // 這半季還沒選完，下半季先不出現
+            }
+        }
+    }
+
+    /**
+     * 聯盟管理員按「開始選秀」：keeper 鎖定、馬上揭曉順位，動畫播完（{@link #REVEAL_SECONDS} 秒）後由排程自動開始第一手。
+     * 每手秒數可以順便設定。
+     */
+    @Transactional
+    public void begin(long draftId, Integer pickSeconds) {
+        DraftRow d = draft(draftId);
+        lock.lock(d.leagueId());
+        if (!"SETUP".equals(d.status()) && !"KEEPERS".equals(d.status())) {
+            throw ApiException.conflict("選秀已開始");
+        }
+        if (d.revealedAt() != null) {
+            throw ApiException.conflict("已經按過開始選秀");
+        }
+        if (pickSeconds != null) {
+            if (pickSeconds < 15) {
+                throw ApiException.badRequest("每手至少 15 秒");
+            }
+            jdbc.sql("update draft set pick_seconds = ? where id = ?").params(pickSeconds, draftId).update();
+        }
+        revealInternal(draft(draftId));
+    }
+
+    /**
      * 上半季：蛇形 draft_rounds 輪，順位在揭曉時隨機抽出（或使用指定順序）。
      * 下半季：補強選秀，每輪同一順序 second_half_rounds 輪，順位在揭曉時依上半季戰績由差到好；建立後進入 keeper 選擇期。
      */
@@ -113,7 +164,7 @@ public class DraftService {
                 .optional().orElse(null);
         if (existing != null) {
             String st = draft(existing).status();
-            if ("IN_PROGRESS".equals(st) || "COMPLETED".equals(st)) {
+            if ("IN_PROGRESS".equals(st) || "PAUSED".equals(st) || "COMPLETED".equals(st)) {
                 throw ApiException.conflict("此半季選秀已開始或已完成");
             }
             jdbc.sql("delete from keeper_selection where draft_id = ?").param(existing).update();
@@ -287,6 +338,15 @@ public class DraftService {
 
     /** 揭曉動畫的長度（前端每 1.7 秒翻一張，5 隊約 9 秒），播完才能開始選秀。 */
     static final int REVEAL_SECONDS = 10;
+
+    /** 排程每秒問一次：管理員已按開始（已揭曉）、而且揭曉動畫已播完的選秀，該自動開始第一手了。 */
+    public List<Long> dueStarts() {
+        return jdbc.sql("""
+                select id from draft
+                where status in ('SETUP', 'KEEPERS') and revealed_at is not null
+                  and revealed_at + make_interval(secs => :anim) <= :now
+                """).param("anim", REVEAL_SECONDS).param("now", Timestamp.from(clock.now())).query(Long.class).list();
+    }
 
     /**
      * 從 API 開始選秀前的檢查：一定要先揭曉順位，而且揭曉動畫播完（使用者決定：不能跳過揭曉）。
@@ -474,6 +534,53 @@ public class DraftService {
         return "IN_PROGRESS".equals(draft(draftId).status());
     }
 
+    // ------------------------------------------------------------------
+    // 聯盟管理員：選秀中暫停／繼續、調整每手秒數
+    // ------------------------------------------------------------------
+
+    /** 暫停：記下這一手剩下的時間；暫停中不能選人，逾時與託管也不動作。 */
+    @Transactional
+    public void pause(long draftId) {
+        DraftRow d = draft(draftId);
+        lock.lock(d.leagueId());
+        if (!"IN_PROGRESS".equals(d.status())) {
+            throw ApiException.conflict("選秀沒有在進行中");
+        }
+        long remaining = d.deadline() == null ? d.pickSeconds() * 1000L
+                : Math.max(0, Duration.between(clock.now(), d.deadline()).toMillis());
+        jdbc.sql("update draft set status = 'PAUSED', paused_remaining_ms = ? where id = ?").params(remaining, draftId).update();
+        notifications.notifyLeague(d.leagueId(), "選秀已暫停");
+    }
+
+    /** 繼續：這一手從暫停時剩下的時間接著倒數。 */
+    @Transactional
+    public void resume(long draftId) {
+        DraftRow d = draft(draftId);
+        lock.lock(d.leagueId());
+        if (!"PAUSED".equals(d.status())) {
+            throw ApiException.conflict("選秀沒有暫停");
+        }
+        Integer remaining = jdbc.sql("select paused_remaining_ms from draft where id = ?").param(draftId).query(Integer.class).single();
+        Instant deadline = clock.now().plusMillis(remaining == null ? d.pickSeconds() * 1000L : remaining);
+        jdbc.sql("update draft set status = 'IN_PROGRESS', current_pick_deadline = ?, paused_remaining_ms = null where id = ?")
+                .params(Timestamp.from(deadline), draftId).update();
+        notifications.notifyLeague(d.leagueId(), "選秀繼續");
+    }
+
+    /** 調整每手秒數（至少 15 秒）：從下一手開始生效，這一手照原本的倒數。 */
+    @Transactional
+    public void setPickSeconds(long draftId, int seconds) {
+        DraftRow d = draft(draftId);
+        lock.lock(d.leagueId());
+        if (seconds < 15) {
+            throw ApiException.badRequest("每手至少 15 秒");
+        }
+        if ("COMPLETED".equals(d.status())) {
+            throw ApiException.conflict("選秀已完成");
+        }
+        jdbc.sql("update draft set pick_seconds = ? where id = ?").params(seconds, draftId).update();
+    }
+
     private void record(DraftRow d, long playerId, boolean auto) {
         jdbc.sql("""
                 update draft_pick set player_id = ?, is_auto = ?, picked_at = ? where draft_id = ? and pick_no = ?
@@ -652,12 +759,14 @@ public class DraftService {
      * @param myKeepers      自己的 keeper（任何時候都看得到）
      * @param keepers        各隊 keeper，揭曉後才公開
      * @param autopilotTeams 開啟託管的隊伍（E18）
+     * @param phase          流程階段：PREPARING 準備中（排候選、選 keeper，等管理員按開始）、REVEALED 已揭曉（動畫播完
+     *                       自動開始）、IN_PROGRESS、PAUSED、COMPLETED。選秀時間（scheduledAt）已不使用，永遠是 null
      */
     public record DraftView(long id, int halfNo, String status, int rounds, int pickSeconds, int currentPickNo,
                             Long currentTeamId, OffsetDateTime deadline, long secondsLeft, List<Long> order,
                             List<PickView> picks, List<KeeperView> myKeepers, OffsetDateTime scheduledAt,
                             OffsetDateTime keeperDeadline, OffsetDateTime revealedAt, boolean snake, List<TeamKeepers> keepers,
-                            List<Long> autopilotTeams) {
+                            List<Long> autopilotTeams, String phase) {
     }
 
     public List<DraftView> list(long leagueId, Long viewerTeamId) {
@@ -685,8 +794,13 @@ public class DraftService {
             return new PickView(rs.getInt(1), rs.getInt(2), rs.getLong(3), rs.getString(4), rs.getObject(5, Long.class),
                     rs.getString(6), rs.getString(7), rs.getBoolean(8), rs.getBoolean(9), rs.getString(10), rs.getString(11));
         }).list();
-        Long current = "IN_PROGRESS".equals(d.status()) ? currentTeam(d) : null;
-        long secondsLeft = d.deadline() == null ? 0 : Math.max(0, Duration.between(clock.now(), d.deadline()).toSeconds());
+        boolean paused = "PAUSED".equals(d.status());
+        Long current = "IN_PROGRESS".equals(d.status()) || paused ? currentTeam(d) : null;
+        // 暫停中倒數停住：顯示暫停時剩下的秒數
+        Integer pausedMs = paused ? jdbc.sql("select paused_remaining_ms from draft where id = ?").param(draftId)
+                .query(Integer.class).single() : null;
+        long secondsLeft = paused ? (pausedMs == null ? d.pickSeconds() : (pausedMs + 999) / 1000)
+                : d.deadline() == null ? 0 : Math.max(0, Duration.between(clock.now(), d.deadline()).toSeconds());
         List<KeeperView> mine = viewerTeamId == null ? List.of() : jdbc.sql("""
                 select k.player_id, p.name from keeper_selection k join player p on p.id = k.player_id
                 where k.draft_id = ? and k.team_id = ? order by p.name
@@ -707,8 +821,16 @@ public class DraftService {
         List<Long> autopilot = jdbc.sql("select id from fantasy_team where league_id = ? and draft_autopilot order by id")
                 .param(d.leagueId()).query(Long.class).list();
         return new DraftView(d.id(), d.halfNo(), d.status(), d.rounds(), d.pickSeconds(), d.currentPickNo(), current,
-                odt(d.deadline()), secondsLeft, order, picks, mine, odt(d.scheduledAt()), odt(d.keeperDeadline()),
-                odt(d.revealedAt()), d.snake(), all, autopilot);
+                paused ? null : odt(d.deadline()), secondsLeft, order, picks, mine, odt(d.scheduledAt()), odt(d.keeperDeadline()),
+                odt(d.revealedAt()), d.snake(), all, autopilot, phase(d));
+    }
+
+    /** 流程階段（見 DraftView）：已開始後看狀態，開始前看管理員是否已按開始（已揭曉）。 */
+    private String phase(DraftRow d) {
+        return switch (d.status()) {
+            case "IN_PROGRESS", "PAUSED", "COMPLETED" -> d.status();
+            default -> d.revealedAt() != null ? "REVEALED" : "PREPARING";
+        };
     }
 
     private OffsetDateTime odt(Instant i) {

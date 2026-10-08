@@ -398,7 +398,7 @@ export interface DraftReport {
 export interface DraftView {
   id: number
   halfNo: number
-  status: 'SETUP' | 'KEEPERS' | 'IN_PROGRESS' | 'COMPLETED'
+  status: 'SETUP' | 'KEEPERS' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED'
   rounds: number
   pickSeconds: number
   currentPickNo: number
@@ -421,6 +421,11 @@ export interface DraftView {
   keepers: { teamId: number; players: { playerId: number; name: string }[] }[]
   /** 開啟託管的隊伍：輪到就在 3 秒內自動選（E18） */
   autopilotTeams: number[]
+  /**
+   * 流程階段：PREPARING 準備中（排候選、選 keeper，等管理員按開始）、REVEALED 已揭曉（動畫播完自動開始）、
+   * IN_PROGRESS、PAUSED、COMPLETED。沒有預設選秀時間：玩家自己討論時間，管理員到時候按開始
+   */
+  phase: 'PREPARING' | 'REVEALED' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED'
 }
 
 export interface Trade {
