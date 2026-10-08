@@ -2144,6 +2144,8 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 @media (prefers-reduced-motion: reduce) {
   .cf-mask, .cf-box { transition: none; }
   .cf-spin { animation-duration: 2s; }
+}
+
 /* 選秀紀錄：已完成的選秀（選秀首頁的卡片、選秀室上方的小列） */
 .dl-rec .row { margin-top: 10px; }
 .dl-rec.compact { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 12px; }
