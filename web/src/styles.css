@@ -1607,6 +1607,7 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 .ps .ps-switch { margin-top: 14px; }
 .ps-card { margin-top: 14px; border-radius: 12px; background: rgb(21 23 28 / .88); border: 1px solid var(--line); border-top-color: rgb(196 202 212 / .14); overflow: hidden; }
 .ps-ctitle { display: flex; align-items: center; gap: 10px; padding: 12px 14px 10px; font: 600 10.5px var(--font-mix); letter-spacing: .16em; color: var(--muted); }
+.ps-ctitle > span:first-child { white-space: nowrap; }
 .ps-ctitle .muted { font: 400 11px var(--font-mix); letter-spacing: 0; color: var(--silver-lo); }
 .ps-card .lv-ghead { border-top: 1px solid #1d2027; }
 .ps-mine { display: inline-flex; flex: none; }
@@ -1637,7 +1638,7 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 .ps-cell.live .top em { color: #ff8a8c; }
 .ps-cell .main { margin-top: 5px; font: 700 20px/1.1 var(--font-num); color: var(--text); }
 .ps-cell .main.dim { color: var(--dim); }
-.ps-cell .tag { display: flex; align-items: center; gap: 4px; height: 15px; margin-top: 2px; font-size: 10.5px; color: var(--silver); white-space: nowrap; }
+.ps-cell .tag { border: 0; padding: 0; display: flex; align-items: center; gap: 4px; height: 15px; margin-top: 2px; font-size: 10.5px; color: var(--silver); white-space: nowrap; }
 .ps-cell.live .tag { color: #ff8a8c; }
 .ps-cell .tag i { flex: none; width: 6px; height: 6px; border-radius: 2px; }
 .ps-cell .meta { margin-top: 3px; font-size: 10px; color: var(--silver-lo); white-space: nowrap; }

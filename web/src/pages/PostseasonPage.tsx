@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type LiveGame, type LiveLine, type PostseasonView, type SeriesView } from '../api'
-import { ErrorBox, fmtTime, Loading } from '../components'
+import { ErrorBox, Loading } from '../components'
 import { useWide } from '../hooks'
 import { ip, OUTS_HINT, outsOf } from '../live'
 import {
@@ -33,6 +33,11 @@ type Group = 'bat' | 'pit'
 function clock(d: Date) {
   const p = (n: number) => String(n).padStart(2, '0')
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
+/** 開賽時間：24 小時制（"18:35"），小格子裡不會換行 */
+function hm(iso: string): string {
+  return new Date(iso).toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false, hour: '2-digit', minute: '2-digit' })
 }
 
 /** "2026-10-17" → "10/17 週六" */
@@ -148,7 +153,7 @@ export default function PostseasonPage() {
       return { key: g.id, top: `第 ${i + 1} 戰`, meta, main: `${sc(tA)}:${sc(tB)}`, mainDim: false, tag: `進行中・${g.inning ?? ''}`, dot: '#ff4d4f', flag: '今天', cls: 'live' }
     }
     const isNext = g === nextGame && !todayGame
-    return { key: g.id, top: `第 ${i + 1} 戰`, meta, main: g.startTime ? fmtTime(g.startTime) : '—', mainDim: false, tag: g.status === 'POSTPONED' ? '延賽' : '', dot: 'transparent', flag: isNext ? '下一戰' : '', cls: isNext ? 'next' : '' }
+    return { key: g.id, top: `第 ${i + 1} 戰`, meta, main: g.startTime ? hm(g.startTime) : '—', mainDim: false, tag: g.status === 'POSTPONED' ? '延賽' : decided ? '未舉行' : '', dot: 'transparent', flag: isNext ? '下一戰' : '', cls: isNext ? 'next' : '' }
   }
   const slots = Math.max(maxGames(s), games.length)
 
@@ -160,9 +165,9 @@ export default function PostseasonPage() {
     if (live && todayNo) return `第 ${todayNo} 戰進行中`
     if (todayGame && todayGame.status === 'FINAL' && todayNo) {
       const w = winnerOf(todayGame)
-      return `第 ${todayNo} 戰 ${w ? `${team(w).short}獲勝` : '平手'}。` + (nextGame ? `下一戰 第 ${noOf(nextGame)} 戰 ${mdw(nextGame.scheduledDate)}${nextGame.startTime ? ` ${fmtTime(nextGame.startTime)}` : ''}` : '')
+      return `第 ${todayNo} 戰 ${w ? `${team(w).short}獲勝` : '平手'}。` + (nextGame ? `下一戰 第 ${noOf(nextGame)} 戰 ${mdw(nextGame.scheduledDate)}${nextGame.startTime ? ` ${hm(nextGame.startTime)}` : ''}` : '')
     }
-    if (nextGame) return `今天休息。第 ${noOf(nextGame)} 戰 ${mdw(nextGame.scheduledDate)}${nextGame.startTime ? ` ${fmtTime(nextGame.startTime)}` : ''} 開打`
+    if (nextGame) return `今天休息。第 ${noOf(nextGame)} 戰 ${mdw(nextGame.scheduledDate)}${nextGame.startTime ? ` ${hm(nextGame.startTime)}` : ''} 開打`
     return '還沒有排定的比賽'
   })()
 
@@ -277,7 +282,7 @@ export default function PostseasonPage() {
       return { inn: g.inning ?? '進行中', sub: outs == null ? '進行中・非最終' : `${outs} 出局・非最終`, live: true }
     }
     if (g.status === 'FINAL') return { inn: '終場', sub: `${winnerOf(g) ? team(winnerOf(g) as string).short + '勝' : '平手'}・比賽結束`, live: false }
-    return { inn: g.startTime ? fmtTime(g.startTime) : '—', sub: '尚未開始', live: false }
+    return { inn: g.startTime ? hm(g.startTime) : '—', sub: '尚未開始', live: false }
   }
 
   const todayBody = (g: LiveGame) => {
@@ -318,13 +323,13 @@ export default function PostseasonPage() {
         {decided
           ? `${team(s.winner as string).short}${isFinals ? `奪得 ${year} 總冠軍` : '晉級台灣大賽'}。每一戰的戰況在下方。`
           : nextGame
-            ? `第 ${noOf(nextGame)} 戰 ${mdw(nextGame.scheduledDate)}${nextGame.startTime ? ` ${fmtTime(nextGame.startTime)}` : ''} 開打。`
+            ? `第 ${noOf(nextGame)} 戰 ${mdw(nextGame.scheduledDate)}${nextGame.startTime ? ` ${hm(nextGame.startTime)}` : ''} 開打。`
             : '下一戰還沒有排定。'}
       </p>
       {!decided && nextGame && (
         <div className="ps-next">
           {chip(nextGame.awayTeam)}<span className="m">客</span>
-          <b>{nextGame.startTime ? fmtTime(nextGame.startTime) : '—'}</b>
+          <b>{nextGame.startTime ? hm(nextGame.startTime) : '—'}</b>
           <span className="m">主</span>{chip(nextGame.homeTeam)}
         </div>
       )}
