@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useApp } from '../App'
-import { api, type Matchup, type StandingRow } from '../api'
+import { api, type Matchup, type PostseasonView, type StandingRow } from '../api'
 import { ErrorBox, ICONS, Loading, useLoad } from '../components'
 
 interface Standings {
@@ -31,6 +31,8 @@ export default function LeagueHubPage() {
   const { leagueId, league, user } = useApp()
   const st = useLoad(() => api.get<Standings>(`/api/leagues/${leagueId}/standings`), [leagueId])
   const ms = useLoad(() => api.get<Matchup[]>(`/api/leagues/${leagueId}/matchups`), [leagueId])
+  // 季後賽專區的入口：有季後賽賽程才出現（錯誤時當作沒有，不影響聯盟首頁）
+  const post = useLoad(() => api.get<PostseasonView>(`/api/postseason?leagueId=${leagueId}`).catch(() => null), [leagueId])
   const [half, setHalf] = useState<1 | 2>((league?.currentPeriod?.halfNo as 1 | 2) ?? 1)
   if (st.loading && !st.data) return <Loading />
   if (st.error || !st.data) return <ErrorBox error={st.error} />
@@ -60,6 +62,12 @@ export default function LeagueHubPage() {
       <div className="hub">
         <Link to="/transactions">{ICONS.swap}Waiver・交易</Link>
         <Link to="/live">{ICONS.live}即時比分</Link>
+        {post.data && post.data.series.length > 0 && (
+          <Link to="/postseason" className="hub-post">
+            {ICONS.trophy}季後賽專區
+            {post.data.series.some((s) => s.games.some((g) => g.status === 'IN_PROGRESS')) && <i className="hub-dot" aria-label="比賽進行中" />}
+          </Link>
+        )}
         <Link to="/league/settings">{ICONS.gear}聯盟設定</Link>
         {user.admin && <Link to="/admin">{ICONS.server}系統管理</Link>}
         <Link to="/privacy">{ICONS.shield}隱私・資料來源</Link>

@@ -4,6 +4,7 @@ import { useApp } from '../App'
 import { api, type LiveGame, type LiveLine, type LiveStarter, type LiveView, type TeamView } from '../api'
 import { ErrorBox, fmtTime, Loading } from '../components'
 import { useWide } from '../hooks'
+import { ip, KIND_NAME, OUTS_HINT, outsOf } from '../live'
 import { TeamIcon } from '../teamIdentity'
 import { cpblTeam, fantasyTeamColor } from '../teams'
 
@@ -28,8 +29,6 @@ function clock(d: Date) {
   const p = (n: number) => String(n).padStart(2, '0')
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
 }
-
-const ip = (outs: number) => `${Math.floor(outs / 3)}.${outs % 3}`
 
 /** 畫面上的一列：上場球員（line）或還沒上場的先發（line 為 null） */
 interface Row {
@@ -78,23 +77,6 @@ function cells(r: Row): { v: string | number; c?: string }[] {
   if (r.isBat) return [v(l.pa), v(l.ab), v(l.h), v(l.r), v(l.hr, true), v(l.bb)]
   return [{ v: ip(l.outs) }, v(l.pH), v(l.pBb), v(l.pEr), v(l.pK), { v: l.w ? 'W' : l.sv ? 'SV' : '–', c: l.w || l.sv ? 'gold' : 'dim' }]
 }
-
-/** 官網沒有出局數，從本半局的打席結果代碼推算；盜壘刺、牽制出局不在打席結果裡，可能少算 */
-const OUTS_HINT = '出局數依本半局打席結果推算，不含盜壘刺與牽制出局'
-function outsOf(g: LiveGame): number | null {
-  if (!g.halfInning || g.halfInning.length === 0) return null
-  let n = 0
-  for (const { result: r } of g.halfInning) {
-    if (r == null) continue
-    if (r === '三殺') n += 3
-    else if (r === '雙殺') n += 2
-    else if (r === '三振' || r === '犧短' || r === '犧飛' || /^[投捕一二三游左中右](飛|滾|平|界飛|短)$/.test(r)) n += 1
-  }
-  return Math.min(n, 3)
-}
-
-/** 官網賽事代碼的名稱（台灣大賽的代碼公布後補上） */
-const KIND_NAME: Record<string, string> = { E: '季後挑戰賽' }
 
 function gameState(g: LiveGame, lines: LiveLine[]): { inn: string; sub: string; live: boolean } {
   switch (g.status) {
@@ -245,7 +227,13 @@ export default function LivePage() {
     const st = gameState(g, data.lines)
     return (
       <div className="lv-ghead">
-        {g.postseason && <div className="lv-kind">{KIND_NAME[g.kindCode] ?? '季後賽'}・不計入 fantasy</div>}
+        {g.postseason && (
+          <div className="lv-kind">
+            {KIND_NAME[g.kindCode] ?? '季後賽'}・不計入 fantasy
+            {/* 卡片本身在網頁版是按鈕，連結不能包在按鈕裡，所以只在手機版（卡片是 div）顯示 */}
+            {!wide && <Link className="lv-kind-link" to="/postseason">季後賽專區 →</Link>}
+          </div>
+        )}
         <div className="teams">{scoreRows(g)}</div>
         <div className={`state${st.live ? ' live' : ''}`}>
           <span className="inn">{st.live && <i />}{st.inn}</span>
@@ -451,7 +439,7 @@ export default function LivePage() {
           {noGameBlock}
         </div>
         <div className="lv-panel">
-          <div className="lv-ptop"><span className="lv-label-t">本場即時數據</span><span className="lv-badge">非最終數據</span><span className="sp" />{seg}</div>
+          <div className="lv-ptop"><span className="lv-label-t">本場即時數據</span><span className="lv-badge">非最終數據</span>{sel?.postseason && <Link className="lv-kind-link" to="/postseason">季後賽專區 →</Link>}<span className="sp" />{seg}</div>
           {sel ? (
             <>
               <div className="lv-big">

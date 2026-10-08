@@ -19,8 +19,13 @@ cpblf:
   zone: Asia/Taipei
   season-year: ${CPBLF_SEASON_YEAR:2026}
   kind-code: A
-  # 季後賽（E 一軍季後挑戰賽；台灣大賽的代碼官網公布後加上）：只做即時比分，不結算、不計入 fantasy
-  postseason-kind-codes: ${CPBLF_POSTSEASON_KINDS:E}
+  # 季後賽（E 一軍季後挑戰賽、C 台灣大賽）：只做即時比分，不結算、不計入 fantasy
+  postseason-kind-codes: ${CPBLF_POSTSEASON_KINDS:E,C}
+  # 季後賽專區的賽制（以賽事代碼為 key）。advantage-team 是保送 1 勝的球隊，每年依規定更新：
+  # 2026 季後挑戰賽由下半季冠軍兄弟（全年勝率較低的半季冠軍）先拿 1 勝
+  postseason-series:
+    E: { name: 季後挑戰賽, wins-needed: 3, advantage-team: BRO }
+    C: { name: 台灣大賽, wins-needed: 4 }
   # 資料來源：demo（模擬賽季，本機開發/展示用）、stats（中職進階數據網站）、
   # replay（以封存的真實球季重播，時鐘可調整）或 web（cpbl.com.tw，CDN 擋爬蟲 UA，目前不可用）
   source: ${CPBLF_SOURCE:demo}

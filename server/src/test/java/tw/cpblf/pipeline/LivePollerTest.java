@@ -119,6 +119,34 @@ class LivePollerTest extends IntegrationTest {
         assertThat(poller.gamesInWindow()).isEmpty();
     }
 
+    /** 季後賽被賽程更新先標成 FINAL：沒有結算會重抓，所以要補抓一次最終 box score，抓完就不再抓。 */
+    @Test
+    void postseasonGameMarkedFinalByScheduleGetsOneFinalFetch() {
+        long e = jdbc.sql("""
+                insert into game (season_year, kind_code, game_sno, scheduled_date, start_time, home_team_code, away_team_code,
+                                  status, home_score, away_score, final_seen_at)
+                values (2026, 'E', 1, '2026-03-20', ?, 'BRO', 'FUB', 'FINAL', 1, 0, ?) returning id
+                """).params(Timestamp.from(start), Timestamp.from(clock.now())).query(Long.class).single();
+        jdbc.sql("update game set status = 'FINAL', result = 'HOME_WIN', final_seen_at = ? where id = ?")
+                .params(Timestamp.from(clock.now()), gameId).update();
+        // 例行賽那場也是 FINAL：不補抓
+        assertThat(poller.gamesInWindow()).extracting(g -> g.id()).containsExactly(e);
+
+        when(source.fetchBoxScore(2026, "E", 1)).thenReturn(box(GameStatus.FINAL, 1));
+        poll();
+        assertThat(count("select count(*) from live_game_stat where game_id = ?", e)).isEqualTo(3);
+        assertThat(poller.gamesInWindow()).isEmpty();
+    }
+
+    @Test
+    void postseasonGameFinishedByThePollerIsNotFetchedAgain() {
+        jdbc.sql("update game set kind_code = 'E' where id = ?").param(gameId).update();
+        when(source.fetchBoxScore(2026, "E", 1)).thenReturn(box(GameStatus.FINAL, 1));
+        poll();
+
+        assertThat(poller.gamesInWindow()).isEmpty();
+    }
+
     Instant changedAt(String cpblId) {
         return jdbc.sql("""
                 select s.changed_at from live_game_stat s join player p on p.id = s.player_id where p.cpbl_player_id = ?

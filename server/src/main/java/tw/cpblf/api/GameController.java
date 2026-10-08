@@ -15,6 +15,7 @@ import tw.cpblf.auth.CurrentUser;
 import tw.cpblf.config.AppClock;
 import tw.cpblf.league.LeagueService;
 import tw.cpblf.live.LiveService;
+import tw.cpblf.live.PostseasonService;
 
 /** 賽程與即時比分。即時數據一律標示為非最終數據（CPBLF-53）。 */
 @RestController
@@ -25,12 +26,15 @@ public class GameController {
     private final AppClock clock;
     private final LeagueService leagues;
     private final LiveService live;
+    private final PostseasonService postseason;
 
-    public GameController(JdbcClient jdbc, AppClock clock, LeagueService leagues, LiveService live) {
+    public GameController(JdbcClient jdbc, AppClock clock, LeagueService leagues, LiveService live,
+                          PostseasonService postseason) {
         this.jdbc = jdbc;
         this.clock = clock;
         this.leagues = leagues;
         this.live = live;
+        this.postseason = postseason;
     }
 
     @GetMapping("/games")
@@ -54,5 +58,13 @@ public class GameController {
         CurrentUser user = Auth.require();
         leagues.requireMember(leagueId, user);
         return live.view(leagueId, user.id());
+    }
+
+    /** 季後賽專區：季後挑戰賽、台灣大賽的系列戰比分與各場數據（不計入 fantasy）。 */
+    @GetMapping("/postseason")
+    public PostseasonService.PostseasonView postseason(@RequestParam long leagueId) {
+        CurrentUser user = Auth.require();
+        leagues.requireMember(leagueId, user);
+        return postseason.view(leagueId, user.id());
     }
 }

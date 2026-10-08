@@ -4,6 +4,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -89,6 +90,11 @@ public class LiveService {
     }
 
     List<LiveGame> games(LocalDate d) {
+        return games("g.play_date = :d or (g.scheduled_date = :d and g.status = 'POSTPONED')", Map.of("d", d));
+    }
+
+    /** @param where 加在 game g 上的條件（可用具名參數），例如某一天或某年某賽事 */
+    List<LiveGame> games(String where, Map<String, ?> params) {
         String base = sourceBase();
         return jdbc.sql("""
                 select g.id, g.season_year, g.kind_code, g.game_sno, g.status, g.stats_final, g.scheduled_date, g.play_date,
@@ -98,9 +104,9 @@ public class LiveService {
                        case when g.status = 'IN_PROGRESS' then lg.inning_text end as inning, lg.fetched_at,
                        lg.line_score, lg.batter_player_id, lg.pitcher_player_id, lg.pitch_count, lg.batter_results, lg.half_inning
                 from game g left join live_game lg on lg.game_id = g.id
-                where g.play_date = ? or (g.scheduled_date = ? and g.status = 'POSTPONED')
+                where %s
                 order by g.start_time nulls last, g.game_sno
-                """).params(d, d).query((rs, n) -> {
+                """.formatted(where)).params(params).query((rs, n) -> {
             boolean live = "IN_PROGRESS".equals(rs.getString("status"));
             return new LiveGame(rs.getLong("id"), rs.getInt("game_sno"), rs.getString("status"), rs.getBoolean("stats_final"),
                     rs.getObject("scheduled_date", LocalDate.class), rs.getObject("play_date", LocalDate.class),
@@ -118,29 +124,39 @@ public class LiveService {
     }
 
     List<LiveLine> lines(long leagueId, LocalDate d) {
+        return lines(leagueId, "g.play_date = :d", Map.of("d", d), d);
+    }
+
+    /**
+     * @param where      加在 game g 上的條件（可用具名參數）
+     * @param rosterDate 幻想隊伍標記以這一天的名單為準
+     */
+    List<LiveLine> lines(long leagueId, String where, Map<String, ?> params, LocalDate rosterDate) {
         return jdbc.sql("""
                 with src as (
                     select ls.game_id, ls.player_id, ls.team_code, ls.batted, ls.pitched, ls.pa, ls.ab, ls.h, ls.r, ls.hr, ls.bb,
                            ls.outs, ls.p_h, ls.p_bb, ls.p_er, ls.p_k, ls.w, ls.sv,
                            ls.box_seq, ls.lineup_slot, ls.is_sub, ls.changed_at, false as settled
                     from live_game_stat ls join game g on g.id = ls.game_id
-                    where g.play_date = :d and not exists (select 1 from game_stat s where s.game_id = ls.game_id)
+                    where (%1$s) and not exists (select 1 from game_stat s where s.game_id = ls.game_id)
                     union all
                     select s.game_id, s.player_id, s.team_code, s.batted, s.pitched, s.pa, s.ab, s.h, s.r, s.hr, s.bb,
                            s.outs, s.p_h, s.p_bb, s.p_er, s.p_k, s.w, s.sv,
                            coalesce(ls.box_seq, 1000), ls.lineup_slot, coalesce(ls.is_sub, false), null, true
                     from game_stat s join game g on g.id = s.game_id
                     left join live_game_stat ls on ls.game_id = s.game_id and ls.player_id = s.player_id
-                    where g.play_date = :d
+                    where (%1$s)
                 )
                 select src.*, src.team_code = g.home_team_code as home, p.name, p.jersey_number, p.listed_position,
                        re.team_id as fantasy_team_id, re.slot as roster_slot
                 from src join game g on g.id = src.game_id join player p on p.id = src.player_id
                 left join (roster_entry re join fantasy_team t on t.id = re.team_id and t.league_id = :league)
-                       on re.player_id = src.player_id and re.valid_from <= :d and (re.valid_to is null or re.valid_to > :d)
+                       on re.player_id = src.player_id and re.valid_from <= :rosterDate
+                      and (re.valid_to is null or re.valid_to > :rosterDate)
                 order by g.start_time nulls last, src.game_id, src.team_code = g.home_team_code, not src.batted, src.box_seq,
                          p.name
-                """).param("d", d).param("league", leagueId).query((rs, n) -> new LiveLine(
+                """.formatted(where)).params(params).param("rosterDate", rosterDate).param("league", leagueId)
+                .query((rs, n) -> new LiveLine(
                 rs.getLong("game_id"), rs.getLong("player_id"), rs.getString("name"), rs.getString("jersey_number"),
                 rs.getString("team_code"), rs.getString("listed_position"), rs.getBoolean("home"), rs.getBoolean("batted"),
                 rs.getBoolean("pitched"), (Integer) rs.getObject("lineup_slot"), rs.getBoolean("is_sub"), rs.getInt("box_seq"),

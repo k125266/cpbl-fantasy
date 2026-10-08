@@ -57,15 +57,23 @@ public class LivePoller {
     record LiveGame(long id, int year, String kind, int sno, String home, String away) {
     }
 
-    /** 目前是否處於比賽時段（有任何未結束且已接近開賽的比賽）。 */
+    /**
+     * 目前是否處於比賽時段（有任何未結束且已接近開賽的比賽）。
+     *
+     * <p>季後賽不結算（沒有賽後重抓），所以賽程更新先把比賽標成 FINAL 時，還要補抓一次最終 box score：
+     * 條件是即時快照比 final_seen_at 舊（或根本沒有快照）。抓完 fetched_at 就不早於 final_seen_at，不會重抓。
+     */
     public List<LiveGame> gamesInWindow() {
         Instant now = clock.now();
         return jdbc.sql("""
                 select id, season_year, kind_code, game_sno, home_team_code, away_team_code from game
-                where status in ('SCHEDULED', 'IN_PROGRESS') and start_time is not null
-                  and start_time <= ? and start_time > ?
+                where start_time is not null and start_time <= ? and start_time > ?
+                  and (status in ('SCHEDULED', 'IN_PROGRESS')
+                       or (status = 'FINAL' and kind_code <> ? and final_seen_at is not null
+                           and not exists (select 1 from live_game lg
+                                           where lg.game_id = game.id and lg.fetched_at >= game.final_seen_at)))
                 order by game_sno
-                """).params(Timestamp.from(now.plus(BEFORE_START)), Timestamp.from(now.minus(MAX_GAME_LENGTH)))
+                """).params(Timestamp.from(now.plus(BEFORE_START)), Timestamp.from(now.minus(MAX_GAME_LENGTH)), props.kindCode())
                 .query((rs, n) -> new LiveGame(rs.getLong(1), rs.getInt(2), rs.getString(3), rs.getInt(4), rs.getString(5),
                         rs.getString(6)))
                 .list();
@@ -97,6 +105,11 @@ public class LivePoller {
                 // 頁面已顯示結束：立即轉為 FINAL（停止輪詢、讓結算開始），不必等下一次賽程更新
                 if (box.status() == GameStatus.FINAL && box.homeScore() != null && box.awayScore() != null) {
                     schedulePoller.markFinal(g.id(), box.homeScore(), box.awayScore());
+                    // final_seen_at 比這次抓取晚幾毫秒；把 fetched_at 拉到不早於它，季後賽才不會被當成還要補抓
+                    jdbc.sql("""
+                            update live_game set fetched_at = greatest(fetched_at,
+                                (select final_seen_at from game where id = ?)) where game_id = ?
+                            """).params(g.id(), g.id()).update();
                 }
             });
             ctx.item();

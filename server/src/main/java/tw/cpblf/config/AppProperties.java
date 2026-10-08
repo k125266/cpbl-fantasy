@@ -11,6 +11,7 @@ public record AppProperties(
         int seasonYear,
         String kindCode,
         java.util.List<String> postseasonKindCodes,
+        java.util.Map<String, Series> postseasonSeries,
         String source,
         boolean schedulerEnabled,
         Crawler crawler,
@@ -30,6 +31,22 @@ public record AppProperties(
             postseasonKindCodes.stream().filter(k -> !k.isBlank() && !k.equals(kindCode)).forEach(out::add);
         }
         return out;
+    }
+
+    /**
+     * 季後賽一個系列戰的賽制。
+     *
+     * @param name          專區顯示的賽事名稱
+     * @param winsNeeded    先拿到幾勝晉級（三勝制 3、七戰四勝 4）
+     * @param advantageTeam 保送 1 勝的球隊代碼（每年依規定更新）；沒有優勢時為 null
+     */
+    public record Series(String name, int winsNeeded, String advantageTeam) {
+    }
+
+    /** 某個賽事代碼的賽制；沒設定的代碼退回「代碼名稱、先拿 4 勝、無優勢」。 */
+    public Series series(String kind) {
+        Series s = postseasonSeries == null ? null : postseasonSeries.get(kind);
+        return s != null ? s : new Series("季後賽 " + kind, 4, null);
     }
 
     public ZoneId zoneId() {

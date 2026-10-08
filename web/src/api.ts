@@ -577,6 +577,33 @@ export interface LiveView {
   starters: LiveStarter[]
 }
 
+/** 季後賽專區（GET /api/postseason）的一個系列戰 */
+export interface SeriesView {
+  /** 官網賽事代碼：E 季後挑戰賽、C 台灣大賽 */
+  kind: string
+  name: string
+  /** 先拿到幾勝晉級 */
+  winsNeeded: number
+  /** 保送 1 勝的球隊代碼；沒有時為 null */
+  advantageTeam: string | null
+  /** 兩隊代碼，依第一場的客隊、主隊排列 */
+  teams: string[]
+  /** 各隊已拿的勝場（含保送的 1 勝） */
+  wins: Record<string, number>
+  /** 已先拿到 winsNeeded 勝的球隊，系列戰還沒結束時為 null */
+  winner: string | null
+  games: LiveGame[]
+  /** 這個系列各場的球員數據（即時快照）；fantasyTeamId 依今天的名單 */
+  lines: LiveLine[]
+}
+
+export interface PostseasonView {
+  notice: string
+  today: string
+  myTeamId: number | null
+  series: SeriesView[]
+}
+
 /** 收藏卡（GET /leagues/:id/players/:pid/card）：卡面數據、本聯盟的卡片履歷與成就印章 */
 export interface CardData {
   playerId: number
