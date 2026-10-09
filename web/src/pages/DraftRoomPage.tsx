@@ -353,6 +353,13 @@ function withPeriod(b: ApiDraftBoard, period: DraftPeriod): DraftBoard {
 
 const isSp = (p: BoardPlayer) => p.eligible.includes('SP')
 
+/** 守位：投手顯示可擔任的先發／後援（SP、RP 或 SP/RP），打者用登記守位 */
+const posLabel = (p: BoardPlayer) => {
+  if (!p.pitcher) return p.position
+  const r = ['SP', 'RP'].filter((x) => p.eligible.includes(x))
+  return r.length ? r.join('/') : p.position
+}
+
 /** 候選清單、球員卡的一行重點數據 */
 export function keyLine(p: BoardPlayer) {
   const s = p.stats
@@ -430,7 +437,7 @@ export function PlayerList({ draft, board, period, onPeriod, queue, myTurn, onPi
     else if (chip === 'P') L = L.filter((p) => p.pitcher)
     else if (chip !== 'ALL') L = L.filter((p) => p.eligible.includes(chip))
     const t = q.trim()
-    if (t) L = L.filter((p) => `${p.name}${cpblTeam(p.cpblTeam).short}${p.position}`.includes(t))
+    if (t) L = L.filter((p) => `${p.name}${cpblTeam(p.cpblTeam).short}${posLabel(p)}`.includes(t))
     if (sortCol) {
       L = [...L].sort((a, b) => {
         const x = sortCol.get(a.stats), y = sortCol.get(b.stats)
@@ -535,10 +542,10 @@ export function PlayerList({ draft, board, period, onPeriod, queue, myTurn, onPi
                   {p.foreign && <i className="tag">洋</i>}{p.recommended && !tk && <i className="tag gold">推薦</i>}{tkTag}
                 </span>
                 {wide
-                  ? <span className="l2"><i className="tc" style={{ background: t.bg, color: t.fg }}>{t.short}</i><em className={p.fillsNeed && !tk ? 'need' : ''}>{p.position}</em></span>
+                  ? <span className="l2"><i className="tc" style={{ background: t.bg, color: t.fg }}>{t.short}</i><em className={p.fillsNeed && !tk ? 'need' : ''}>{posLabel(p)}</em></span>
                   : (
                     <span className="l2">
-                      <em className={p.fillsNeed && !tk ? 'need' : ''}>{p.position}</em>
+                      <em className={p.fillsNeed && !tk ? 'need' : ''}>{posLabel(p)}</em>
                       {keys.map((c) => <span key={c.key} className={sortCol?.key === c.key ? 'on' : ''}><b>{c.fmt(c.get(p.stats))}</b>{c.label}</span>)}
                     </span>
                   )}
@@ -708,7 +715,7 @@ function QueueList({ players, myTurn, onPick, onRemove }: { players: BoardPlayer
             <span className={`n${i === 0 ? ' first' : ''}`}>{i + 1}</span>
             <div className="m">
               <div className="l1"><b>{p.name}</b><i style={{ background: t.bg, color: t.fg }}>{t.short}</i></div>
-              <div className="l2">{p.position} · 排名 {p.rank ?? '–'} · {keyLine(p)}</div>
+              <div className="l2">{posLabel(p)} · 排名 {p.rank ?? '–'} · {keyLine(p)}</div>
             </div>
             <div className="a">
               {myTurn && <button type="button" className="dr-pick" onClick={() => onPick(p)}>選</button>}
