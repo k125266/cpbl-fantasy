@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useApp } from '../App'
 import { api } from '../api'
 import { ErrorBox, fmtDateTime, Loading, useLoad } from '../components'
+import { cpblTeam } from '../teams'
 
 interface Status {
   now: string
@@ -19,6 +20,58 @@ interface Status {
   }
   /** 選秀參考季（上一季），模擬賽季沒有 */
   reference?: { year: number; games: number; players: number }
+}
+
+/** 接下來的比賽與開賽時間（GET /api/admin/games/upcoming），startLocal 為台北時間 */
+interface UpcomingGame {
+  kind: string
+  sno: number
+  date: string
+  home: string
+  away: string
+  status: string
+  startLocal: string | null
+  manual: boolean
+}
+
+const KIND: Record<string, string> = { A: '例行賽', E: '季後挑戰賽', C: '台灣大賽' }
+
+/** 賽程時間：官網的開賽時間有時不準，系統管理員可以手動設定（設定後賽程更新不會覆寫）；清空＝改回預設。 */
+function GameTimesCard({ run, busy }: { run: (fn: () => Promise<unknown>) => void; busy: boolean }) {
+  const games = useLoad(() => api.get<UpcomingGame[]>('/api/admin/games/upcoming'), [])
+  const [edit, setEdit] = useState<Record<string, string>>({})
+  const rows = games.data ?? []
+  const keyOf = (g: UpcomingGame) => `${g.kind}-${g.sno}`
+  const save = (g: UpcomingGame, at: string) =>
+    run(() => api.put(`/api/admin/games/${g.kind}/${g.sno}/start-time`, { at }).finally(() => {
+      setEdit((e) => { const n = { ...e }; delete n[keyOf(g)]; return n })
+      games.reload()
+    }))
+  return (
+    <div className="card">
+      <h2>賽程時間</h2>
+      <p className="small muted">官網的開賽時間有時會偏移。這裡可以手動改（台北時間）；手動設定後賽程更新不會覆寫，「改回預設」會取消手動設定。即時比分的輪詢不依賴這個時間，所以改錯也不會漏抓。</p>
+      {games.loading && !games.data && <Loading />}
+      <ErrorBox error={games.error} />
+      {games.data && rows.length === 0 && <p className="small muted">接下來沒有比賽。</p>}
+      {rows.map((g) => {
+        const value = edit[keyOf(g)] ?? g.startLocal ?? ''
+        const changed = edit[keyOf(g)] !== undefined && edit[keyOf(g)] !== (g.startLocal ?? '')
+        return (
+          <div key={keyOf(g)} className="row" style={{ alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+            <span className="small" style={{ minWidth: 190 }}>
+              {KIND[g.kind] ?? g.kind} #{g.sno}・{g.date.slice(5)}・{cpblTeam(g.away).short} @ {cpblTeam(g.home).short}
+            </span>
+            <input type="datetime-local" value={value} aria-label={`${keyOf(g)} 開賽時間`}
+              onChange={(e) => setEdit((x) => ({ ...x, [keyOf(g)]: e.target.value }))} />
+            <button className="small" disabled={busy || !changed || !value} onClick={() => save(g, value)}>儲存</button>
+            {g.manual && <button className="small" disabled={busy} onClick={() => save(g, '')}>改回預設</button>}
+            {g.manual && <span className="small muted">手動</span>}
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 /** 一次性建盟碼（GET /api/admin/create-codes） */
@@ -142,6 +195,7 @@ export default function AdminPage() {
           ))}
         </ul>
       </div>
+      <GameTimesCard run={run} busy={busy} />
       {s?.reference && (
         <div className="card">
           <h2>選秀參考季（{s.reference.year}）</h2>

@@ -28,7 +28,19 @@ class SchedulePollerStartTimeTest extends IntegrationTest {
     }
 
     static SchedulePoller.Existing known(Instant start) {
-        return new SchedulePoller.Existing(1, LocalDate.of(2026, 10, 5), null, "SCHEDULED", false, start);
+        return new SchedulePoller.Existing(1, LocalDate.of(2026, 10, 5), null, "SCHEDULED", false, start, false);
+    }
+
+    static SchedulePoller.Existing manual(Instant start) {
+        return new SchedulePoller.Existing(1, LocalDate.of(2026, 10, 5), null, "SCHEDULED", false, start, true);
+    }
+
+    @Test
+    void manualTimeBeatsTheSourceAndTheDefault() {
+        Instant mine = at("2026-10-05T17:05:00+08:00");
+        Instant site = at("2026-10-05T18:35:00+08:00");
+        assertThat(poller.startTime(game(LocalDate.of(2026, 10, 5), site, GameStatus.SCHEDULED), manual(mine))).isEqualTo(mine);
+        assertThat(poller.startTime(game(LocalDate.of(2026, 10, 5), null, GameStatus.SCHEDULED), manual(mine))).isEqualTo(mine);
     }
 
     @Test

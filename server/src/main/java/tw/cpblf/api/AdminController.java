@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -26,6 +27,7 @@ import tw.cpblf.pipeline.JobRunner;
 import tw.cpblf.pipeline.Pipeline;
 import tw.cpblf.pipeline.SettlementJob;
 import tw.cpblf.scoring.MatchupService;
+import tw.cpblf.source.GameTimes;
 
 /** 系統管理員：job 監控、告警、修正歷程、手動作業與 demo 時鐘。 */
 @RestController
@@ -180,6 +182,56 @@ public class AdminController {
         jdbc.sql("select play_date from game where id = ?").param(gameId).query(java.time.LocalDate.class).optional()
                 .ifPresent(d -> matchups.recomputeForDates(List.of(d)));
         return Map.of("result", r, "at", now.toString());
+    }
+
+    /** 接下來的比賽與開賽時間（台北時間），給管理員核對、手動修正。 */
+    @GetMapping("/games/upcoming")
+    public List<Map<String, Object>> upcomingGames() {
+        Auth.requireAdmin();
+        return jdbc.sql("""
+                select kind_code as "kind", game_sno as "sno", play_date as "date", home_team_code as "home",
+                       away_team_code as "away", status,
+                       to_char(start_time at time zone 'Asia/Taipei', 'YYYY-MM-DD"T"HH24:MI') as "startLocal",
+                       start_time_manual as "manual"
+                from game where season_year = ? and play_date >= ? and status in ('SCHEDULED', 'IN_PROGRESS')
+                order by play_date, game_sno limit 40
+                """).params(props.seasonYear(), clock.today()).query().listOfRows();
+    }
+
+    /** at 為台北時間（例 2026-10-10T17:05）；空白＝取消手動設定，改回預設時間，之後由賽程更新接手。 */
+    public record SetStart(String at) {
+    }
+
+    @PutMapping("/games/{kind}/{sno}/start-time")
+    public Map<String, Object> setStartTime(@PathVariable String kind, @PathVariable int sno, @RequestBody SetStart req) {
+        Auth.requireAdmin();
+        var row = jdbc.sql("select id, play_date, status from game where season_year = ? and kind_code = ? and game_sno = ?")
+                .params(props.seasonYear(), kind, sno)
+                .query((rs, n) -> new Object[] {rs.getLong(1), rs.getObject(2, java.time.LocalDate.class), rs.getString(3)})
+                .optional().orElseThrow(() -> ApiException.notFound("找不到這場比賽"));
+        long id = (Long) row[0];
+        java.time.LocalDate date = (java.time.LocalDate) row[1];
+        String status = (String) row[2];
+        if (!status.equals("SCHEDULED") && !status.equals("IN_PROGRESS")) {
+            throw ApiException.conflict("比賽已結束，不能改開賽時間");
+        }
+        if (req.at() == null || req.at().isBlank()) {
+            jdbc.sql("update game set start_time = ?, start_time_manual = false where id = ?")
+                    .params(java.sql.Timestamp.from(GameTimes.defaultStart(date)), id).update();
+            return Map.of("kind", kind, "sno", sno, "manual", false);
+        }
+        LocalDateTime local;
+        try {
+            local = LocalDateTime.parse(req.at());
+        } catch (java.time.format.DateTimeParseException e) {
+            throw ApiException.badRequest("時間格式要像 2026-10-10T17:05");
+        }
+        if (local.toLocalDate().isBefore(date.minusDays(1)) || local.toLocalDate().isAfter(date.plusDays(1))) {
+            throw ApiException.badRequest("日期要在比賽日（" + date + "）前後一天內");
+        }
+        jdbc.sql("update game set start_time = ?, start_time_manual = true where id = ?")
+                .params(java.sql.Timestamp.from(local.atZone(clock.zone()).toInstant()), id).update();
+        return Map.of("kind", kind, "sno", sno, "manual", true, "startLocal", local.toString());
     }
 
     public record Advance(int days) {
