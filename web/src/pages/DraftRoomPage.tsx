@@ -591,9 +591,8 @@ export function useDraftBoard(draft: DraftView) {
 /** 球員的各期間數據表：網頁卡片只列計分類別，手機的完整數據列出全部欄位（可左右捲動） */
 function StatTable({ p, periods, period, full }: { p: BoardPlayer; periods: ApiDraftBoard['periods']; period: DraftPeriod; full: boolean }) {
   const cols = p.pitcher ? (full ? P_COLS : CARD_P) : (full ? H_COLS : CARD_H)
-  const w = full ? { minWidth: 76 + cols.length * 46 } : undefined
   return (
-    <div className={`dr-pt${full ? ' full' : ''}`} style={{ '--n': cols.length, ...w } as CSSProperties}>
+    <div className={`dr-pt${full ? ' full' : ''}`} style={{ '--n': cols.length } as CSSProperties}>
       <div className="r hd"><span className="lb">期間</span>{cols.map((c) => <span key={c.key} className={`v${c.score ? ' sc' : ''}`}>{c.label}</span>)}</div>
       {periods.map((x) => {
         const s = p.byPeriod[x.key]
@@ -617,7 +616,7 @@ function PlayerPanel({ p, board, period, inQ, onToggle, pickText, canPick, onPic
   const tier = tierOf(p.rank)
   const tk = p.taken
   const tkTeam = tk ? teams.find((x) => x.id === tk.teamId) : undefined
-  const only = board.periods.filter((x) => p.byPeriod[x.key]).length === 1
+  const have = board.periods.filter((x) => p.byPeriod[x.key])
   const colN = p.pitcher ? P_COLS.length : H_COLS.length
   return (
     <div className={`dr-card t-${tier}`}>
@@ -636,7 +635,7 @@ function PlayerPanel({ p, board, period, inQ, onToggle, pickText, canPick, onPic
         {full && <div className="ft"><span>完整數據・{colN} 項</span><span>左右滑動 ›</span></div>}
         <StatTable p={p} periods={board.periods} period={period} full={full} />
         <div className="ft">
-          <span>{only ? '開季前只有 2025 全季・' : ''}金色為計分類別</span>
+          <span>{have.length === 1 ? `開季前只有 ${have[0].label}・` : ''}金色為計分類別</span>
           <Link to={`/players/${p.playerId}`}>看完整球員頁 ›</Link>
         </div>
         <div className="btns">

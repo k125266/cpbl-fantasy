@@ -2118,7 +2118,8 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .dr-row .l2 .tc { font-style: normal; font-size: 9.5px; font-weight: 500; border-radius: 4px; padding: 0 3px; line-height: 14px; }
   .dr-row .star { width: 40px; }
 }
-.dr-pt { border-radius: 8px; background: #14161b; border: 1px solid #23272f; overflow: hidden; }
+.dr-card, .dr-card > .in, .dr-card > .in > * { min-width: 0; max-width: 100%; }
+.dr-pt { border-radius: 8px; min-width: 0; background: #14161b; border: 1px solid #23272f; overflow: hidden; }
 .dr-pt.full { overflow-x: auto; scrollbar-width: none; }
 .dr-pt .r { display: grid; grid-template-columns: 72px repeat(var(--n), minmax(0, 1fr)); align-items: center; height: 34px; border-top: 1px solid #1d2027; padding-right: 8px; }
 .dr-pt.full .r { grid-template-columns: 72px repeat(var(--n), 46px); width: max-content; min-width: 100%; }
