@@ -6,10 +6,16 @@ export class ApiError extends Error {
   }
 }
 
+/** 請求逾時（毫秒）：連線卡住時不會讓畫面一直停在舊資料而沒有任何提示 */
+const TIMEOUT_MS = 30_000
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
     credentials: 'same-origin',
+    // 資料每分鐘都在變（即時比分、選秀），不讓瀏覽器或中間的代理快取
+    cache: 'no-store',
+    signal: AbortSignal.timeout(TIMEOUT_MS),
     headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   })

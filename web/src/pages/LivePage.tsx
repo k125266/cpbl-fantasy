@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type LiveGame, type LiveLine, type LiveStarter, type LiveView, type TeamView } from '../api'
 import { ErrorBox, fmtTime, Loading } from '../components'
-import { useWide } from '../hooks'
+import { useCountdown, useWide } from '../hooks'
 import { ip, KIND_NAME, OUTS_HINT, outsOf } from '../live'
 import { TeamIcon } from '../teamIdentity'
 import { cpblTeam, fantasyTeamColor } from '../teams'
@@ -107,22 +107,19 @@ export default function LivePage() {
   const [data, setData] = useState<LiveView | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [upd, setUpd] = useState('')
-  const [sec, setSec] = useState(REFRESH)
+  const [failed, setFailed] = useState(false)
+  const { sec, restart } = useCountdown(REFRESH)
   const [mode, setMode] = useState<Mode>('full')
   const [selId, setSelId] = useState<number | null>(null)
 
   const load = useCallback(() => {
     api.get<LiveView>(`/api/live?leagueId=${leagueId}`)
-      .then((v) => { setData(v); setError(null); setUpd(clock(new Date())) })
-      .catch(setError)
-    setSec(REFRESH)
-  }, [leagueId])
+      .then((v) => { setData(v); setError(null); setFailed(false); setUpd(clock(new Date())) })
+      .catch((e) => { setError(e); setFailed(true) })
+    restart()
+  }, [leagueId, restart])
 
   useEffect(() => { load() }, [load])
-  useEffect(() => {
-    const t = setInterval(() => setSec((s) => (s <= 1 ? 0 : s - 1)), 1000)
-    return () => clearInterval(t)
-  }, [])
   useEffect(() => { if (sec === 0) load() }, [sec, load])
 
   const teams = useMemo(() => league?.teams ?? [], [league])
@@ -380,7 +377,7 @@ export default function LivePage() {
       <div className="t">
         <div className="lv-kicker"><i />LIVE · 非最終數據</div>
         <h1>即時比分</h1>
-        <div className="upd">上次更新 {upd}・每 60 秒自動更新</div>
+        <div className="upd">上次更新 {upd}・每 60 秒自動更新{failed && <em className="bad">・更新失敗，稍後重試</em>}</div>
       </div>
       <button type="button" className="lv-ring" style={{ background: ring }} title="立即更新" aria-label={`${sec} 秒後更新，點一下立即更新`} onClick={load}>
         <span><b>{sec}</b><small>秒</small></span>

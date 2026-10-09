@@ -2360,6 +2360,9 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .dr-list .legend em { display: inline; }
 }
 
+/* 自動更新失敗的提示 */
+.pv-refresh em.bad, .lv .upd em.bad { font-style: normal; color: var(--bad); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
