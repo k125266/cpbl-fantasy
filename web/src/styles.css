@@ -2475,6 +2475,13 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .dr-main-x { grid-template-columns: minmax(0, 1280px) minmax(440px, 1fr) 360px; }
   .dr-bd .ft .tn { display: inline; }
 }
+/* 樣本少：AVG／ERA／WHIP 排序時排最後，該格變淡並在旁邊標「少」；平常不出現 */
+.dr-list .low-note { margin: 0 16px 10px; font-size: 12px; color: var(--silver-lo); }
+.dr-row .v.low, .dr-row .l2 .low, .dr-row .l2 .low b { color: var(--silver-lo); }
+.dr-row sup { margin-left: 2px; font: 600 9.5px var(--font-mix); letter-spacing: 0; color: var(--silver-lo); vertical-align: top; }
+@media (max-width: 1023px) {
+  .dr-list .low-note { margin: 4px 2px 6px; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
