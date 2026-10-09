@@ -147,6 +147,68 @@ class LivePollerTest extends IntegrationTest {
         assertThat(poller.gamesInWindow()).isEmpty();
     }
 
+    // ---- 比賽日（E26）：表定開賽時間不準時也不能漏抓 ----
+
+    long todayGame(int sno, Instant scheduledStart) {
+        return jdbc.sql("""
+                insert into game (season_year, kind_code, game_sno, scheduled_date, start_time, home_team_code, away_team_code, status)
+                values (2026, 'E', ?, ?, ?, 'BRO', 'FUB', 'SCHEDULED') returning id
+                """).params(sno, java.sql.Date.valueOf(clock.today()), Timestamp.from(scheduledStart)).query(Long.class).single();
+    }
+
+    BoxScore notStarted() {
+        return new BoxScore(GameStatus.SCHEDULED, null, null, null, List.of(), List.of(), null);
+    }
+
+    @Test
+    void gameThatStartedEarlierThanScheduledIsCaughtAndItsStartTimeLearned() {
+        clock.setNow(clock.at(clock.today(), 15));
+        jdbc.sql("delete from game where id = ?").param(gameId).update();
+        // 表定時間（預設猜晚了）還有 3 小時，但比賽頁已經開打
+        Instant before = clock.now();
+        long g = todayGame(7, clock.now().plus(Duration.ofHours(3)));
+        assertThat(poller.gamesInWindow()).extracting(x -> x.id()).containsExactly(g);
+        when(source.fetchBoxScore(2026, "E", 7)).thenReturn(box(GameStatus.IN_PROGRESS, 2));
+        poll();
+
+        assertThat(count("select count(*) from live_game where game_id = ?", g)).isEqualTo(1);
+        assertThat(jdbc.sql("select status from game where id = ?").param(g).query(String.class).single()).isEqualTo("IN_PROGRESS");
+        Instant learned = jdbc.sql("select start_time from game where id = ?").param(g).query(Timestamp.class).single().toInstant();
+        assertThat(learned).isBetween(before, clock.now());
+    }
+
+    @Test
+    void earlyGameDayChecksAreSpacedTenMinutesApart() {
+        clock.setNow(clock.at(clock.today(), 13));
+        jdbc.sql("delete from game where id = ?").param(gameId).update();
+        todayGame(8, clock.now().plus(Duration.ofHours(4)));
+        when(source.fetchBoxScore(2026, "E", 8)).thenReturn(notStarted());
+
+        poll();
+        clock.setNow(clock.now().plus(Duration.ofMinutes(5)));
+        poll();
+        org.mockito.Mockito.verify(source, org.mockito.Mockito.times(1)).fetchBoxScore(2026, "E", 8);
+        clock.setNow(clock.now().plus(Duration.ofMinutes(6)));
+        poll();
+        org.mockito.Mockito.verify(source, org.mockito.Mockito.times(2)).fetchBoxScore(2026, "E", 8);
+        // 還沒開打：沒有寫任何即時資料
+        assertThat(count("select count(*) from live_game")).isZero();
+    }
+
+    @Test
+    void noGameDayPollingBeforeNoonOrOnOtherDays() {
+        jdbc.sql("delete from game where id = ?").param(gameId).update();
+        clock.setNow(clock.at(clock.today(), 9));
+        long g = todayGame(9, clock.now().plus(Duration.ofHours(8)));
+        assertThat(poller.gamesInWindow()).isEmpty();
+
+        clock.setNow(clock.at(clock.today(), 12));
+        assertThat(poller.gamesInWindow()).extracting(x -> x.id()).containsExactly(g);
+
+        jdbc.sql("update game set scheduled_date = ? where id = ?").params(java.sql.Date.valueOf(clock.today().plusDays(1)), g).update();
+        assertThat(poller.gamesInWindow()).isEmpty();
+    }
+
     Instant changedAt(String cpblId) {
         return jdbc.sql("""
                 select s.changed_at from live_game_stat s join player p on p.id = s.player_id where p.cpbl_player_id = ?
