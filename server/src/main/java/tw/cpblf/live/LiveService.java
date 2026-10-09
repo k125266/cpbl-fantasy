@@ -90,8 +90,10 @@ public class LiveService {
         return new LiveView(NOTICE, today, myTeam, opponent, games(today), lines(leagueId, today), starters(leagueId, today));
     }
 
+    /** 即時比分只放一軍例行賽；季後賽在「季後賽專區」（{@link PostseasonService}），不在這裡重複。 */
     List<LiveGame> games(LocalDate d) {
-        return games("g.play_date = :d or (g.scheduled_date = :d and g.status = 'POSTPONED')", Map.of("d", d));
+        return games("(g.play_date = :d or (g.scheduled_date = :d and g.status = 'POSTPONED')) and g.kind_code = :kind",
+                Map.of("d", d, "kind", props.kindCode()));
     }
 
     /** @param where 加在 game g 上的條件（可用具名參數），例如某一天或某年某賽事 */
@@ -125,7 +127,7 @@ public class LiveService {
     }
 
     List<LiveLine> lines(long leagueId, LocalDate d) {
-        return lines(leagueId, "g.play_date = :d", Map.of("d", d), d);
+        return lines(leagueId, "g.play_date = :d and g.kind_code = :kind", Map.of("d", d, "kind", props.kindCode()), d);
     }
 
     /**

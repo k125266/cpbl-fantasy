@@ -48,16 +48,17 @@ class PostseasonLiveTest extends IntegrationTest {
     }
 
     @Test
-    void postseasonGamesAreMarkedOnTheLivePage() {
+    void theLivePageOnlyListsRegularSeasonGames() {
         LocalDate day = clock.today();
         long regular = game("A", 901, day);
         long wildCard = game("E", 1, day);
 
         var games = live.games(day);
-        LiveGame e = games.stream().filter(g -> g.id() == wildCard).findFirst().orElseThrow();
-        LiveGame a = games.stream().filter(g -> g.id() == regular).findFirst().orElseThrow();
+        assertThat(games).extracting(LiveGame::id).contains(regular).doesNotContain(wildCard);
+        assertThat(games).allMatch(g -> !g.postseason());
+        // 季後賽專區用自己的條件取比賽，不受影響
+        var e = live.games("g.id = :id", java.util.Map.of("id", wildCard)).get(0);
         assertThat(e.postseason()).isTrue();
         assertThat(e.kindCode()).isEqualTo("E");
-        assertThat(a.postseason()).isFalse();
     }
 }

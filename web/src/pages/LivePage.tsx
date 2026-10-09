@@ -1,10 +1,10 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useApp } from '../App'
-import { api, type LiveGame, type LiveLine, type LiveStarter, type LiveView, type TeamView } from '../api'
+import { api, type LiveGame, type LiveLine, type LiveStarter, type LiveView, type PostseasonView, type TeamView } from '../api'
 import { ErrorBox, fmtTime, Loading } from '../components'
 import { useCountdown, useWide } from '../hooks'
-import { ip, KIND_NAME, OUTS_HINT, outsOf } from '../live'
+import { ip, OUTS_HINT, outsOf } from '../live'
 import { TeamIcon } from '../teamIdentity'
 import { cpblTeam, fantasyTeamColor } from '../teams'
 
@@ -85,8 +85,6 @@ function gameState(g: LiveGame, lines: LiveLine[]): { inn: string; sub: string; 
       return { inn: g.inning ?? '進行中', sub: outs == null ? '進行中・非最終' : `${outs} 出局・非最終`, live: true }
     }
     case 'FINAL': {
-      // 季後賽不結算，不會有「結算中 → 比賽結束」的變化
-      if (g.postseason) return { inn: '終', sub: '比賽結束・不計分', live: false }
       const settled = lines.some((l) => l.gameId === g.id && l.settled)
       return { inn: '終', sub: g.statsFinal ? '數據已定版' : settled ? '比賽結束' : '比賽結束・結算中', live: false }
     }
@@ -111,6 +109,11 @@ export default function LivePage() {
   const { sec, restart } = useCountdown(REFRESH)
   const [mode, setMode] = useState<Mode>('full')
   const [selId, setSelId] = useState<number | null>(null)
+  // 季後賽不在這一頁；有季後賽賽程時，沒有比賽的日子提示去專區
+  const [hasPost, setHasPost] = useState(false)
+  useEffect(() => {
+    api.get<PostseasonView>(`/api/postseason?leagueId=${leagueId}`).then((v) => setHasPost(v.series.length > 0)).catch(() => setHasPost(false))
+  }, [leagueId])
 
   const load = useCallback(() => {
     api.get<LiveView>(`/api/live?leagueId=${leagueId}`)
@@ -122,6 +125,7 @@ export default function LivePage() {
   useEffect(() => { load() }, [load])
   useEffect(() => { if (sec === 0) load() }, [sec, load])
 
+  const postNote = hasPost && <Link className="lv-kind-link" to="/postseason">季後賽請看季後賽專區 →</Link>
   const teams = useMemo(() => league?.teams ?? [], [league])
   const teamOf = useCallback((id: number | null) => (id == null ? null : teams.find((t) => t.id === id) ?? null), [teams])
 
@@ -224,13 +228,6 @@ export default function LivePage() {
     const st = gameState(g, data.lines)
     return (
       <div className="lv-ghead">
-        {g.postseason && (
-          <div className="lv-kind">
-            {KIND_NAME[g.kindCode] ?? '季後賽'}・不計入 fantasy
-            {/* 卡片本身在網頁版是按鈕，連結不能包在按鈕裡，所以只在手機版（卡片是 div）顯示 */}
-            {!wide && <Link className="lv-kind-link" to="/postseason">季後賽專區 →</Link>}
-          </div>
-        )}
         <div className="teams">{scoreRows(g)}</div>
         <div className={`state${st.live ? ' live' : ''}`}>
           <span className="inn">{st.live && <i />}{st.inn}</span>
@@ -402,7 +399,7 @@ export default function LivePage() {
         {header}
         {summary}
         <div className="lv-label"><span>今日賽事 · {data.games.length} 場</span>{seg}</div>
-        {data.games.length === 0 && <div className="lv-empty box">今日無比賽（中職通常週一休兵，可自由調整名單）</div>}
+        {data.games.length === 0 && <div className="lv-empty box">今日無一軍例行賽（中職通常週一休兵，可自由調整名單）{postNote}</div>}
         {data.games.map((g) => (
           <div key={g.id} className={`lv-card${PLAYING(g) ? '' : ' dimmed'}`}>
             {gameHead(g)}
@@ -426,7 +423,7 @@ export default function LivePage() {
         <div className="lv-left">
           {summary}
           <div className="lv-label"><span>今日賽事 · {data.games.length} 場</span><span className="muted">客 / 主</span></div>
-          {data.games.length === 0 && <div className="lv-empty box">今日無比賽（中職通常週一休兵，可自由調整名單）</div>}
+          {data.games.length === 0 && <div className="lv-empty box">今日無一軍例行賽（中職通常週一休兵，可自由調整名單）{postNote}</div>}
           {data.games.map((g) => (
             <button key={g.id} type="button" className={`lv-card pick${sel?.id === g.id ? ' sel' : ''}${PLAYING(g) ? '' : ' dimmed'}`} onClick={() => setSelId(g.id)}>
               {gameHead(g)}
@@ -436,7 +433,7 @@ export default function LivePage() {
           {noGameBlock}
         </div>
         <div className="lv-panel">
-          <div className="lv-ptop"><span className="lv-label-t">本場即時數據</span><span className="lv-badge">非最終數據</span>{sel?.postseason && <Link className="lv-kind-link" to="/postseason">季後賽專區 →</Link>}<span className="sp" />{seg}</div>
+          <div className="lv-ptop"><span className="lv-label-t">本場即時數據</span><span className="lv-badge">非最終數據</span><span className="sp" />{seg}</div>
           {sel ? (
             <>
               <div className="lv-big">
