@@ -2299,6 +2299,8 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .app.has-wn:not(.app-draft) { padding-top: 16px; }
   .app.app-draft { max-width: 2560px; padding-inline: 24px; }
   .dr-right { top: 68px; }
+  .dr-stick { top: 56px; }
+  .dr-banner { top: 100px; }
 }
 @media (min-width: 1680px) {
   .wn-in { padding: 0 32px; }
