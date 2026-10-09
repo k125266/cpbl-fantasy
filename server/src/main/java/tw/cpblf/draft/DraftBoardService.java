@@ -270,6 +270,7 @@ public class DraftBoardService {
         // 我的先發缺位
         List<Need> needs = new ArrayList<>();
         Set<Long> fills = Set.of();
+        boolean foreignFull = false;
         if (teamId != null) {
             List<SlotAssigner.Candidate> cands = mine.stream().map(id -> new SlotAssigner.Candidate(id, el.get(id))).toList();
             Map<Long, Slot> assigned = SlotAssigner.assign(cands, league.slotCounts());
@@ -279,6 +280,9 @@ public class DraftBoardService {
                 needs.add(new Need(s.name(), filled.getOrDefault(s, 0), league.slotCounts().getOrDefault(s, 0)));
             }
             fills = drafts.fillsNeed(d, teamId, pool.subList(0, Math.min(pool.size(), DraftService.NEED_LOOKAHEAD)));
+            // 洋將已達上限：之後選洋將會被拒絕，所以不標成補缺位或推薦
+            foreignFull = !mine.isEmpty() && jdbc.sql("select count(*) from player where id in (:ids) and is_foreign")
+                    .param("ids", mine).query(Integer.class).single() >= league.foreignPlayerLimit();
         }
 
         // 已選與 keeper（「顯示已選」用）。揭曉前別隊的 keeper 保密：不標為 keeper，照常列在可選裡
@@ -336,7 +340,7 @@ public class DraftBoardService {
             String[] p = info.get(id);
             if (p == null) continue;
             Taken t = taken.get(id);
-            boolean fill = t == null && fills.contains(id);
+            boolean fill = t == null && fills.contains(id) && !(foreignFull && Boolean.parseBoolean(p[4]));
             boolean rec = fill && recommended < RECOMMEND;
             if (rec) recommended++;
             PlayerRankingService.Ranked r = ranks.get(id);
