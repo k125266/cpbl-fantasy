@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type DraftView } from '../api'
 import { useConfirm } from '../Confirm'
@@ -32,10 +32,24 @@ export default function DraftPage() {
   const half = Number(params.get('half')) || null
   const drafts = useLoad(() => api.get<DraftView[]>(`/api/leagues/${leagueId}/drafts`), [leagueId])
   const [err, setErr] = useState<unknown>(null)
+  const nav = useNavigate()
+  // 在選秀室看著進行中的選秀：記住是哪一場。上半季一結束系統就會建立下半季選秀，如果直接跳過去，
+  // 上半季的「選秀結束」畫面和成績單就看不到；所以看著的那一場完成後仍留在這一場，離開選秀室才換
+  const [watching, setWatching] = useState<number | null>(null)
   const all = drafts.data || []
-  const active = (half ? all.find((d) => d.halfNo === half) : undefined) ?? all.find((d) => d.status !== 'COMPLETED') ?? all.slice(-1)[0]
+  const watched = watching != null ? all.find((d) => d.id === watching) : undefined
+  const active = (half ? all.find((d) => d.halfNo === half) : undefined) ?? watched ?? all.find((d) => d.status !== 'COMPLETED') ?? all.slice(-1)[0]
   const phase = active?.phase
   const live = phase === 'IN_PROGRESS' || phase === 'PAUSED'
+  const inRoom = pathname.startsWith('/draft/room')
+  const atRoot = pathname === '/draft' || pathname === '/draft/'
+  // 選秀進行中時 /draft 直接導到選秀室，網址才表示「人在選秀室」（下面記住這一場、離開才換的判斷靠它）
+  useEffect(() => { if (live && atRoot) nav('/draft/room', { replace: true }) }, [live, atRoot, nav])
+  useEffect(() => {
+    if (inRoom && live && active) setWatching(active.id)
+    else if (!inRoom) setWatching(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inRoom, live, active?.id])
 
   // v1 以輪詢同步（SSE / WebSocket 列在工程待辦 E8）：進行中 2 秒；開始前 3 秒，才接得到自動揭曉與自動開始
   useEffect(() => {
