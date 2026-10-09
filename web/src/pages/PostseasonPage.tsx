@@ -33,13 +33,14 @@ export default function PostseasonPage() {
   const [data, setData] = useState<PostseasonView | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [upd, setUpd] = useState('')
+  const [failed, setFailed] = useState(false)
   const { sec, restart } = useCountdown(REFRESH)
   const [kind, setKind] = useState<string | null>(null)
 
   const load = useCallback(() => {
     api.get<PostseasonView>(`/api/postseason?leagueId=${leagueId}`)
-      .then((v) => { setData(v); setError(null); setUpd(clock(new Date())) })
-      .catch(setError)
+      .then((v) => { setData(v); setError(null); setFailed(false); setUpd(clock(new Date())) })
+      .catch((e) => { setError(e); setFailed(true) })
     restart()
   }, [leagueId, restart])
 
@@ -96,7 +97,7 @@ export default function PostseasonPage() {
         </div>
         {active && (
           <div className="pv-refresh">
-            <div className="txt"><div><b>{sec}</b> 秒後更新</div><small>上次 {upd}</small></div>
+            <div className="txt"><div><b>{sec}</b> 秒後更新</div><small>上次 {upd}{failed && <em className="bad">・更新失敗，稍後重試</em>}</small></div>
             <button type="button" className="lv-ring" style={{ background: ring }} title="立即更新" aria-label={`${sec} 秒後更新，點一下立即更新`} onClick={load}>
               <span><b>{sec}</b><small>秒</small><i className="ico">↻</i></span>
             </button>
