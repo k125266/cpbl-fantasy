@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type LiveGame, type LiveLine, type LiveStarter, type LiveView, type TeamView } from '../api'
 import { ErrorBox, fmtTime, Loading } from '../components'
-import { useWide } from '../hooks'
+import { useCountdown, useWide } from '../hooks'
 import { ip, KIND_NAME, OUTS_HINT, outsOf } from '../live'
 import { TeamIcon } from '../teamIdentity'
 import { cpblTeam, fantasyTeamColor } from '../teams'
@@ -107,7 +107,7 @@ export default function LivePage() {
   const [data, setData] = useState<LiveView | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [upd, setUpd] = useState('')
-  const [sec, setSec] = useState(REFRESH)
+  const { sec, restart } = useCountdown(REFRESH)
   const [mode, setMode] = useState<Mode>('full')
   const [selId, setSelId] = useState<number | null>(null)
 
@@ -115,14 +115,10 @@ export default function LivePage() {
     api.get<LiveView>(`/api/live?leagueId=${leagueId}`)
       .then((v) => { setData(v); setError(null); setUpd(clock(new Date())) })
       .catch(setError)
-    setSec(REFRESH)
-  }, [leagueId])
+    restart()
+  }, [leagueId, restart])
 
   useEffect(() => { load() }, [load])
-  useEffect(() => {
-    const t = setInterval(() => setSec((s) => (s <= 1 ? 0 : s - 1)), 1000)
-    return () => clearInterval(t)
-  }, [])
   useEffect(() => { if (sec === 0) load() }, [sec, load])
 
   const teams = useMemo(() => league?.teams ?? [], [league])

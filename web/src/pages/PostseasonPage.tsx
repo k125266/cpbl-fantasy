@@ -8,6 +8,7 @@ import Leaders from '../postseason/Leaders'
 import MinePanel from '../postseason/MinePanel'
 import Recaps from '../postseason/Recaps'
 import SeriesCard from '../postseason/SeriesCard'
+import { useCountdown } from '../hooks'
 import { buildCtx, mdw, SERVED } from '../postseason/shared'
 import TodayCard from '../postseason/TodayCard'
 import { useSeenCards } from '../postseason/useSeenCards'
@@ -32,21 +33,17 @@ export default function PostseasonPage() {
   const [data, setData] = useState<PostseasonView | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [upd, setUpd] = useState('')
-  const [sec, setSec] = useState(REFRESH)
+  const { sec, restart } = useCountdown(REFRESH)
   const [kind, setKind] = useState<string | null>(null)
 
   const load = useCallback(() => {
     api.get<PostseasonView>(`/api/postseason?leagueId=${leagueId}`)
       .then((v) => { setData(v); setError(null); setUpd(clock(new Date())) })
       .catch(setError)
-    setSec(REFRESH)
-  }, [leagueId])
+    restart()
+  }, [leagueId, restart])
 
   useEffect(() => { load() }, [load])
-  useEffect(() => {
-    const t = setInterval(() => setSec((s) => (s <= 1 ? 0 : s - 1)), 1000)
-    return () => clearInterval(t)
-  }, [])
 
   const teams = useMemo(() => league?.teams ?? [], [league])
   const { seen, mark } = useSeenCards(leagueId, user.id)
