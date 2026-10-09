@@ -368,8 +368,8 @@ export function keyLine(p: BoardPlayer) {
 }
 
 const CHIPS: [string, string][] = [['NEED', '缺位'], ['ALL', '全部'], ['H', '打者'], ['P', '投手'], ['IF', 'IF'], ['OF', 'OF'], ['SP', 'SP'], ['RP', 'RP']]
-/** 每頁人數（設計稿更新版：分頁取代「前 40 位」） */
-const PAGE = 25
+/** 每頁人數：網頁 15、手機 10（使用者 2026-10-09：25 人一頁太多） */
+const pageSize = (wide: boolean) => (wide ? 15 : 10)
 
 /** 頁碼：總頁數不超過格數就全列，否則用「…」省略（網頁 7 格、手機 5 格，同設計稿） */
 function pageSeq(total: number, cur: number, slots: 5 | 7): (number | '…')[] {
@@ -380,6 +380,7 @@ function pageSeq(total: number, cur: number, slots: 5 | 7): (number | '…')[] {
 }
 
 function Pager({ total, page, onPage, wide }: { total: number; page: number; onPage: (n: number) => void; wide: boolean }) {
+  const PAGE = pageSize(wide)
   const pages = Math.max(1, Math.ceil(total / PAGE))
   if (pages <= 1) return null
   const from = (page - 1) * PAGE + 1, to = Math.min(total, page * PAGE)
@@ -451,6 +452,7 @@ export function PlayerList({ draft, board, period, onPeriod, queue, myTurn, onPi
   // 分頁：篩選、排序、搜尋改變時回第 1 頁；被選走使總數變少時不超過最後一頁
   const [pageWant, setPageWant] = useState(1)
   useEffect(() => setPageWant(1), [chip, q, sortKey, showTaken])
+  const PAGE = pageSize(wide)
   const page = Math.min(pageWant, Math.max(1, Math.ceil(rows.length / PAGE)))
   const top = useRef<HTMLDivElement>(null)
   const goPage = (n: number) => {

@@ -2316,6 +2316,34 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .dr-right > .dr-box { grid-column: 2; grid-row: 1 / span 2; align-self: stretch; }
 }
 
+/* 選秀室球員表放大字（使用者 2026-10-09：字有點太小）：手機與網頁各放大一級 */
+.dr-row .rk { font-size: 17px; }
+.dr-row .l1 b { font-size: 16px; }
+.dr-row .l1 i { font-size: 11px; line-height: 16px; padding: 0 4px; }
+.dr-row .l2 em { font-size: 13px; }
+.dr-row .l2 { font-size: 10px; }
+.dr-row .l2 b { font-size: 15px; }
+.dr-row .star { font-size: 20px; }
+.dr-pick { height: 36px; font-size: 14px; }
+.dr-pt .lb { font-size: 13px; }
+.dr-pt .v { font-size: 17px; }
+.dr-pt .r.hd { font-size: 12px; }
+.dr-pt .r { height: 38px; }
+@media (min-width: 1024px) {
+  .dr-row, .dr-row.rec { grid-template-columns: 40px 40px minmax(150px, 1fr) repeat(var(--n), minmax(40px, 56px)) 60px; height: 58px; }
+  .dr-row.hd { height: 40px; font-size: 12.5px; }
+  .dr-row.hd.two { height: 52px; }
+  .dr-row > .v { font-size: 18px; }
+  .dr-row .l2 .tc { font-size: 11px; line-height: 16px; }
+  .dr-list .search input { height: 38px; font-size: 14.5px; }
+  .dr-list .per { height: 38px; font-size: 14.5px; }
+  .dr-list .chips button { height: 32px; font-size: 14px; }
+  .dr-list .chk, .dr-list .tools .count, .dr-list .legend { font-size: 13.5px; }
+}
+@media (min-width: 1680px) {
+  .dr-row, .dr-row.rec { grid-template-columns: 40px 40px minmax(150px, 1fr) repeat(var(--n), minmax(40px, 66px)) 60px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
