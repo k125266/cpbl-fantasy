@@ -354,6 +354,17 @@ function withPeriod(b: ApiDraftBoard, period: DraftPeriod): DraftBoard {
 
 const isSp = (p: BoardPlayer) => p.eligible.includes('SP')
 
+/**
+ * 樣本太少的球員，依 AVG、ERA、WHIP 排序時排最後（使用者 2026-10-09 決定）：只投 4 局的 ERA 0.00、只打 1 個打數的 AVG 1.000
+ * 不該排第一。門檻依期間：上一季全季打席 100／投球 20 局，本季 30／10 局，近 14 天 10／3 局。
+ */
+const MIN_SAMPLE: Record<DraftPeriod, { pa: number; outs: number }> = {
+  REF: { pa: 100, outs: 60 }, SEASON: { pa: 30, outs: 30 }, LAST14: { pa: 10, outs: 9 },
+}
+const RATE_KEYS = new Set(['avg', 'era', 'whip'])
+const lowSample = (p: BoardPlayer, period: DraftPeriod) =>
+  p.pitcher ? p.stats.outs < MIN_SAMPLE[period].outs : p.stats.pa < MIN_SAMPLE[period].pa
+
 /** 選秀紀錄（選秀板、我的陣容、選中動畫、結束畫面）存的是登記守位（投手是 P）；由選秀室提供球員的 SP／RP，查不到就用登記守位 */
 const PosContext = createContext<(playerId: number | null | undefined, fallback: string | null | undefined) => string>((_, f) => f ?? '')
 
@@ -444,14 +455,19 @@ export function PlayerList({ draft, board, period, onPeriod, queue, myTurn, onPi
     const t = q.trim()
     if (t) L = L.filter((p) => `${p.name}${cpblTeam(p.cpblTeam).short}${posLabel(p)}`.includes(t))
     if (sortCol) {
+      const rate = RATE_KEYS.has(sortCol.key)
       L = [...L].sort((a, b) => {
+        if (rate) {
+          const la = lowSample(a, period), lb = lowSample(b, period)
+          if (la !== lb) return la ? 1 : -1
+        }
         const x = sortCol.get(a.stats), y = sortCol.get(b.stats)
         if (x == null || y == null) return x == null ? (y == null ? 0 : 1) : -1
         return sortCol.low ? x - y : y - x
       })
     }
     return L
-  }, [all, open, showTaken, chip, q, sortCol])
+  }, [all, open, showTaken, chip, q, sortCol, period])
 
   // 分頁：篩選、排序、搜尋改變時回第 1 頁；被選走使總數變少時不超過最後一頁
   const [pageWant, setPageWant] = useState(1)
@@ -476,6 +492,13 @@ export function PlayerList({ draft, board, period, onPeriod, queue, myTurn, onPi
     </label>
   )
   const nCols = cols ? cols.length : ALL_COLS.length
+  const rateSort = !!sortCol && RATE_KEYS.has(sortCol.key)
+  const minS = MIN_SAMPLE[period]
+  const lowNote = rateSort && (
+    <div className="low-note">
+      樣本少（{grp === 'P' ? `投球不到 ${minS.outs / 3} 局` : grp === 'H' ? `打席不到 ${minS.pa}` : `打席不到 ${minS.pa}、投球不到 ${minS.outs / 3} 局`}）的排最後，數字旁標「少」
+    </div>
+  )
   const star = (p: BoardPlayer, inQ: boolean) => (
     <button type="button" className={`star${inQ ? ' on' : ''}`} aria-label={inQ ? '移出候選' : '加入候選'}
       onClick={(e) => { e.stopPropagation(); queue.toggle(p.playerId) }}>{inQ ? '★' : '☆'}</button>
@@ -498,6 +521,7 @@ export function PlayerList({ draft, board, period, onPeriod, queue, myTurn, onPi
         {wide && <span className="legend"><i />計分類別<em>篩打者或投手後可依任一欄排序</em></span>}
       </div>
       {!wide && <div className="tkrow">{takenBox}<span className="count">{count}</span></div>}
+      {wide && lowNote}
       {!wide && (
         <div className="sorts">
           <span className="lab">排序</span>
@@ -507,6 +531,7 @@ export function PlayerList({ draft, board, period, onPeriod, queue, myTurn, onPi
           ))}
         </div>
       )}
+      {!wide && lowNote}
       {wide && (
         <div className={`dr-row hd${cols ? '' : ' two'}`}>
           <span className="c">候選</span><span className="rk">排名</span><span>球員</span>
@@ -531,6 +556,7 @@ export function PlayerList({ draft, board, period, onPeriod, queue, myTurn, onPi
         if (sortCol && !keys.some((c) => c.key === sortCol.key)) keys[2] = sortCol
         const rowCols = cols ?? ALL_COLS.map(([h, pp]) => (p.pitcher ? pp : h))
         const tk = p.taken
+        const low = rateSort && lowSample(p, period)
         const tkTeam = tk ? teams.find((x) => x.id === tk.teamId) : undefined
         const tkTag = tk && (
           <i className="tk"><s style={{ background: tkTeam ? fantasyTeamColor(tkTeam.id, teams) : 'var(--silver)' }} />
@@ -552,12 +578,18 @@ export function PlayerList({ draft, board, period, onPeriod, queue, myTurn, onPi
                   : (
                     <span className="l2">
                       <em className={p.fillsNeed && !tk ? 'need' : ''}>{posLabel(p)}</em>
-                      {keys.map((c) => <span key={c.key} className={sortCol?.key === c.key ? 'on' : ''}><b>{c.fmt(c.get(p.stats))}</b>{c.label}</span>)}
+                      {keys.map((c) => {
+                        const mark = low && sortCol?.key === c.key
+                        return <span key={c.key} className={`${sortCol?.key === c.key ? 'on' : ''}${mark ? ' low' : ''}`}><b>{c.fmt(c.get(p.stats))}</b>{c.label}{mark && <sup>少</sup>}</span>
+                      })}
                     </span>
                   )}
               </span>
             </span>
-            {wide && rowCols.map((c) => <span key={c.key} className={`v${c.score ? ' sc' : ''}${sortCol?.key === c.key ? ' on' : ''}`}>{c.fmt(c.get(p.stats))}</span>)}
+            {wide && rowCols.map((c) => {
+              const mark = low && sortCol?.key === c.key
+              return <span key={c.key} className={`v${c.score ? ' sc' : ''}${sortCol?.key === c.key ? ' on' : ''}${mark ? ' low' : ''}`}>{c.fmt(c.get(p.stats))}{mark && <sup title="樣本少">少</sup>}</span>
+            })}
             {!wide && (tk ? <span /> : star(p, inQ))}
             <span className="act">{myTurn && !tk && <button type="button" className="dr-pick" onClick={(e) => { e.stopPropagation(); onPick(p) }}>選</button>}</span>
           </div>
