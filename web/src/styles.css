@@ -42,6 +42,15 @@ a { color: var(--gold-hi); text-decoration: none; }
 a:hover { text-decoration: underline; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
+
+/* 自製捲軸：細、圓角、平常低調，滑過才亮；Firefox 沒有 ::-webkit-scrollbar，退回標準屬性 */
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background: #3a414e; border: 3px solid transparent; background-clip: content-box; border-radius: 999px; min-height: 36px; }
+::-webkit-scrollbar-thumb:hover { background: #5b6372; background-clip: content-box; }
+::-webkit-scrollbar-thumb:active { background: var(--gold-lo, #7a6440); background-clip: content-box; }
+@supports not selector(::-webkit-scrollbar) { * { scrollbar-width: thin; scrollbar-color: #3a414e transparent; } }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
 .app { max-width: 480px; margin: 0 auto; padding: 0 16px calc(104px + env(safe-area-inset-bottom, 0px)); }
@@ -1565,7 +1574,7 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .dr-left-top > .dr-seg { align-self: flex-start; }
   .dr-left-top > .dr-seg button { flex: none; padding: 6px 16px; font-size: 13px; }
   .dr-right { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-  .dr-box { border-radius: 12px; background: rgba(21,23,28,.88); border: 1px solid var(--line); border-top-color: rgba(196,202,212,.14); padding: 10px; display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; scrollbar-width: thin; }
+  .dr-box { border-radius: 12px; background: rgba(21,23,28,.88); border: 1px solid var(--line); border-top-color: rgba(196,202,212,.14); padding: 10px; display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; }
   .dr-box .dr-seg button { font-size: 12.5px; padding: 6px 0; }
   .dr-side-list .it { grid-template-columns: 16px minmax(0, 1fr) auto; padding: 7px 4px 7px 10px; background: rgba(14,16,20,.45); border-color: #23272f; }
   .dr-side-list .it.mine { padding: 7px 10px; }
@@ -2370,7 +2379,7 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 @media (min-width: 1680px) {
   /* 固定一屏：高度 = 視窗 − 導覽列；管理員工具卡在下面，要捲動欄內才看得到 */
   .app.app-draft:has(.dr-x) { box-sizing: border-box; height: calc(100dvh - 56px); overflow: hidden; padding-top: 18px; padding-bottom: 24px; }
-  .app.app-draft:has(.dr-x) > .stack { height: 100%; overflow-y: auto; scrollbar-width: thin; }
+  .app.app-draft:has(.dr-x) > .stack { height: 100%; overflow-y: auto; }
   .app.app-draft:has(.dr-x) > footer, .app.app-draft:has(.dr-x) .footer { display: none; }
   .dr-x { position: relative; isolation: isolate; height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 16px; }
   .dr-x::before { content: ""; position: absolute; z-index: -1; top: -300px; left: 6%; width: 1100px; height: 560px; border-radius: 50%; background: rgb(123 140 255 / .08); filter: blur(150px); pointer-events: none; }
@@ -2379,9 +2388,10 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .dr-x > .dr-main-x { flex: 1; min-height: 0; }
   .dr-main-x { display: grid; grid-template-columns: minmax(0, 1fr) 520px 360px; grid-template-rows: minmax(0, 1fr); gap: 16px; align-items: stretch; }
   .dr-main-x > .dr-left, .dr-main-x > .dr-right { min-height: 0; }
-  .dr-main-x > .dr-right { position: static; display: flex; flex-direction: column; overflow-y: auto; scrollbar-width: thin; }
+  .dr-main-x > .dr-right { position: static; display: flex; flex-direction: column; overflow: hidden; }
   .dr-main-x > .dr-right > * { flex: none; }
-  .dr-main-x > .dr-right > .dr-box { flex: 1 1 auto; min-height: 170px; max-height: none; }
+  /* 只留一條捲軸：候選／陣容框在欄內捲；視窗太矮時改成整欄一起捲（見下方 max-height） */
+  .dr-main-x > .dr-right > .dr-box { flex: 1 1 auto; min-height: 160px; max-height: none; overflow-y: auto; }
   .dr-main-x > .dr-right .dr-card > .in { gap: 9px; padding: 11px 16px 12px; }
 
   /* 球員表：欄內捲動，頁碼與說明在底下 */
@@ -2398,7 +2408,7 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .dr-list.x .dr-row.hd > span, .dr-list.x .dr-row.hd > button { display: flex; align-items: center; }
   .dr-list.x .dr-row.hd .v { flex-direction: column; align-items: flex-end; justify-content: center; gap: 2px; }
   .dr-list.x .dr-row.hd.two .v.sc { padding-bottom: 0; }
-  .dr-list.x .rows { display: block; flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+  .dr-list.x .rows { display: block; flex: 1; min-height: 0; overflow-y: auto; }
   .dr-list.x .rows .dr-row { height: 42px; }
   .dr-list.x .dr-row .l1 b { font-size: 16px; }
   .dr-list.x .rows .dr-row > .v { font-size: 17px; }
@@ -2429,7 +2439,7 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .dr-bd .bt b { display: flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .dr-bd .bt small { font-size: 10.5px; font-weight: 400; color: #b9c3ff; }
   .dr-bd .bt span { display: block; margin-top: 1px; font: 500 11.5px var(--font-mix); color: var(--silver-lo); white-space: nowrap; }
-  .dr-bd .br { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 12px; display: flex; flex-direction: column; gap: 4px; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+  .dr-bd .br { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 12px; display: flex; flex-direction: column; gap: 4px; }
   .dr-bd .r { flex: 1 0 48px; max-height: 84px; display: grid; gap: 4px; }
   .dr-bd .rn { display: flex; flex-direction: column; align-items: center; justify-content: center; font: 600 13px/1.1 var(--font-num); color: var(--muted); }
   .dr-bd .rn span { font-size: 12px; color: #4a505c; }
@@ -2455,6 +2465,10 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .dr-bd .c:not(.done).me .nm { font-size: 12.5px; color: #b9c3ff; }
   .dr-bd .c:not(.done):not(.cur) .ft { justify-content: center; }
   .dr-bd .c.cur .nm { font-size: 14px; }
+}
+@media (min-width: 1680px) and (max-height: 1000px) {
+  .dr-main-x > .dr-right { overflow-y: auto; }
+  .dr-main-x > .dr-right > .dr-box { flex: none; overflow: visible; }
 }
 /* 2560：球員表最寬 1280、右欄 360，剩下的寬度都給選秀板；格子多放中職隊簡稱 */
 @media (min-width: 2200px) {
