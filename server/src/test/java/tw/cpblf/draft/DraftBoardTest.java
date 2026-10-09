@@ -69,4 +69,22 @@ class DraftBoardTest extends IntegrationTest {
             assertThat(t.best()).isEmpty();
         });
     }
+
+    @Test
+    void foreignPlayersAreNotNeedsOnceTheForeignLimitIsReached() {
+        long league = seeder.seed();
+        long d = jdbc.sql("select id from draft where league_id = ?").param(league).query(Long.class).single();
+        drafts.start(d);
+        long team = drafts.view(d, null).currentTeamId();
+        // 洋將上限設成 0：選了第一位球員後，洋將再選會被拒絕，選秀板就不該把他們標成補缺位或推薦
+        jdbc.sql("update league set foreign_player_limit = 0 where id = ?").param(league).update();
+        var b = board.board(d, team);
+        assertThat(b.players()).anyMatch(p -> p.foreign() && p.fillsNeed());
+        long first = b.players().stream().filter(p -> !p.foreign() && p.fillsNeed()).findFirst().orElseThrow().playerId();
+        drafts.pick(d, team, first);
+        var after = board.board(d, team);
+        assertThat(after.players().stream().filter(BoardPlayer::foreign)).isNotEmpty()
+                .noneMatch(BoardPlayer::fillsNeed).noneMatch(BoardPlayer::recommended);
+        assertThat(after.players().stream().filter(p -> !p.foreign() && p.taken() == null)).anyMatch(BoardPlayer::fillsNeed);
+    }
 }
