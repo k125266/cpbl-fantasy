@@ -126,6 +126,14 @@ public class DraftController {
         return drafts.keeperCandidates(draftId, team);
     }
 
+    /** 目前的自由球員，依排名前 30 位（Keeper 頁第三欄，選保留前先看球員池）。 */
+    @GetMapping("/{draftId}/keeper-pool")
+    public List<DraftService.PoolPlayer> keeperPool(@PathVariable long leagueId, @PathVariable long draftId) {
+        leagues.requireMember(leagueId, Auth.require());
+        check(leagueId, draftId);
+        return drafts.keeperPool(draftId, 30);
+    }
+
     @PostMapping("/{draftId}/keepers")
     public List<DraftService.KeeperView> keepers(@PathVariable long leagueId, @PathVariable long draftId, @RequestBody Keepers req) {
         long team = leagues.requireTeam(leagueId, Auth.require());
