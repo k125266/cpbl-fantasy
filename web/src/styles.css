@@ -2193,6 +2193,70 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .dr-glow { animation: none; opacity: .8; }
   .dr-cue.next i { animation: none; }
 }
+/* 選秀室數據表：期間下拉、顯示已選、完整欄位、已選球員、球員卡期間表 */
+.dr-list .per { flex: none; height: 38px; box-sizing: border-box; padding: 0 10px; border-radius: 8px; background: rgba(24,27,33,.85); border: 1px solid var(--line); color: var(--text); font: 500 13.5px 'Noto Sans TC', sans-serif; max-width: 42%; }
+.dr-list .chk { flex: none; display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--silver); white-space: nowrap; cursor: pointer; }
+.dr-list .chk input { width: 16px; height: 16px; margin: 0; accent-color: var(--gold); }
+.dr-list .tkrow { display: flex; align-items: center; justify-content: space-between; margin: 8px 2px 0; }
+.dr-list .legend { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--gold); white-space: nowrap; }
+.dr-list .legend i { width: 14px; height: 2px; background: var(--gold); }
+.dr-list .legend em { font-style: normal; color: var(--silver-lo); }
+.dr-row.taken { opacity: .5; }
+.dr-row.taken .l1 b { color: var(--silver); }
+.dr-row .l1 .tk { flex: none; display: inline-flex; align-items: center; gap: 4px; font: 600 10.5px/15px 'Barlow Condensed', 'Noto Sans TC', sans-serif; font-style: normal; padding: 0 5px; border-radius: 4px; border: 1px solid #3a404c; color: var(--silver); white-space: nowrap; }
+.dr-row .l1 .tk s { width: 8px; height: 3px; border-radius: 1px; }
+@media (min-width: 1024px) {
+  .dr-list .tools { gap: 10px; }
+  .dr-list .chips { align-items: center; }
+  .dr-list .legend { margin-left: auto; }
+  .dr-row, .dr-row.rec { grid-template-columns: 40px 40px minmax(150px, 1fr) repeat(var(--n), minmax(34px, 50px)) 56px; gap: 8px; height: 51px; }
+  .dr-row.hd { height: 36px; }
+  .dr-row.hd.two { height: 46px; align-items: end; padding-bottom: 6px; }
+  .dr-row.hd .c { text-align: center; }
+  .dr-row.hd .v { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; line-height: 1; }
+  .dr-row.hd .v b { font-weight: 600; }
+  .dr-row.hd .v.sc { color: var(--gold); }
+  .dr-row.hd.two .v.sc { padding-bottom: 5px; border-bottom: 2px solid var(--gold); }
+  .dr-row.hd button.v { display: block; padding-bottom: 4px; border-bottom: 2px solid transparent; }
+  .dr-row.hd button.v.on { color: var(--gold-hi); border-bottom-color: var(--gold); }
+  .dr-row > .v.sc { color: var(--text); }
+  .dr-row .l2 { margin-top: 2px; gap: 6px; align-items: center; }
+  .dr-row .l2 .tc { font-style: normal; font-size: 9.5px; font-weight: 500; border-radius: 4px; padding: 0 3px; line-height: 14px; }
+  .dr-row .star { width: 40px; }
+}
+.dr-card, .dr-card > .in, .dr-card > .in > * { min-width: 0; max-width: 100%; }
+.dr-pt { border-radius: 8px; min-width: 0; background: #14161b; border: 1px solid #23272f; overflow: hidden; }
+.dr-pt.full { overflow-x: auto; scrollbar-width: none; }
+.dr-pt .r { display: grid; grid-template-columns: 72px repeat(var(--n), minmax(0, 1fr)); align-items: center; height: 34px; border-top: 1px solid #1d2027; padding-right: 8px; }
+.dr-pt.full .r { grid-template-columns: 72px repeat(var(--n), 46px); width: max-content; min-width: 100%; }
+.dr-pt .r.hd { height: 28px; border-top: 0; font: 600 10.5px 'Barlow Condensed', sans-serif; letter-spacing: .06em; color: var(--silver-lo); }
+.dr-pt .lb { padding-left: 10px; font: 400 11.5px 'Noto Sans TC', sans-serif; letter-spacing: 0; color: var(--silver); white-space: nowrap; }
+.dr-pt .r.hd .lb { color: var(--silver-lo); }
+.dr-pt .v { text-align: right; padding-right: 2px; font: 700 15px 'Barlow Condensed', sans-serif; }
+.dr-pt .r.hd .v { font: inherit; padding: 9px 2px 0; height: 100%; box-sizing: border-box; }
+.dr-pt .r.hd .v.sc { color: var(--gold); box-shadow: inset 0 -2px 0 var(--gold); margin-left: 6px; }
+.dr-pt .r.cur { background: rgba(216,178,90,.09); }
+.dr-pt .r.cur .lb { color: var(--gold-hi); }
+.dr-pt .r.none .lb, .dr-pt .r.none .v { color: #4a505c; font-weight: 500; }
+.dr-pt.full .lb { position: sticky; left: 0; z-index: 1; background: #14161b; }
+.dr-pt.full .r.cur .lb { background: #1c1b15; }
+.dr-card .ft { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 11px; color: var(--silver-lo); }
+.dr-card .ft a { display: flex; align-items: center; min-height: 32px; font-size: 13px; color: var(--silver); white-space: nowrap; }
+.dr-card .ft a:hover { color: var(--gold-hi); }
+.dr-card .pos .tk { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; font: 600 11px/15px 'Barlow Condensed', 'Noto Sans TC', sans-serif; padding: 0 5px; border-radius: 4px; border: 1px solid #3a404c; color: var(--silver); }
+.dr-card .pos .tk s { width: 8px; height: 3px; border-radius: 1px; }
+.dr-card .btns button:disabled { opacity: .5; }
+
+/* Keeper 名單的數據欄 */
+.kp-row .l3 { display: flex; gap: 9px; margin-top: 3px; white-space: nowrap; font: 600 9px var(--font-num); color: var(--silver-lo); }
+.kp-row .l3 b { margin-right: 2px; font: 700 12.5px var(--font-num); color: var(--text); }
+@media (min-width: 1024px) {
+  .kp-grid { grid-template-columns: 24px minmax(180px, 1fr) 56px 76px 112px repeat(5, 50px); gap: 8px; }
+  .kp-grid .st { text-align: right; font: 600 15px var(--font-num); }
+  .kp-grid.head .st { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding-bottom: 5px; line-height: 1; color: var(--gold); box-shadow: inset 0 -2px 0 var(--gold); }
+  .kp-grid.head { min-height: 46px; align-items: end; padding-bottom: 6px; }
+  .kp-grid.head .st b { font-weight: 600; font-size: 11px; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

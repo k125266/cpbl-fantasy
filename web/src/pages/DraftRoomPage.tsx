@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import confetti from 'canvas-confetti'
 import { useApp } from '../App'
 import { api, type BoardPlayer as ApiBoardPlayer, type DraftBoard as ApiDraftBoard, type DraftPick, type DraftReport,
-  type DraftStats, type DraftView } from '../api'
+  type DraftPeriod, type DraftStats, type DraftView } from '../api'
 import { BottomSheet, ErrorBox, TIER_LABEL, tierOf, useLoad } from '../components'
 import { useServerNow, useWide } from '../hooks'
 import { cpblTeam, fantasyTeamColor } from '../teams'
@@ -292,22 +292,6 @@ export function useDraftQueue(draft: DraftView): DraftQueue {
 export type Cat = 'R' | 'HR' | 'H' | 'BB' | 'AVG' | 'QS' | 'K' | 'W+SV' | 'ERA' | 'WHIP'
 export const HIT: Cat[] = ['R', 'HR', 'H', 'BB', 'AVG']
 export const PIT: Cat[] = ['QS', 'K', 'W+SV', 'ERA', 'WHIP']
-const LOW = new Set<Cat>(['ERA', 'WHIP'])
-
-export function statOf(s: DraftStats, c: Cat): number | null {
-  switch (c) {
-    case 'R': return s.r
-    case 'HR': return s.hr
-    case 'H': return s.h
-    case 'BB': return s.bb
-    case 'AVG': return s.avg
-    case 'QS': return s.qs
-    case 'K': return s.k
-    case 'W+SV': return s.wsv
-    case 'ERA': return s.era
-    case 'WHIP': return s.whip
-  }
-}
 
 export function fmtStat(c: string, v: number | null | undefined) {
   if (v == null) return '–'
@@ -316,7 +300,65 @@ export function fmtStat(c: string, v: number | null | undefined) {
   return String(Math.round(v))
 }
 
+/**
+ * 數據表的一欄。score＝聯盟計分的類別（表頭金色）；low＝越小越好（排序時由小到大）。
+ * 官網沒有打點、盜壘、中繼，所以沒有這些欄（見 docs/decisions.md「選秀室」）。
+ */
+interface Col { key: string; label: string; score: boolean; low: boolean; get: (s: DraftStats) => number | null; fmt: (v: number | null) => string }
+const num = (v: number | null) => (v == null ? '–' : String(Math.round(v)))
+const avgF = (v: number | null) => fmtStat('AVG', v)
+const rateF = (v: number | null) => fmtStat('ERA', v)
+const ipF = (v: number | null) => (v == null ? '–' : `${Math.floor(v / 3)}.${v % 3}`)
+const col = (key: string, label: string, get: Col['get'], o: { score?: boolean; low?: boolean; fmt?: Col['fmt'] } = {}): Col =>
+  ({ key, label, get, score: !!o.score, low: !!o.low, fmt: o.fmt ?? num })
+
+/** 打者 8 欄、投手 11 欄（設計稿「選秀室 v3」） */
+const H_COLS: Col[] = [
+  col('g', 'G', (s) => s.g), col('pa', 'PA', (s) => s.pa), col('ab', 'AB', (s) => s.ab),
+  col('h', 'H', (s) => s.h, { score: true }), col('r', 'R', (s) => s.r, { score: true }), col('hr', 'HR', (s) => s.hr, { score: true }),
+  col('bb', 'BB', (s) => s.bb, { score: true }), col('avg', 'AVG', (s) => s.avg, { score: true, fmt: avgF }),
+]
+const P_COLS: Col[] = [
+  col('g', 'G', (s) => s.pg), col('gs', 'GS', (s) => s.gs), col('ip', 'IP', (s) => s.outs, { fmt: ipF }),
+  col('w', 'W', (s) => s.w, { score: true }), col('sv', 'SV', (s) => s.sv, { score: true }), col('qs', 'QS', (s) => s.qs, { score: true }),
+  col('k', 'K', (s) => s.k, { score: true }), col('h', 'H', (s) => s.ph, { low: true }), col('bb', 'BB', (s) => s.pbb, { low: true }),
+  col('era', 'ERA', (s) => s.era, { score: true, low: true, fmt: rateF }), col('whip', 'WHIP', (s) => s.whip, { score: true, low: true, fmt: rateF }),
+]
+/** W 與 SV 在聯盟計分合計為 W+SV；只在「全部」表與手機排序列使用 */
+const WSV = col('wsv', 'W+SV', (s) => s.wsv, { score: true })
+/** 「全部」：打者與投手共用 7 欄，上排打者、下排投手 */
+const ALL_COLS: [Col, Col][] = [
+  [H_COLS[0], P_COLS[0]], [H_COLS[1], P_COLS[2]], [H_COLS[4], P_COLS[5]], [H_COLS[5], P_COLS[6]],
+  [H_COLS[3], WSV], [H_COLS[6], P_COLS[9]], [H_COLS[7], P_COLS[10]],
+]
+/** 手機排序列、候選清單等用的計分類別 */
+const SORT_H: Col[] = ['r', 'hr', 'h', 'bb', 'avg'].map((k) => H_COLS.find((c) => c.key === k)!)
+const SORT_P: Col[] = [P_COLS[5], P_COLS[6], WSV, P_COLS[9], P_COLS[10]]
+/** 球員卡（網頁）每段期間一列的欄位：第一欄 PA／IP，後面是計分類別 */
+const CARD_H: Col[] = [H_COLS[1], H_COLS[4], H_COLS[5], H_COLS[3], H_COLS[6], H_COLS[7]]
+const CARD_P: Col[] = [P_COLS[2], P_COLS[5], P_COLS[6], WSV, P_COLS[9], P_COLS[10]]
+const colOf = (list: Col[], key: string) => list.find((c) => c.key === key)!
+
+/** 一位球員：stats 是目前選的數據期間，byPeriod 是各期間（球員卡逐期間列出） */
+export type BoardPlayer = Omit<ApiBoardPlayer, 'stats'> & { stats: DraftStats; byPeriod: ApiBoardPlayer['stats'] }
+type DraftBoard = Omit<ApiDraftBoard, 'players'> & { players: BoardPlayer[] }
+
+const NO_STATS: DraftStats = {
+  g: 0, pa: 0, ab: 0, h: 0, r: 0, hr: 0, bb: 0, avg: null,
+  pg: 0, gs: 0, outs: 0, w: 0, sv: 0, wsv: 0, qs: 0, k: 0, ph: 0, pbb: 0, era: null, whip: null,
+}
+function withPeriod(b: ApiDraftBoard, period: DraftPeriod): DraftBoard {
+  return { ...b, players: b.players.map((p) => ({ ...p, stats: p.stats[period] ?? NO_STATS, byPeriod: p.stats })) }
+}
+
 const isSp = (p: BoardPlayer) => p.eligible.includes('SP')
+
+/** 守位：投手顯示可擔任的先發／後援（SP、RP 或 SP/RP），打者用登記守位 */
+const posLabel = (p: BoardPlayer) => {
+  if (!p.pitcher) return p.position
+  const r = ['SP', 'RP'].filter((x) => p.eligible.includes(x))
+  return r.length ? r.join('/') : p.position
+}
 
 /** 候選清單、球員卡的一行重點數據 */
 export function keyLine(p: BoardPlayer) {
@@ -361,45 +403,54 @@ function Pager({ total, page, onPage, wide }: { total: number; page: number; onP
   )
 }
 
-export function PlayerList({ draft, board, queue, myTurn, onPick, selId, onSelect }: {
+export function PlayerList({ draft, board, period, onPeriod, queue, myTurn, onPick, selId, onSelect }: {
   draft: DraftView
   board: DraftBoard | null
+  period: DraftPeriod
+  onPeriod: (p: DraftPeriod) => void
   queue: DraftQueue
   myTurn: boolean
   onPick: (p: BoardPlayer) => void
   selId: number | null
   onSelect: (p: BoardPlayer) => void
 }) {
+  const { league } = useApp()
   const wide = useWide()
+  const teams = league?.teams ?? []
+  const n = draft.order.length || 1
   const [q, setQ] = useState('')
   const [chip, setChip] = useState('ALL')
-  const [sort, setSort] = useState<Cat | 'RANK'>('RANK')
+  const [sortKey, setSortKey] = useState('')
+  const [showTaken, setShowTaken] = useState(false)
+  // 篩了打者或投手才攤開完整欄位、才能依任一欄排序；「全部」只列 7 個共用欄
   const grp = ['H', 'IF', 'OF'].includes(chip) ? 'H' : ['P', 'SP', 'RP'].includes(chip) ? 'P' : null
-  const cats = grp === 'P' ? PIT : HIT
-  const sortBy: Cat | 'RANK' = grp && (grp === 'H' ? HIT : PIT).includes(sort as Cat) ? (sort as Cat) : 'RANK'
+  const sortCols = grp === 'P' ? [...P_COLS, WSV] : grp === 'H' ? H_COLS : []
+  const sortCol = sortCols.find((c) => c.key === sortKey)
+  const cols = grp === 'P' ? P_COLS : grp === 'H' ? H_COLS : null
 
+  const all = useMemo(() => board?.players ?? [], [board])
+  const open = useMemo(() => all.filter((p) => !p.taken), [all])
   const rows = useMemo(() => {
-    let L = board?.players ?? []
-    if (chip === 'NEED') L = L.filter((p) => p.fillsNeed)
+    let L = showTaken ? all : open
+    if (chip === 'NEED') L = L.filter((p) => !p.taken && p.fillsNeed)
     else if (chip === 'H') L = L.filter((p) => !p.pitcher)
     else if (chip === 'P') L = L.filter((p) => p.pitcher)
     else if (chip !== 'ALL') L = L.filter((p) => p.eligible.includes(chip))
     const t = q.trim()
-    if (t) L = L.filter((p) => `${p.name}${cpblTeam(p.cpblTeam).short}${p.position}`.includes(t))
-    if (sortBy !== 'RANK') {
-      const v = (p: BoardPlayer) => statOf(p.stats, sortBy)
+    if (t) L = L.filter((p) => `${p.name}${cpblTeam(p.cpblTeam).short}${posLabel(p)}`.includes(t))
+    if (sortCol) {
       L = [...L].sort((a, b) => {
-        const x = v(a), y = v(b)
+        const x = sortCol.get(a.stats), y = sortCol.get(b.stats)
         if (x == null || y == null) return x == null ? (y == null ? 0 : 1) : -1
-        return LOW.has(sortBy) ? x - y : y - x
+        return sortCol.low ? x - y : y - x
       })
     }
     return L
-  }, [board, chip, q, sortBy])
+  }, [all, open, showTaken, chip, q, sortCol])
 
   // 分頁：篩選、排序、搜尋改變時回第 1 頁；被選走使總數變少時不超過最後一頁
   const [pageWant, setPageWant] = useState(1)
-  useEffect(() => setPageWant(1), [chip, q, sortBy])
+  useEffect(() => setPageWant(1), [chip, q, sortKey, showTaken])
   const page = Math.min(pageWant, Math.max(1, Math.ceil(rows.length / PAGE)))
   const top = useRef<HTMLDivElement>(null)
   const goPage = (n: number) => {
@@ -410,59 +461,99 @@ export function PlayerList({ draft, board, queue, myTurn, onPick, selId, onSelec
     const y = el.getBoundingClientRect().top + window.scrollY - (wide ? 12 : 64)
     if (window.scrollY > y) window.scrollTo({ top: y })
   }
-  const count = `${rows.length} 位`
+  const count = showTaken ? `${rows.length} 位（含已選）` : `可選 ${rows.length} 位`
+  // 沒有任何期間有數據時（例如開季前的 demo），仍列出預設期間
+  const periods = (board?.periods ?? []).filter((x) => x.available || x.key === board?.defaultPeriod)
+  const takenBox = (
+    <label className="chk">
+      <input type="checkbox" checked={showTaken} onChange={(e) => setShowTaken(e.target.checked)} />顯示已選
+    </label>
+  )
+  const nCols = cols ? cols.length : ALL_COLS.length
+  const star = (p: BoardPlayer, inQ: boolean) => (
+    <button type="button" className={`star${inQ ? ' on' : ''}`} aria-label={inQ ? '移出候選' : '加入候選'}
+      onClick={(e) => { e.stopPropagation(); queue.toggle(p.playerId) }}>{inQ ? '★' : '☆'}</button>
+  )
   return (
-    <div className="dr-list" ref={top}>
+    <div className="dr-list" ref={top} style={{ '--n': nCols } as CSSProperties}>
       <div className="tools">
         <label className="search">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋球員、中職球隊、守位" aria-label="搜尋球員" />
         </label>
+        <select className="per" value={period} onChange={(e) => onPeriod(e.target.value as DraftPeriod)} aria-label="數據期間">
+          {periods.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+        </select>
+        {wide && takenBox}
         {wide && <span className="count">{count}</span>}
       </div>
       <div className="chips">
         {CHIPS.map(([v, t]) => <button key={v} type="button" aria-pressed={chip === v} onClick={() => setChip(chip === v && v !== 'ALL' ? 'ALL' : v)}>{t}</button>)}
+        {wide && <span className="legend"><i />計分類別<em>篩打者或投手後可依任一欄排序</em></span>}
       </div>
-      <div className="sorts">
-        <span className="lab">排序</span>
-        <button type="button" className={sortBy === 'RANK' ? 'on' : ''} onClick={() => setSort('RANK')}>排名</button>
-        {grp && cats.map((c) => <button key={c} type="button" className={sortBy === c ? 'on' : ''} onClick={() => setSort(c)}>{c}</button>)}
-        <span className="basis">{board ? `數據：${board.basis}` : ''}</span>
-        {!wide && <span className="count">{count}</span>}
-      </div>
+      {!wide && <div className="tkrow">{takenBox}<span className="count">{count}</span></div>}
+      {!wide && (
+        <div className="sorts">
+          <span className="lab">排序</span>
+          <button type="button" className={!sortCol ? 'on' : ''} onClick={() => setSortKey('')}>排名</button>
+          {(grp === 'P' ? SORT_P : grp === 'H' ? SORT_H : []).map((c) => (
+            <button key={c.key} type="button" className={sortCol?.key === c.key ? 'on' : ''} onClick={() => setSortKey(c.key)}>{c.label}</button>
+          ))}
+        </div>
+      )}
       {wide && (
-        <div className="dr-row hd">
-          <span className="rk">排名</span><span>球員</span><span>守位</span>
-          {cats.map((c, i) => grp
-            ? <button key={c} type="button" className={`v${sortBy === c ? ' on' : ''}`} onClick={() => setSort(sortBy === c ? 'RANK' : c)}>{c}</button>
-            : <span key={c} className="v">{HIT[i]}/{PIT[i]}</span>)}
-          <span className="c">候選</span><span />
+        <div className={`dr-row hd${cols ? '' : ' two'}`}>
+          <span className="c">候選</span><span className="rk">排名</span><span>球員</span>
+          {cols
+            ? cols.map((c) => (
+              <button key={c.key} type="button" className={`v${c.score ? ' sc' : ''}${sortCol?.key === c.key ? ' on' : ''}`}
+                onClick={() => setSortKey(sortCol?.key === c.key ? '' : c.key)}>{c.label}</button>
+            ))
+            : ALL_COLS.map(([h, p]) => (
+              <span key={h.key + p.key} className={`v${h.score || p.score ? ' sc' : ''}`}>
+                {h.label === p.label ? <b>{h.label}</b> : <><b>{h.label}</b><b>{p.label}</b></>}
+              </span>
+            ))}
+          <span />
         </div>
       )}
       {rows.slice((page - 1) * PAGE, page * PAGE).map((p) => {
         const t = cpblTeam(p.cpblTeam)
         const inQ = queue.ids.includes(p.playerId)
-        const keys: Cat[] = !p.pitcher ? ['AVG', 'HR', 'R'] : isSp(p) ? ['ERA', 'K', 'QS'] : ['ERA', 'W+SV', 'K']
-        if (sortBy !== 'RANK' && !keys.includes(sortBy)) keys[2] = sortBy
+        const keys: Col[] = !p.pitcher ? ['avg', 'hr', 'r'].map((k) => colOf(H_COLS, k))
+          : isSp(p) ? ['era', 'k', 'qs'].map((k) => colOf(P_COLS, k)) : [colOf(P_COLS, 'era'), WSV, colOf(P_COLS, 'k')]
+        if (sortCol && !keys.some((c) => c.key === sortCol.key)) keys[2] = sortCol
+        const rowCols = cols ?? ALL_COLS.map(([h, pp]) => (p.pitcher ? pp : h))
+        const tk = p.taken
+        const tkTeam = tk ? teams.find((x) => x.id === tk.teamId) : undefined
+        const tkTag = tk && (
+          <i className="tk"><s style={{ background: tkTeam ? fantasyTeamColor(tkTeam.id, teams) : 'var(--silver)' }} />
+            {tkTeam?.name ?? ''}{tk.keeper || tk.pickNo == null ? '・Keeper' : ` ${pickLabel(tk.pickNo, n)}`}</i>
+        )
         return (
-          <div key={p.playerId} className={`dr-row${p.recommended ? ' rec' : ''}${selId === p.playerId ? ' sel' : ''}`} onClick={() => onSelect(p)}>
+          <div key={p.playerId} className={`dr-row${p.recommended && !tk ? ' rec' : ''}${selId === p.playerId ? ' sel' : ''}${tk ? ' taken' : ''}`} onClick={() => onSelect(p)}>
+            {wide && (tk ? <span /> : star(p, inQ))}
             <span className="rk">{p.rank ?? '–'}</span>
             <span className="who">
               <Medal rank={p.rank} jersey={p.jerseyNumber} team={p.cpblTeam} size={wide ? 30 : 36} />
               <span className="nm">
-                <span className="l1"><b>{p.name}</b><i className="tc" style={{ background: t.bg, color: t.fg }}>{t.short}</i>{p.foreign && <i className="tag">洋</i>}{p.recommended && <i className="tag gold">推薦</i>}</span>
-                {!wide && (
-                  <span className="l2">
-                    <em className={p.fillsNeed ? 'need' : ''}>{p.position}</em>
-                    {keys.map((c) => <span key={c} className={sortBy === c ? 'on' : ''}><b>{fmtStat(c, statOf(p.stats, c))}</b>{c}</span>)}
-                  </span>
-                )}
+                <span className="l1">
+                  <b>{p.name}</b>{!wide && <i className="tc" style={{ background: t.bg, color: t.fg }}>{t.short}</i>}
+                  {p.foreign && <i className="tag">洋</i>}{p.recommended && !tk && <i className="tag gold">推薦</i>}{tkTag}
+                </span>
+                {wide
+                  ? <span className="l2"><i className="tc" style={{ background: t.bg, color: t.fg }}>{t.short}</i><em className={p.fillsNeed && !tk ? 'need' : ''}>{posLabel(p)}</em></span>
+                  : (
+                    <span className="l2">
+                      <em className={p.fillsNeed && !tk ? 'need' : ''}>{posLabel(p)}</em>
+                      {keys.map((c) => <span key={c.key} className={sortCol?.key === c.key ? 'on' : ''}><b>{c.fmt(c.get(p.stats))}</b>{c.label}</span>)}
+                    </span>
+                  )}
               </span>
             </span>
-            {wide && <span className={`pos${p.fillsNeed ? ' need' : ''}`}>{p.position}</span>}
-            {wide && (p.pitcher ? PIT : HIT).map((c) => <span key={c} className={`v${sortBy === c ? ' on' : ''}`}>{fmtStat(c, statOf(p.stats, c))}</span>)}
-            <button type="button" className={`star${inQ ? ' on' : ''}`} aria-label={inQ ? '移出候選' : '加入候選'} onClick={(e) => { e.stopPropagation(); queue.toggle(p.playerId) }}>{inQ ? '★' : '☆'}</button>
-            <span className="act">{myTurn && <button type="button" className="dr-pick" onClick={(e) => { e.stopPropagation(); onPick(p) }}>選</button>}</span>
+            {wide && rowCols.map((c) => <span key={c.key} className={`v${c.score ? ' sc' : ''}${sortCol?.key === c.key ? ' on' : ''}`}>{c.fmt(c.get(p.stats))}</span>)}
+            {!wide && (tk ? <span /> : star(p, inQ))}
+            <span className="act">{myTurn && !tk && <button type="button" className="dr-pick" onClick={(e) => { e.stopPropagation(); onPick(p) }}>選</button>}</span>
           </div>
         )
       })}
@@ -531,30 +622,44 @@ export function DraftGrid({ draft }: { draft: DraftView }) {
 /** 選秀室資料（可選球員、缺位）：每個順位結束後重新讀取 */
 export function useDraftBoard(draft: DraftView) {
   const { leagueId } = useApp()
-  return useLoad(() => api.get<ApiDraftBoard>(`/api/leagues/${leagueId}/drafts/${draft.id}/board`).then(toRoomBoard),
+  return useLoad(() => api.get<ApiDraftBoard>(`/api/leagues/${leagueId}/drafts/${draft.id}/board`),
     [leagueId, draft.id, draft.currentPickNo, draft.status])
-}
-
-// 過渡：API 已改成各期間數據並含已選球員；畫面跟上新設計稿（期間下拉、顯示已選）前，先用預設期間、只列可選
-type BoardPlayer = Omit<ApiBoardPlayer, 'stats'> & { stats: DraftStats }
-type DraftBoard = Omit<ApiDraftBoard, 'players'> & { players: BoardPlayer[] }
-const NO_STATS: DraftStats = {
-  g: 0, pa: 0, ab: 0, h: 0, r: 0, hr: 0, bb: 0, avg: null,
-  pg: 0, gs: 0, outs: 0, w: 0, sv: 0, wsv: 0, qs: 0, k: 0, ph: 0, pbb: 0, era: null, whip: null,
-}
-function toRoomBoard(b: ApiDraftBoard): DraftBoard {
-  return { ...b, players: b.players.filter((p) => !p.taken).map((p) => ({ ...p, stats: p.stats[b.defaultPeriod] ?? NO_STATS })) }
 }
 
 // ------------------------------------------------------------------
 // 球員卡、先發缺位、候選清單、我的陣容
 // ------------------------------------------------------------------
 
-function PlayerPanel({ p, basis, inQ, onToggle, pickText, canPick, onPick }: {
-  p: BoardPlayer; basis: string; inQ: boolean; onToggle: () => void; pickText: string; canPick: boolean; onPick: () => void
+/** 球員的各期間數據表：網頁卡片只列計分類別，手機的完整數據列出全部欄位（可左右捲動） */
+function StatTable({ p, periods, period, full }: { p: BoardPlayer; periods: ApiDraftBoard['periods']; period: DraftPeriod; full: boolean }) {
+  const cols = p.pitcher ? (full ? P_COLS : CARD_P) : (full ? H_COLS : CARD_H)
+  return (
+    <div className={`dr-pt${full ? ' full' : ''}`} style={{ '--n': cols.length } as CSSProperties}>
+      <div className="r hd"><span className="lb">期間</span>{cols.map((c) => <span key={c.key} className={`v${c.score ? ' sc' : ''}`}>{c.label}</span>)}</div>
+      {periods.map((x) => {
+        const s = p.byPeriod[x.key]
+        return (
+          <div key={x.key} className={`r${x.key === period ? ' cur' : ''}${s ? '' : ' none'}`}>
+            <span className="lb">{x.label}</span>
+            {cols.map((c) => <span key={c.key} className="v">{s ? c.fmt(c.get(s)) : '—'}</span>)}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function PlayerPanel({ p, board, period, inQ, onToggle, pickText, canPick, onPick, full }: {
+  p: BoardPlayer; board: DraftBoard; period: DraftPeriod; inQ: boolean; onToggle: () => void; pickText: string; canPick: boolean; onPick: () => void; full: boolean
 }) {
+  const { league } = useApp()
+  const teams = league?.teams ?? []
   const t = cpblTeam(p.cpblTeam)
   const tier = tierOf(p.rank)
+  const tk = p.taken
+  const tkTeam = tk ? teams.find((x) => x.id === tk.teamId) : undefined
+  const have = board.periods.filter((x) => p.byPeriod[x.key])
+  const colN = p.pitcher ? P_COLS.length : H_COLS.length
   return (
     <div className={`dr-card t-${tier}`}>
       <div className="in" style={{ background: `linear-gradient(165deg, ${t.bg}33 0%, ${t.bg}12 42%, transparent 72%), var(--surface)` }}>
@@ -563,15 +668,20 @@ function PlayerPanel({ p, basis, inQ, onToggle, pickText, canPick, onPick }: {
           <Medal rank={p.rank} jersey={p.jerseyNumber} team={p.cpblTeam} size={56} />
           <div>
             <div className="l1"><b>{p.name}</b><i style={{ background: t.bg, color: t.fg }}>{t.short}</i>{p.foreign && <i className="tag">洋</i>}</div>
-            <div className={`pos${p.fillsNeed ? ' need' : ''}`}>{p.eligible.join('・')}{p.fillsNeed ? '・補先發缺位' : ''}</div>
-            <div className="basis">{basis} · {keyLine(p)}</div>
+            <div className={`pos${p.fillsNeed && !tk ? ' need' : ''}`}>
+              {p.eligible.join('・')}{p.fillsNeed && !tk ? '・補先發缺位' : ''}
+              {tk && <span className="tk"><s style={{ background: tkTeam ? fantasyTeamColor(tkTeam.id, teams) : 'var(--silver)' }} />{tkTeam?.name}{tk.keeper || tk.pickNo == null ? '・Keeper' : '・已選走'}</span>}
+            </div>
           </div>
         </div>
-        <div className="stats">
-          {(p.pitcher ? PIT : HIT).map((c) => <div key={c}><small>{c}</small><b>{fmtStat(c, statOf(p.stats, c))}</b></div>)}
+        {full && <div className="ft"><span>完整數據・{colN} 項</span><span>左右滑動 ›</span></div>}
+        <StatTable p={p} periods={board.periods} period={period} full={full} />
+        <div className="ft">
+          <span>{have.length === 1 ? `開季前只有 ${have[0].label}・` : ''}金色為計分類別</span>
+          <Link to={`/players/${p.playerId}`}>看完整球員頁 ›</Link>
         </div>
         <div className="btns">
-          <button type="button" className={`q${inQ ? ' on' : ''}`} onClick={onToggle}>{inQ ? '★ 候選中' : '☆ 候選'}</button>
+          <button type="button" className={`q${inQ ? ' on' : ''}`} onClick={onToggle} disabled={!!tk}>{inQ ? '★ 候選中' : '☆ 候選'}</button>
           <button type="button" className={`p${canPick ? ' on' : ''}`} disabled={!canPick} onClick={onPick}>{pickText}</button>
         </div>
       </div>
@@ -605,7 +715,7 @@ function QueueList({ players, myTurn, onPick, onRemove }: { players: BoardPlayer
             <span className={`n${i === 0 ? ' first' : ''}`}>{i + 1}</span>
             <div className="m">
               <div className="l1"><b>{p.name}</b><i style={{ background: t.bg, color: t.fg }}>{t.short}</i></div>
-              <div className="l2">{p.position} · 排名 {p.rank ?? '–'} · {keyLine(p)}</div>
+              <div className="l2">{posLabel(p)} · 排名 {p.rank ?? '–'} · {keyLine(p)}</div>
             </div>
             <div className="a">
               {myTurn && <button type="button" className="dr-pick" onClick={() => onPick(p)}>選</button>}
@@ -682,7 +792,7 @@ function PickReveal({ rv, draft, onClose }: { rv: Reveal; draft: DraftView; onCl
   const t = cpblTeam(rv.pick.playerTeam)
   const tier = tierOf(p?.rank)
   const me = league?.teams.find((x) => x.id === rv.pick.teamId)
-  const stats = p ? (p.pitcher ? PIT : HIT).slice(0, 4).map((c) => `${fmtStat(c, statOf(p.stats, c))} ${c}`).join(' · ') : ''
+  const stats = p ? (p.pitcher ? SORT_P : SORT_H).slice(0, 4).map((c) => `${c.fmt(c.get(p.stats))} ${c.label}`).join(' · ') : ''
   return (
     <div className={`dr-rv ph${ph}`} onClick={() => ph >= 3 && onClose()} role="dialog" aria-label={`選中 ${rv.pick.playerName}`}>
       <div className="kick">{rv.pick.auto ? `時間到・自動選秀 · PICK ${label}` : `PICK ${label} · 第 ${rv.pick.pickNo} 順位`}</div>
@@ -893,7 +1003,12 @@ export default function DraftRoom({ draft, onChange }: { draft: DraftView; onCha
   const done = draft.status === 'COMPLETED'
   const myTurn = draft.status === 'IN_PROGRESS' && draft.currentTeamId === league?.myTeamId
   const queue = useDraftQueue(draft)
-  const board = useDraftBoard(draft)
+  const raw = useDraftBoard(draft)
+  // 數據期間：預設用後端建議的（上半季選秀前只有上一季）；選了但之後不可用就退回預設
+  const [periodWant, setPeriodWant] = useState<DraftPeriod | null>(null)
+  const period = periodWant && raw.data?.periods.some((x) => x.key === periodWant && (x.available || x.key === raw.data?.defaultPeriod)) ? periodWant : raw.data?.defaultPeriod ?? 'SEASON'
+  const boardData = useMemo(() => (raw.data ? withPeriod(raw.data, period) : null), [raw.data, period])
+  const board = { data: boardData, error: raw.error }
   const [sel, setSel] = useState<number | null>(null)
   const [tab, setTab] = useState<'avail' | 'queue' | 'board' | 'mine'>(done ? 'board' : 'avail')
   const [dtab, setDtab] = useState<'avail' | 'board'>(done ? 'board' : 'avail')
@@ -901,12 +1016,13 @@ export default function DraftRoom({ draft, onChange }: { draft: DraftView; onCha
   const [err, setErr] = useState<unknown>(null)
 
   const players = useMemo(() => board.data?.players ?? [], [board.data])
+  const openPlayers = useMemo(() => players.filter((p) => !p.taken), [players])
   const byId = useMemo(() => new Map(players.map((p) => [p.playerId, p])), [players])
-  const qPlayers = queue.ids.map((id) => byId.get(id)).filter((p): p is BoardPlayer => !!p)
+  const qPlayers = queue.ids.map((id) => byId.get(id)).filter((p): p is BoardPlayer => !!p && !p.taken)
   const myPicks = draftSlots(draft).filter((p) => p.teamId === league?.myTeamId && p.playerId).reverse()
   const nextMe = draftSlots(draft).find((p) => p.teamId === league?.myTeamId && p.pickNo >= draft.currentPickNo && !p.playerId)
   // 網頁版右欄預設顯示排名第一的可選球員（設計稿）；被選走就換下一位
-  const selP = (sel != null ? byId.get(sel) : undefined) ?? (wide ? players[0] : undefined)
+  const selP = (sel != null ? byId.get(sel) : undefined) ?? (wide ? openPlayers[0] : undefined)
 
   // 我的新選擇（自己選或時間到自動選）出現時播放選中動畫；剛進來時已有的不播。
   // 選中後球員已不在可選名單，數據從上一份名單找
@@ -936,11 +1052,11 @@ export default function DraftRoom({ draft, onChange }: { draft: DraftView; onCha
   const pickText = myTurn ? '選這位' : done ? '選秀已結束' : draft.status === 'PAUSED' ? '選秀暫停中' : draft.status !== 'IN_PROGRESS' ? '選秀尚未開始'
     : nextMe ? `還沒輪到你・再 ${nextMe.pickNo - draft.currentPickNo} 順位` : '你已選完'
   const panel = (p: BoardPlayer) => (
-    <PlayerPanel p={p} basis={board.data?.basis ?? ''} inQ={queue.ids.includes(p.playerId)} onToggle={() => queue.toggle(p.playerId)}
-      pickText={pickText} canPick={myTurn} onPick={() => pick(p)} />
+    board.data && <PlayerPanel p={p} board={board.data} period={period} inQ={queue.ids.includes(p.playerId)} onToggle={() => queue.toggle(p.playerId)}
+      pickText={p.taken ? '已被選走' : pickText} canPick={myTurn && !p.taken} onPick={() => pick(p)} full={!wide} />
   )
   const list = (
-    <PlayerList draft={draft} board={board.data ?? null} queue={queue} myTurn={myTurn} onPick={pick}
+    <PlayerList draft={draft} board={board.data} period={period} onPeriod={setPeriodWant} queue={queue} myTurn={myTurn} onPick={pick}
       selId={selP?.playerId ?? null} onSelect={(p) => setSel(p.playerId)} />
   )
   const needs = board.data && <Needs needs={board.data.needs} count={myPicks.length} rounds={draft.rounds} />
