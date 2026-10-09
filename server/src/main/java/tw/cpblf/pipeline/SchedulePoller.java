@@ -67,17 +67,17 @@ public class SchedulePoller {
     }
 
     record Existing(long id, LocalDate scheduledDate, LocalDate actualPlayDate, String status, boolean finalSeen,
-                    Instant startTime) {
+                    Instant startTime, boolean manual) {
     }
 
     void upsert(SourceGame g, String home, String away) {
         Existing ex = jdbc.sql("""
-                select id, scheduled_date, actual_play_date, status, final_seen_at is not null, start_time
+                select id, scheduled_date, actual_play_date, status, final_seen_at is not null, start_time, start_time_manual
                 from game where season_year = ? and kind_code = ? and game_sno = ?
                 """).params(g.year(), g.kindCode(), g.gameSno())
                 .query((rs, n) -> new Existing(rs.getLong(1), rs.getObject(2, LocalDate.class),
                         rs.getObject(3, LocalDate.class), rs.getString(4), rs.getBoolean(5),
-                        rs.getTimestamp(6) == null ? null : rs.getTimestamp(6).toInstant()))
+                        rs.getTimestamp(6) == null ? null : rs.getTimestamp(6).toInstant(), rs.getBoolean(7)))
                 .optional().orElse(null);
         Instant startAt = startTime(g, ex);
         GameStatus status = effectiveStatus(g, startAt);
@@ -131,6 +131,10 @@ public class SchedulePoller {
      * 改期或從未知道時，尚未結束的比賽用預設時間（平日 18:35、週末 17:05），讓即時輪詢能啟動。
      */
     Instant startTime(SourceGame g, Existing ex) {
+        // 系統管理員手動設定的時間永遠優先（官網的時間會偏移）
+        if (ex != null && ex.manual() && ex.startTime() != null) {
+            return ex.startTime();
+        }
         if (g.startTime() != null) {
             return g.startTime();
         }
