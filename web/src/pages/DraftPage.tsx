@@ -252,7 +252,7 @@ function DraftTools({ draft, call }: { draft: DraftView; call: (fn: () => Promis
         {(league?.teams ?? []).map((t) => {
           const on = draft.autopilotTeams.includes(t.id)
           return (
-            <button key={t.id} type="button" aria-pressed={on} className={on ? 'primary' : ''}
+            <button key={t.id} type="button" aria-pressed={on} className={`tg${on ? ' on' : ''}`}
               onClick={() => call(() => api.put(`${base}/autopilot`, { teamId: t.id, on: !on }))}>
               {t.name}・託管{on ? '開' : '關'}
             </button>

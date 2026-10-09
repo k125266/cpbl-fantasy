@@ -1472,6 +1472,9 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 .dr-sound { margin-left: auto; flex: none; display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 999px; border: 1px solid var(--line); background: none; color: var(--muted); font-size: 12px; font-weight: 400; white-space: nowrap; }
 /* 託管緊接在音效右邊（E18） */
 .dr-sound + .dr-auto { margin-left: 0; }
+/* 管理員的託管開關：小而細的切換鈕，開啟只用淡金邊，不用實心金色 */
+.tg { padding: 5px 12px; font-size: 13px; font-weight: 400; color: var(--muted); background: none; border: 1px solid var(--line); }
+.tg.on { color: var(--gold-hi); border-color: rgba(200,173,127,.38); background: rgba(200,173,127,.06); }
 .dr-sound.on { border-color: rgba(200,173,127,.26); background: none; color: var(--gold-hi); }
 .dr-banner { position: fixed; left: 16px; right: 16px; top: 54px; z-index: 60; max-width: 380px; margin: 0 auto; pointer-events: none; border-radius: 10px; padding: 1px; background: var(--metal-gold); box-shadow: 0 12px 30px rgba(0,0,0,.55); transform: translateY(-120px); opacity: 0; transition: transform .45s cubic-bezier(.2,.8,.2,1.2), opacity .3s; }
 .dr-banner.on { transform: none; opacity: 1; }
