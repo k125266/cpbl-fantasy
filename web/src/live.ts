@@ -19,5 +19,3 @@ export function outsOf(g: LiveGame): number | null {
   return Math.min(n, 3)
 }
 
-/** 官網賽事代碼的名稱（賽制在後端 application.yml 的 postseason-series） */
-export const KIND_NAME: Record<string, string> = { E: '季後挑戰賽', C: '台灣大賽' }
