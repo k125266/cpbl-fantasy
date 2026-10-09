@@ -71,7 +71,9 @@ public class PipelineScheduler {
 
     // ---- 週期型（兩種模式皆執行；各自只處理已到期項目）----
 
-    @Scheduled(fixedDelayString = "#{${cpblf.crawler.live-poll-interval-seconds} * 1000}", initialDelay = 30_000)
+    // fixedRate：開始時間固定對齊。fixedDelay 的週期是「間隔＋執行時間」，每分鐘多出約 0.5 秒，一小時會晚約 30 秒；
+    // 追趕式連續執行由 Pipeline.livePoll 的 PollThrottle 擋掉
+    @Scheduled(fixedRateString = "#{${cpblf.crawler.live-poll-interval-seconds} * 1000}", initialDelay = 30_000)
     void live() {
         pipeline.livePoll();
     }
