@@ -1,17 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useApp } from './App'
 
-/** 是否為網頁版版面（≥ 1024px）。 */
-export function useWide() {
-  const q = '(min-width: 1024px)'
-  const [wide, setWide] = useState(() => window.matchMedia(q).matches)
+function useMedia(q: string) {
+  const [on, setOn] = useState(() => window.matchMedia(q).matches)
   useEffect(() => {
     const m = window.matchMedia(q)
-    const f = () => setWide(m.matches)
+    const f = () => setOn(m.matches)
     m.addEventListener('change', f)
     return () => m.removeEventListener('change', f)
-  }, [])
-  return wide
+  }, [q])
+  return on
+}
+
+/** 是否為網頁版版面（≥ 1024px）。 */
+export function useWide() {
+  return useMedia('(min-width: 1024px)')
+}
+
+/** 是否為寬螢幕網頁版（≥ 1680px，設計稿「1680 以上多一欄」；選秀三頁在這個寬度換成三欄版面）。 */
+export function useXWide() {
+  return useMedia('(min-width: 1680px)')
 }
 
 /**
