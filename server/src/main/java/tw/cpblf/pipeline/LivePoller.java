@@ -3,10 +3,12 @@ package tw.cpblf.pipeline;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -33,6 +35,14 @@ public class LivePoller {
     static final Duration BEFORE_START = Duration.ofMinutes(15);
     static final Duration MAX_GAME_LENGTH = Duration.ofHours(5);
     static final Duration SCHEDULE_REFRESH = Duration.ofMinutes(10);
+    /**
+     * 比賽日（E26）：官網的開賽時間有時不準（2026-10-09 季後賽第 1 戰顯示 01:05，實際 17:05），所以不能只靠表定開賽時間。
+     * 當天還沒結束的比賽從 12:00 起就納入，離表定開賽還早於 BEFORE_START 的那段「早期」每場每 EARLY_INTERVAL 才看一次比賽頁
+     * （只確認開打了沒）；進行中的比賽到 FINAL 為止都輪詢（安全上限 MAX_IN_PROGRESS）。非比賽日一次都不抓。
+     */
+    static final LocalTime DAY_START = LocalTime.of(12, 0);
+    static final Duration EARLY_INTERVAL = Duration.ofMinutes(10);
+    static final Duration MAX_IN_PROGRESS = Duration.ofHours(12);
 
     private final CpblDataSource source;
     private final JdbcClient jdbc;
@@ -42,6 +52,7 @@ public class LivePoller {
     private final SchedulePoller schedulePoller;
     private final TransactionTemplate tx;
     private volatile Instant lastScheduleRefresh = Instant.EPOCH;
+    private final Map<Long, Instant> lastEarlyCheck = new ConcurrentHashMap<>();
 
     public LivePoller(CpblDataSource source, JdbcClient jdbc, AppClock clock, AppProperties props, BoxScoreMapper mapper,
                       SchedulePoller schedulePoller, TransactionTemplate tx) {
@@ -65,15 +76,19 @@ public class LivePoller {
      */
     public List<LiveGame> gamesInWindow() {
         Instant now = clock.now();
+        Instant dayStart = clock.today().atTime(DAY_START).atZone(clock.zone()).toInstant();
         return jdbc.sql("""
                 select id, season_year, kind_code, game_sno, home_team_code, away_team_code from game
-                where start_time is not null and start_time <= ? and start_time > ?
+                where ((start_time is not null and start_time <= ? and start_time > ?)
+                       or (play_date = ? and cast(? as boolean))
+                       or (status = 'IN_PROGRESS' and start_time is not null and start_time > ?))
                   and (status in ('SCHEDULED', 'IN_PROGRESS')
                        or (status = 'FINAL' and kind_code <> ? and final_seen_at is not null
                            and not exists (select 1 from live_game lg
                                            where lg.game_id = game.id and lg.fetched_at >= game.final_seen_at)))
                 order by game_sno
-                """).params(Timestamp.from(now.plus(BEFORE_START)), Timestamp.from(now.minus(MAX_GAME_LENGTH)), props.kindCode())
+                """).params(Timestamp.from(now.plus(BEFORE_START)), Timestamp.from(now.minus(MAX_GAME_LENGTH)),
+                        clock.today(), !now.isBefore(dayStart), Timestamp.from(now.minus(MAX_IN_PROGRESS)), props.kindCode())
                 .query((rs, n) -> new LiveGame(rs.getLong(1), rs.getInt(2), rs.getString(3), rs.getInt(4), rs.getString(5),
                         rs.getString(6)))
                 .list();
@@ -84,21 +99,30 @@ public class LivePoller {
         if (games.isEmpty()) {
             return;
         }
-        // 偵測比賽結束需要賽程狀態；比賽時段內每 10 分鐘更新一次
-        if (Duration.between(lastScheduleRefresh, clock.now()).compareTo(SCHEDULE_REFRESH) >= 0) {
+        Instant checkAt = clock.now();
+        // 偵測比賽結束需要賽程狀態；比賽時段內每 10 分鐘更新一次（只有「早期」的比賽時不更新，賽程更新要逐場讀比賽頁，太花請求）
+        boolean anyNear = games.stream().anyMatch(g -> !isEarly(g.id(), checkAt));
+        if (anyNear && Duration.between(lastScheduleRefresh, checkAt).compareTo(SCHEDULE_REFRESH) >= 0) {
             schedulePoller.poll(ctx);
             lastScheduleRefresh = clock.now();
             games = gamesInWindow();
         }
         Instant now = clock.now();
         for (LiveGame g : games) {
-            if (now.isBefore(startTime(g.id()))) {
-                continue;
+            if (isEarly(g.id(), now)) {
+                Instant last = lastEarlyCheck.get(g.id());
+                // 時鐘往回跳（demo、測試）時不當作「剛檢查過」
+                Duration since = last == null ? null : Duration.between(last, now);
+                if (since != null && !since.isNegative() && since.compareTo(EARLY_INTERVAL) < 0) {
+                    continue;
+                }
+                lastEarlyCheck.put(g.id(), now);
             }
             BoxScore box = source.fetchBoxScore(g.year(), g.kind(), g.sno());
             if (box.batters().isEmpty() && box.pitchers().isEmpty()) {
                 continue;
             }
+            learnStart(g.id(), box, now);
             Map<Long, StatRow> rows = mapper.map(box, g.home(), g.away());
             tx.executeWithoutResult(s -> {
                 write(g, box, rows, now);
@@ -117,7 +141,25 @@ public class LivePoller {
     }
 
     private Instant startTime(long gameId) {
-        return jdbc.sql("select start_time from game where id = ?").param(gameId).query(Timestamp.class).single().toInstant();
+        Timestamp t = jdbc.sql("select start_time from game where id = ?").param(gameId).query(Timestamp.class).optional().orElse(null);
+        return t == null ? null : t.toInstant();
+    }
+
+    /** 離表定開賽還早於 BEFORE_START（或沒有表定時間）：表定時間可能不準，只低頻確認。 */
+    private boolean isEarly(long gameId, Instant now) {
+        Instant start = startTime(gameId);
+        return start == null || now.isBefore(start.minus(BEFORE_START));
+    }
+
+    /** 比賽頁顯示已開打，但表定開賽時間還沒到：表定時間不準，把實際開賽時間記下來（頁面「幾點開打」也跟著對）。 */
+    private void learnStart(long gameId, BoxScore box, Instant now) {
+        if (box.status() != GameStatus.IN_PROGRESS && box.status() != GameStatus.FINAL) {
+            return;
+        }
+        jdbc.sql("""
+                update game set start_time = ?, status = case when status = 'SCHEDULED' then 'IN_PROGRESS' else status end
+                where id = ? and (start_time is null or start_time > ?)
+                """).params(Timestamp.from(now), gameId, Timestamp.from(now)).update();
     }
 
     private void write(LiveGame g, BoxScore box, Map<Long, StatRow> rows, Instant now) {
