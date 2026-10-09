@@ -2363,6 +2363,15 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 /* 自動更新失敗的提示 */
 .pv-refresh em.bad, .lv .upd em.bad { font-style: normal; color: var(--bad); }
 
+/* 選秀室篩選區對齊：搜尋、下拉、顯示已選垂直置中；晶片列與底線之間留空 */
+.dr-list .tools { align-items: center; }
+.dr-list .tools > * { align-self: center; margin-block: 0; }
+.dr-list .search input, .dr-list .per { height: 38px; box-sizing: border-box; }
+.dr-list .chips { padding-bottom: 14px; }
+@media (min-width: 1024px) {
+  .dr-list .chips { margin-top: 14px; padding-bottom: 14px; border-bottom: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
