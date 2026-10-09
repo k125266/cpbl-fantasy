@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { api, type LeagueDetail, type Membership, type Notification, type SystemInfo, type User } from './api'
+import { api, type LeagueDetail, type Membership, type SystemInfo, type User } from './api'
 import { Footer, ICONS, Loading } from './components'
 import TeamPage from './pages/TeamPage'
 import MatchupPage from './pages/MatchupPage'
@@ -16,6 +16,7 @@ import AdminPage from './pages/AdminPage'
 import PrivacyPage from './pages/PrivacyPage'
 import NotificationsPage from './pages/NotificationsPage'
 import OnboardingPage from './pages/OnboardingPage'
+import { demoNote, useUnread, WebNav } from './WebNav'
 
 interface Ctx {
   user: User
@@ -41,9 +42,10 @@ export default function App() {
   const [memberships, setMemberships] = useState<Membership[] | null>(null)
   const [league, setLeague] = useState<LeagueDetail | null>(null)
   const navigate = useNavigate()
-  // 即時比分、選秀在寬螢幕是多欄版面，外框放寬（其他頁面維持 480px）
+  // 即時比分、季後賽在寬螢幕是多欄版面，外框放寬到 1280；選秀（app-draft）填滿視窗；其他頁面維持 480px
   const { pathname } = useLocation()
-  const widePage = pathname === '/live' || pathname === '/postseason' || pathname.startsWith('/draft')
+  const widePage = pathname === '/live' || pathname === '/postseason'
+  const draftPage = pathname.startsWith('/draft')
 
   const reloadSystem = useCallback(() => {
     api.get<SystemInfo>('/api/system').then(setSystem).catch(() => setSystem(null))
@@ -117,7 +119,8 @@ export default function App() {
 
   return (
     <AppContext.Provider value={{ user, system, leagueId, league, reloadLeague, reloadSystem, logout }}>
-      <div className={`app${widePage ? ' app-wide' : ''}`}>
+      <WebNav />
+      <div className={`app has-wn${widePage ? ' app-wide' : ''}${draftPage ? ' app-draft' : ''}`}>
         <LeagueTopBar />
         {!league ? <Loading /> : (
           <Routes>
@@ -152,10 +155,7 @@ function LeagueTopBar() {
   const { league, leagueId, system } = useApp()
   const location = useLocation()
   const navigate = useNavigate()
-  const [unread, setUnread] = useState(0)
-  useEffect(() => {
-    api.get<Notification[]>(`/api/leagues/${leagueId}/notifications`).then((ns) => setUnread(ns.filter((n) => !n.read).length)).catch(() => {})
-  }, [leagueId, location.pathname])
+  const unread = useUnread(leagueId)
   const p = league?.currentPeriod
   const sub = p ? (p.kind === 'FINAL' ? '總冠軍賽' : `${p.halfNo === 1 ? '上' : '下'}半季 第 ${p.periodNo} 期`) : 'H2H 類別'
   const isRoot = ['/', '/matchups', '/players', '/draft', '/league'].includes(location.pathname)
@@ -165,8 +165,7 @@ function LeagueTopBar() {
       subtitle={`H2H 類別・${sub}`}
       left={isRoot ? undefined : <button type="button" className="round" aria-label="返回" onClick={() => navigate(-1)}>{ICONS.back}</button>}
       right={<button type="button" className="round" aria-label="通知" onClick={() => navigate('/notifications')}>{ICONS.bell}{unread > 0 && <span className="dot" />}</button>}
-      demo={system?.demo ? `Demo 模式・模擬賽季（虛構球員）・模擬時間 ${system.now.slice(5, 16).replace('T', ' ')}`
-        : system?.source === 'replay' ? `重播模式・${system.seasonYear} 真實球季・重播時間 ${system.now.slice(5, 16).replace('T', ' ')}` : undefined}
+      demo={demoNote(system)}
     />
   )
 }

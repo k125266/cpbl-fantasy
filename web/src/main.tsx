@@ -5,6 +5,9 @@ import App from './App'
 import { ConfirmProvider } from './Confirm'
 import './styles.css'
 
+// 手機版不讓使用者縮放：meta 的 user-scalable=no 在 iOS Safari 會被忽略，所以再擋掉捏合手勢
+document.addEventListener('gesturestart', (e) => e.preventDefault())
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
