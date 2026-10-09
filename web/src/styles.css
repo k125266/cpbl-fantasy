@@ -2296,12 +2296,22 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   /* 網頁版外框：導覽列取代手機版標題列與底部選單；選秀頁填滿視窗 */
   .app.has-wn .topbar, .app.has-wn .dock { display: none; }
   .app.has-wn { padding-bottom: 40px; }
+  .app.has-wn:not(.app-draft) { padding-top: 16px; }
   .app.app-draft { max-width: 2560px; padding-inline: 24px; }
   .dr-right { top: 68px; }
 }
 @media (min-width: 1680px) {
   .wn-in { padding: 0 32px; }
   .app.app-draft { padding-inline: 32px; }
+}
+
+/* 選秀室 ≥1680：右欄拆成兩欄（球員卡＋缺位｜候選與我的陣容），球員表維持和 1440 相近的寬度 */
+@media (min-width: 1680px) {
+  .dr-main { grid-template-columns: minmax(0, 1fr) 744px; }
+  .dr-row, .dr-row.rec { grid-template-columns: 40px 40px minmax(150px, 1fr) repeat(var(--n), minmax(34px, 64px)) 56px; }
+  .dr-right { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+  .dr-right > :not(.dr-box) { grid-column: 1; }
+  .dr-right > .dr-box { grid-column: 2; grid-row: 1 / span 2; align-self: stretch; }
 }
 
 @media (prefers-reduced-motion: reduce) {
