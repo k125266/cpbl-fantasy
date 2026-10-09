@@ -299,11 +299,12 @@ public final class StatsSiteParsers {
     /**
      * 賽程列表頁（/schedule）上尚未開打的比賽的開賽時間，key 為「年-類別-編號」。
      * 列表依日期分組（「10月7日,星期三」），每場以「GAME274未開始」開頭、「[成績看板](/schedule/…)」結尾，
-     * 未開打的會顯示時間。網站顯示的日期時間比實際晚 8 小時，以 {@link GameTimes#fromSiteDisplay} 換算。
-     * 延賽的那一筆（原定日期）略過，以補賽日那筆為準。頁首的今日賽事區塊沒有日期標題，不採用。
+     * 未開打的會顯示時間。回傳的是網站顯示的時間（比實際晚 8 小時），日期要用比賽頁的日期，
+     * 由 {@link GameTimes#fromSiteTime} 一起換算。延賽的那一筆（原定日期）略過，以補賽日那筆為準。
+     * 頁首的今日賽事區塊沒有日期標題，不採用。
      */
-    public static java.util.Map<String, java.time.Instant> parseScheduleTimes(String md) {
-        java.util.Map<String, java.time.Instant> out = new java.util.HashMap<>();
+    public static java.util.Map<String, java.time.LocalTime> parseScheduleTimes(String md) {
+        java.util.Map<String, java.time.LocalTime> out = new java.util.HashMap<>();
         Integer month = null, day = null;
         String status = null;
         java.time.LocalTime time = null;
@@ -332,7 +333,7 @@ public final class StatsSiteParsers {
                 if (month != null && day != null && time != null && status != null && !status.contains("延賽")) {
                     int year = Integer.parseInt(k.group(1));
                     String key = year + "-" + k.group(2) + "-" + k.group(3);
-                    GameTimes.fromSiteDisplay(java.time.LocalDate.of(year, month, day), time).ifPresent(at -> out.put(key, at));
+                    out.put(key, time);
                 }
                 status = null;
                 time = null;
