@@ -45,6 +45,7 @@ public class Pipeline {
     private final WeeklyMvpService weeklyMvp;
     private final SeasonArchiver archiver;
     private final ReferenceSeason reference;
+    private final PollThrottle liveThrottle;
 
     public Pipeline(JobRunner runner, SchedulePoller schedule, RegistrationSync registration, SettlementJob settlement,
                     LivePoller live, MatchupService matchups, RosterService roster, WaiverService waivers, TradeService trades,
@@ -52,6 +53,7 @@ public class Pipeline {
                     AppClock clock, AppProperties props, WeeklyMvpService weeklyMvp, SeasonArchiver archiver,
                     ReferenceSeason reference) {
         this.weeklyMvp = weeklyMvp;
+        this.liveThrottle = new PollThrottle(java.time.Duration.ofSeconds(Math.max(1, live.intervalSeconds() - 5)));
         this.reference = reference;
         this.archiver = archiver;
         this.runner = runner;
@@ -104,6 +106,9 @@ public class Pipeline {
     public void livePoll() {
         if (live.gamesInWindow().isEmpty()) {
             // 非比賽時段：不發請求、不寫紀錄
+            return;
+        }
+        if (!liveThrottle.tryStart(System.nanoTime())) {
             return;
         }
         runner.run(LivePoller.JOB, live::poll);
