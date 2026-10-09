@@ -598,7 +598,10 @@ function BoardPanel({ draft, byId, selId, onSelect }: { draft: DraftView; byId: 
   const { league } = useApp()
   const posOf = useContext(PosContext)
   const teams = league?.teams ?? []
-  const n = draft.order.length || 1
+  // 順位還沒揭曉時先用聯盟隊伍排出空板，不要留一片空白
+  const ordered = draft.order.length > 0
+  const order = ordered ? draft.order : teams.map((t) => t.id)
+  const n = order.length || 1
   const slots = draftSlots(draft)
   const at = new Map(slots.map((p) => [`${p.round}-${p.teamId}`, p]))
   const live = draft.status === 'IN_PROGRESS'
@@ -614,10 +617,10 @@ function BoardPanel({ draft, byId, selId, onSelect }: { draft: DraftView; byId: 
   const cols = { gridTemplateColumns: `34px repeat(${n}, minmax(0, 1fr))` }
   return (
     <div className="dr-bd">
-      <div className="bh"><span>DRAFT BOARD · 選秀板</span><em>{draft.snake ? '蛇形' : '每輪同順序'}・點格子看球員</em></div>
+      <div className="bh"><span>DRAFT BOARD · 選秀板</span><em>{ordered ? `${draft.snake ? '蛇形' : '每輪同順序'}・點格子看球員` : '順位揭曉後排入'}</em></div>
       <div className="bt" style={cols}>
         <span />
-        {draft.order.map((id) => {
+        {order.map((id) => {
           const t = teams.find((x) => x.id === id)
           return (
             <div key={id} className={id === mineId ? 'me' : ''}>
@@ -634,7 +637,7 @@ function BoardPanel({ draft, byId, selId, onSelect }: { draft: DraftView; byId: 
           return (
             <div key={r} className="r" style={cols}>
               <div className="rn">R{r}<span>{back ? '←' : '→'}</span></div>
-              {draft.order.map((id) => {
+              {order.map((id) => {
                 const p = at.get(`${r}-${id}`)
                 const isCur = live && p?.pickNo === draft.currentPickNo
                 const me = id === mineId

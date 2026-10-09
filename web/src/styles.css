@@ -2374,9 +2374,12 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .dr-x.mine::before { background: rgb(200 173 127 / .16); }
   .dr-x > * { flex: none; }
   .dr-x > .dr-main-x { flex: 1; min-height: 0; }
-  .dr-main-x { display: grid; grid-template-columns: minmax(0, 1fr) 440px 360px; grid-template-rows: minmax(0, 1fr); gap: 16px; align-items: stretch; }
+  .dr-main-x { display: grid; grid-template-columns: minmax(0, 1fr) 520px 360px; grid-template-rows: minmax(0, 1fr); gap: 16px; align-items: stretch; }
   .dr-main-x > .dr-left, .dr-main-x > .dr-right { min-height: 0; }
-  .dr-main-x > .dr-right { position: static; overflow-y: auto; scrollbar-width: thin; }
+  .dr-main-x > .dr-right { position: static; display: flex; flex-direction: column; overflow-y: auto; scrollbar-width: thin; }
+  .dr-main-x > .dr-right > * { flex: none; }
+  .dr-main-x > .dr-right > .dr-box { flex: 1 1 auto; min-height: 170px; max-height: none; }
+  .dr-main-x > .dr-right .dr-card > .in { gap: 9px; padding: 11px 16px 12px; }
 
   /* 球員表：欄內捲動，頁碼與說明在底下 */
   .dr-list.x { height: 100%; min-height: 0; display: flex; flex-direction: column; }
@@ -2396,6 +2399,11 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .dr-list.x .rows .dr-row { height: 42px; }
   .dr-list.x .dr-row .l1 b { font-size: 16px; }
   .dr-list.x .rows .dr-row > .v { font-size: 17px; }
+  /* 球員名、球隊、守位排同一行，中間不要擠成兩層 */
+  .dr-list.x .rows .dr-row .nm { flex-direction: row; align-items: center; gap: 12px; }
+  .dr-list.x .rows .dr-row .l2 { margin-top: 0; gap: 10px; }
+  .dr-list.x .rows .dr-row .l2 .tc { font-size: 11px; padding: 0 4px; line-height: 16px; }
+  .dr-list.x .rows .dr-row .l2 em { font-size: 13px; }
   .dr-list.x .dr-row.hd .v { font-size: 11px; }
   .dr-list.x .dr-row.hd .v b { font-size: 11px; font-weight: 600; }
   .dr-list.x .dr-row { grid-template-columns: 40px 40px minmax(150px, 1fr) repeat(var(--n), minmax(40px, 60px)) 60px; }
@@ -2419,10 +2427,10 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .dr-bd .bt small { font-size: 10.5px; font-weight: 400; color: #b9c3ff; }
   .dr-bd .bt span { display: block; margin-top: 1px; font: 500 11.5px var(--font-mix); color: var(--silver-lo); white-space: nowrap; }
   .dr-bd .br { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 12px; display: flex; flex-direction: column; gap: 4px; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
-  .dr-bd .r { flex: none; display: grid; gap: 4px; }
+  .dr-bd .r { flex: 1 0 48px; max-height: 84px; display: grid; gap: 4px; }
   .dr-bd .rn { display: flex; flex-direction: column; align-items: center; justify-content: center; font: 600 13px/1.1 var(--font-num); color: var(--muted); }
   .dr-bd .rn span { font-size: 12px; color: #4a505c; }
-  .dr-bd .c { height: 44px; box-sizing: border-box; min-width: 0; border-radius: 6px; padding: 5px 7px 4px; background: rgb(24 27 33 / .5); box-shadow: inset 0 0 0 1px #23272f; display: flex; flex-direction: column; justify-content: space-between; }
+  .dr-bd .c { min-height: 48px; box-sizing: border-box; min-width: 0; border-radius: 6px; padding: 5px 7px 4px; background: rgb(24 27 33 / .5); box-shadow: inset 0 0 0 1px #23272f; display: flex; flex-direction: column; justify-content: space-between; }
   .dr-bd .c.me { background: rgb(123 140 255 / .07); }
   .dr-bd .c.done { background: rgb(24 27 33 / .9); box-shadow: inset 0 0 0 1px var(--line-2); cursor: pointer; }
   .dr-bd .c.done.me { background: rgb(123 140 255 / .12); }
@@ -2436,7 +2444,14 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .dr-bd .ft .ps { color: var(--silver); }
   .dr-bd .ft .tn { display: none; }
   .dr-bd .ft .no { margin-left: auto; }
-  .dr-bd .ft .no.w { margin-left: 0; color: #4a505c; }
+  .dr-bd .ft .no.w { margin-left: 0; font-size: 12.5px; color: #6b7380; }
+  /* 還沒選的格子：標籤置中，不要一片黑；我的欄位淡藍並寫「你」 */
+  .dr-bd .c:not(.done) { align-items: center; justify-content: center; gap: 1px; background: rgb(24 27 33 / .35); box-shadow: inset 0 0 0 1px #20242c; }
+  .dr-bd .c:not(.done).me { background: rgb(123 140 255 / .06); box-shadow: inset 0 0 0 1px rgb(123 140 255 / .18); }
+  .dr-bd .c:not(.done) .nm:empty { display: none; }
+  .dr-bd .c:not(.done).me .nm { font-size: 12.5px; color: #b9c3ff; }
+  .dr-bd .c:not(.done):not(.cur) .ft { justify-content: center; }
+  .dr-bd .c.cur .nm { font-size: 14px; }
 }
 /* 2560：球員表最寬 1280、右欄 360，剩下的寬度都給選秀板；格子多放中職隊簡稱 */
 @media (min-width: 2200px) {
