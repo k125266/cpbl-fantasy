@@ -2344,6 +2344,22 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .dr-row, .dr-row.rec { grid-template-columns: 40px 40px minmax(150px, 1fr) repeat(var(--n), minmax(40px, 66px)) 60px; }
 }
 
+/* 選秀室球員表表頭：兩排表頭別擠在一起（使用者 2026-10-09 回報） */
+@media (min-width: 1024px) {
+  .dr-row.hd { height: 48px; padding-top: 6px; padding-bottom: 6px; align-items: end; font-size: 12.5px; letter-spacing: .06em; }
+  .dr-row.hd.two { height: 68px; padding-top: 10px; padding-bottom: 10px; }
+  .dr-row.hd > span, .dr-row.hd > button { line-height: 1.2; }
+  .dr-row.hd .v { gap: 7px; }
+  .dr-row.hd.two .v.sc { padding-bottom: 8px; }
+  .dr-row.hd button.v { padding-bottom: 6px; }
+  .dr-list .chips { margin-bottom: 12px; }
+  .dr-list .legend { flex: none; }
+  .dr-list .legend em { display: none; }
+}
+@media (min-width: 1360px) {
+  .dr-list .legend em { display: inline; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
