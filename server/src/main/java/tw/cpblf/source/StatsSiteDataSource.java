@@ -53,11 +53,13 @@ public class StatsSiteDataSource implements CpblDataSource {
     @Override
     public List<SourceGame> fetchSchedule(int year, String kindCode) {
         String sitemap = http.get(baseUrl + "/sitemap.xml");
-        Map<String, java.time.Instant> times = StatsSiteParsers.parseScheduleTimes(markdown("/schedule"));
+        Map<String, java.time.LocalTime> times = StatsSiteParsers.parseScheduleTimes(markdown("/schedule"));
         List<SourceGame> out = new java.util.ArrayList<>();
         for (int sno : StatsSiteParsers.parseSitemapGames(sitemap, year, kindCode)) {
             SourceGame g = gamePage(year, kindCode, sno).game();
-            java.time.Instant start = times.get(year + "-" + kindCode + "-" + sno);
+            java.time.LocalTime shown = times.get(year + "-" + kindCode + "-" + sno);
+            // 列表只信時間，日期用比賽頁的（GameTimes.fromSiteTime）；換算不合理就當作沒有時間
+            java.time.Instant start = shown == null ? null : GameTimes.fromSiteTime(g.date(), shown).orElse(null);
             out.add(new SourceGame(g.year(), g.kindCode(), g.gameSno(), g.date(), start, g.homeTeamName(), g.awayTeamName(),
                     g.status(), g.homeScore(), g.awayScore()));
         }

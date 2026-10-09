@@ -108,18 +108,21 @@ class StatsSiteLiveParsersTest {
     @Test
     void scheduleListGivesStartTimesShiftedBackEightHours() throws IOException {
         var times = StatsSiteParsers.parseScheduleTimes(fixture("schedule-2026-10-05.md"));
-        // 補賽 A-274：列表顯示「10月7日 02:35」（延賽那筆在 10月6日，略過），實際為 10/6 18:35
-        assertThat(times).containsEntry("2026-A-274", OffsetDateTime.parse("2026-10-06T18:35:00+08:00").toInstant());
+        // 補賽 A-274：列表顯示「10月7日 02:35」（延賽那筆在 10月6日，略過）；只取顯示的時間，日期用比賽頁的（實際 10/6）
+        assertThat(times).containsEntry("2026-A-274", LocalTime.of(2, 35));
+        assertThat(GameTimes.fromSiteTime(LocalDate.of(2026, 10, 6), times.get("2026-A-274")))
+                .contains(OffsetDateTime.parse("2026-10-06T18:35:00+08:00").toInstant());
         // 已結束、進行中的比賽列表上沒有時間
         assertThat(times).doesNotContainKey("2026-A-14").doesNotContainKey("2026-A-251");
     }
 
     @Test
     void siteTimeOutsideTheUsualWindowIsRejected() {
-        assertThat(GameTimes.fromSiteDisplay(LocalDate.of(2026, 10, 6), LocalTime.of(1, 5)))
-                .contains(OffsetDateTime.parse("2026-10-05T17:05:00+08:00").toInstant());
+        // 季後挑戰賽第 1 戰（2026-10-09）：顯示 01:05，實際 17:05；日期取比賽頁的 10/9
+        assertThat(GameTimes.fromSiteTime(LocalDate.of(2026, 10, 9), LocalTime.of(1, 5)))
+                .contains(OffsetDateTime.parse("2026-10-09T17:05:00+08:00").toInstant());
         // 換算後 07:00，不像職棒開賽時間：視為換算規則失效
-        assertThat(GameTimes.fromSiteDisplay(LocalDate.of(2026, 10, 6), LocalTime.of(15, 0))).isEmpty();
+        assertThat(GameTimes.fromSiteTime(LocalDate.of(2026, 10, 6), LocalTime.of(15, 0))).isEmpty();
     }
 
     @Test
