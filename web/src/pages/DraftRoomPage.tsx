@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import confetti from 'canvas-confetti'
 import { useApp } from '../App'
@@ -86,6 +86,7 @@ const CUE_TITLE: Record<Cue, string> = { soon: '⏳ 再 2 手輪到你', next: '
 
 /** 計時票根、標題、上一個選擇與接下來的順位橫條。 */
 export function RoomHeader({ draft, queueLen = 0, onReport, onChange }: { draft: DraftView; queueLen?: number; onReport?: () => void; onChange?: () => void }) {
+  const posOf = useContext(PosContext)
   const { leagueId, league, system } = useApp()
   // 託管（E18）：輪到就在 3 秒內照候選 → 補缺位 → 排名自動選
   const auto = (id: number | null | undefined) => id != null && draft.autopilotTeams.includes(id)
@@ -233,7 +234,7 @@ export function RoomHeader({ draft, queueLen = 0, onReport, onChange }: { draft:
         </div>
         <div className="dr-last">
           <span className="eb">LAST PICK</span>
-          {last ? <><i style={{ background: color(last.teamId) }} /><span>{pickLabel(last.pickNo, n)} {short(last.teamId)} → {last.playerName}{last.playerPosition ? `（${last.playerPosition}）` : ''}{last.auto ? '・自動' : ''}</span></> : <span>—</span>}
+          {last ? <><i style={{ background: color(last.teamId) }} /><span>{pickLabel(last.pickNo, n)} {short(last.teamId)} → {last.playerName}{last.playerPosition ? `（${posOf(last.playerId, last.playerPosition)}）` : ''}{last.auto ? '・自動' : ''}</span></> : <span>—</span>}
         </div>
         <div className="dr-strip">
           {strip.map((p) => {
@@ -352,6 +353,9 @@ function withPeriod(b: ApiDraftBoard, period: DraftPeriod): DraftBoard {
 }
 
 const isSp = (p: BoardPlayer) => p.eligible.includes('SP')
+
+/** 選秀紀錄（選秀板、我的陣容、選中動畫、結束畫面）存的是登記守位（投手是 P）；由選秀室提供球員的 SP／RP，查不到就用登記守位 */
+const PosContext = createContext<(playerId: number | null | undefined, fallback: string | null | undefined) => string>((_, f) => f ?? '')
 
 /** 守位：投手顯示可擔任的先發／後援（SP、RP 或 SP/RP），打者用登記守位 */
 const posLabel = (p: BoardPlayer) => {
@@ -572,6 +576,7 @@ export function PlayerList({ draft, board, period, onPeriod, queue, myTurn, onPi
 // ------------------------------------------------------------------
 
 export function DraftGrid({ draft }: { draft: DraftView }) {
+  const posOf = useContext(PosContext)
   const { league } = useApp()
   const wide = useWide()
   const teams = league?.teams ?? []
@@ -606,7 +611,7 @@ export function DraftGrid({ draft }: { draft: DraftView }) {
                 <div key={id} className={`c${p?.playerId ? ' done' : ''}${cur ? ' cur' : ''}${id === league?.myTeamId ? ' me' : ''}`}>
                   <span className="nm">{p?.playerName ?? (cur ? '選擇中' : '')}</span>
                   <span className="ft">
-                    <span>{p?.playerPosition ?? ''}</span>
+                    <span>{p ? posOf(p.playerId, p.playerPosition) : ''}</span>
                     {wide && t && <i style={{ background: t.bg, color: t.fg }}>{t.short}</i>}
                     {p?.auto && <em>自動</em>}
                     <span className="no">{p ? pickLabel(p.pickNo, n) : ''}</span>
@@ -732,6 +737,7 @@ function QueueList({ players, myTurn, onPick, onRemove }: { players: BoardPlayer
 }
 
 function MyRoster({ draft, picks }: { draft: DraftView; picks: DraftPick[] }) {
+  const posOf = useContext(PosContext)
   const n = draft.order.length || 1
   return (
     <div className="dr-side-list">
@@ -742,7 +748,7 @@ function MyRoster({ draft, picks }: { draft: DraftView; picks: DraftPick[] }) {
             <span className="lb">{pickLabel(p.pickNo, n)}</span>
             <div className="m">
               <div className="l1"><b>{p.playerName}</b><i style={{ background: t.bg, color: t.fg }}>{t.short}</i></div>
-              <div className="l2">{p.playerPosition ?? ''}{p.auto ? '・自動選' : ''}</div>
+              <div className="l2">{posOf(p.playerId, p.playerPosition)}{p.auto ? '・自動選' : ''}</div>
             </div>
           </div>
         )
@@ -778,6 +784,7 @@ function boom() {
 }
 
 function PickReveal({ rv, draft, onClose }: { rv: Reveal; draft: DraftView; onClose: () => void }) {
+  const posOf = useContext(PosContext)
   const { league, system } = useApp()
   const [ph, setPh] = useState(0)
   useEffect(() => {
@@ -809,7 +816,7 @@ function PickReveal({ rv, draft, onClose }: { rv: Reveal; draft: DraftView; onCl
           </div>
           <div className={`face front t-${tier}`}>
             <div className="in" style={{ background: `linear-gradient(165deg, ${t.bg}33 0%, ${t.bg}12 42%, transparent 72%), var(--surface)` }}>
-              <div className="r1"><span>{rv.pick.playerPosition ?? ''}</span><i style={{ background: t.bg, color: t.fg }}>{t.short}</i></div>
+              <div className="r1"><span>{posOf(rv.pick.playerId, rv.pick.playerPosition)}</span><i style={{ background: t.bg, color: t.fg }}>{t.short}</i></div>
               <div className="num"><b>{rv.pick.playerJersey ?? '–'}</b><span>{TIER_LABEL[tier]}</span></div>
               <div className="nm">{rv.pick.playerName}</div>
               <div className="ln">{p ? keyLine(p) : '—'}</div>
@@ -955,6 +962,7 @@ function DraftReportView({ draft, onClose }: { draft: DraftView; onClose: () => 
 // ------------------------------------------------------------------
 
 function DraftFinish({ draft, mine, onReport, onClose }: { draft: DraftView; mine: DraftPick[]; onReport: () => void; onClose: () => void }) {
+  const posOf = useContext(PosContext)
   const { leagueId, league, system } = useApp()
   const r = useLoad(() => api.get<DraftReport>(`/api/leagues/${leagueId}/drafts/${draft.id}/report`), [leagueId, draft.id])
   const me = r.data?.teams.find((t) => t.teamId === league?.myTeamId)
@@ -981,7 +989,7 @@ function DraftFinish({ draft, mine, onReport, onClose }: { draft: DraftView; min
               <li key={p.pickNo}>
                 <span className="no">{pickLabel(p.pickNo, n)}</span>
                 <b>{p.playerName}</b>
-                <em>{p.playerPosition ?? ''}</em>
+                <em>{posOf(p.playerId, p.playerPosition)}</em>
               </li>
             ))}
           </ol>
@@ -999,7 +1007,7 @@ function DraftFinish({ draft, mine, onReport, onClose }: { draft: DraftView; min
 // 選秀室
 // ------------------------------------------------------------------
 
-export default function DraftRoom({ draft, onChange }: { draft: DraftView; onChange: () => void }) {
+function DraftRoomInner({ draft, onChange, posMap }: { draft: DraftView; onChange: () => void; posMap: Map<number, string> }) {
   const { leagueId, league } = useApp()
   const wide = useWide()
   const done = draft.status === 'COMPLETED'
@@ -1018,6 +1026,7 @@ export default function DraftRoom({ draft, onChange }: { draft: DraftView; onCha
   const [err, setErr] = useState<unknown>(null)
 
   const players = useMemo(() => board.data?.players ?? [], [board.data])
+  players.forEach((p) => posMap.set(p.playerId, posLabel(p)))
   const openPlayers = useMemo(() => players.filter((p) => !p.taken), [players])
   const byId = useMemo(() => new Map(players.map((p) => [p.playerId, p])), [players])
   const qPlayers = queue.ids.map((id) => byId.get(id)).filter((p): p is BoardPlayer => !!p && !p.taken)
@@ -1133,4 +1142,12 @@ export default function DraftRoom({ draft, onChange }: { draft: DraftView; onCha
       {finishEl}
     </div>
   )
+}
+
+/** 選秀室：外層提供「球員 → SP／RP 守位」給選秀板、我的陣容、選中動畫、結束畫面（見 PosContext） */
+export default function DraftRoom(props: { draft: DraftView; onChange: () => void }) {
+  const posMap = useRef(new Map<number, string>())
+  const posOf = useCallback((id: number | null | undefined, fallback: string | null | undefined) =>
+    (id != null ? posMap.current.get(id) : undefined) ?? fallback ?? '', [])
+  return <PosContext.Provider value={posOf}><DraftRoomInner {...props} posMap={posMap.current} /></PosContext.Provider>
 }
