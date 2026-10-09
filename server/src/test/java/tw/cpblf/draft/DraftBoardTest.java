@@ -49,25 +49,6 @@ class DraftBoardTest extends IntegrationTest {
         assertThat(picked.fillsNeed()).isFalse();
         assertThat(picked.recommended()).isFalse();
         assertThat(after.needs().stream().mapToInt(Need::filled).sum()).isEqualTo(1);
-
-        // 選完後的成績單：每類別依名次給 n..1 分，總分合計固定；我的關鍵順位兩筆
-        while (drafts.inProgress(d)) {
-            drafts.autoPick(d);
-        }
-        var r = board.report(d, team);
-        int n = r.teams().size();
-        assertThat(r.teams().stream().mapToDouble(DraftBoardService.TeamReport::points).sum()).isEqualTo(10.0 * n * (n + 1) / 2);
-        assertThat(r.maxPoints()).isEqualTo(10 * n);
-        assertThat(r.teams()).allSatisfy(t -> assertThat(t.grade()).isNotBlank());
-        assertThat(r.highlights()).extracting(DraftBoardService.Highlight::kind).containsExactly("BEST_VALUE", "BOLDEST_REACH");
-
-        // 開季前沒有數據，各類別全部同分：名次並列、平分積分，沒有人是「最佳類別」
-        assertThat(r.teams()).allSatisfy(t -> {
-            assertThat(t.place()).isEqualTo(1);
-            assertThat(t.points()).isEqualTo(10.0 * (n + 1) / 2);
-            assertThat(t.ranks().values()).containsOnly(1);
-            assertThat(t.best()).isEmpty();
-        });
     }
 
     @Test

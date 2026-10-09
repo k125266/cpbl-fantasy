@@ -89,7 +89,7 @@ public class PlayerRankingService {
 
     /**
      * 選秀用的排名與數據來源：上半季選秀用參考季（上一季，有封存時），下半季用當季。
-     * 只用於選秀室（排名、數據欄、推薦、自動選、成績單），不影響計分（docs/rulebook-amendments.md「6.5 選秀參考數據」）。
+     * 只用於選秀室（排名、數據欄、推薦、自動選），不影響計分（docs/rulebook-amendments.md「6.5 選秀參考數據」）。
      */
     public record DraftBasis(String label, Map<Long, Line> lines, Map<Long, Ranked> ranks) {
     }

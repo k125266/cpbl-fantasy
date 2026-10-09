@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Link } from 'react-router-dom'
 import confetti from 'canvas-confetti'
 import { useApp } from '../App'
-import { api, type BoardPlayer as ApiBoardPlayer, type DraftBoard as ApiDraftBoard, type DraftPick, type DraftReport,
+import { api, type BoardPlayer as ApiBoardPlayer, type DraftBoard as ApiDraftBoard, type DraftPick,
   type DraftPeriod, type DraftStats, type DraftView } from '../api'
 import { BottomSheet, ErrorBox, TIER_LABEL, tierOf, useLoad } from '../components'
 import { useServerNow, useWide, useXWide } from '../hooks'
@@ -85,7 +85,7 @@ function playCue(c: Cue) {
 const CUE_TITLE: Record<Cue, string> = { soon: '⏳ 再 2 手輪到你', next: '⏳ 下一手是你', now: '🔔 輪到你了！' }
 
 /** 計時票根、標題、上一個選擇與接下來的順位橫條。 */
-export function RoomHeader({ draft, queueLen = 0, onReport, onChange }: { draft: DraftView; queueLen?: number; onReport?: () => void; onChange?: () => void }) {
+export function RoomHeader({ draft, queueLen = 0, onChange }: { draft: DraftView; queueLen?: number; onChange?: () => void }) {
   const posOf = useContext(PosContext)
   const { leagueId, league, system } = useApp()
   // 託管（E18）：輪到就在 3 秒內照候選 → 補缺位 → 排名自動選
@@ -119,7 +119,7 @@ export function RoomHeader({ draft, queueLen = 0, onReport, onChange }: { draft:
 
   const state = done ? 'done' : urgent ? 'urgent' : mine ? 'mine' : 'idle'
   const label = cur ? pickLabel(cur.pickNo, n) : '—'
-  const note = done ? '看成績單 ›'
+  const note = done ? '選秀已結束'
     : paused ? '暫停中，等管理員繼續'
       : pre ? (draft.revealedAt ? '順位已揭曉・馬上自動開始' : '等管理員按下開始選秀')
       : mine ? (myAuto ? '託管中・3 秒內自動選' : queueLen > 0 ? '時間到選候選第 1 位' : '時間到自動補缺位')
@@ -209,7 +209,7 @@ export function RoomHeader({ draft, queueLen = 0, onReport, onChange }: { draft:
           <div className="bar"><i style={{ width: live || paused ? `${Math.min(100, (rem / draft.pickSeconds) * 100)}%` : '0%' }} /></div>
         </div>
         <div className="tear" />
-        <div className={`foot${done && onReport ? ' go' : ''}`} onClick={done ? onReport : undefined}>
+        <div className="foot">
           <span>{done ? `${slots.length} PICKS · FINAL` : `PICK ${label} · 第 ${draft.currentPickNo} 順位`}</span>
           <span className="note">{note}</span>
         </div>
@@ -970,145 +970,17 @@ function PickReveal({ rv, draft, onClose }: { rv: Reveal; draft: DraftView; onCl
 }
 
 // ------------------------------------------------------------------
-// 選秀成績單（選秀完成後）
+// 選秀結束畫面：人在選秀室、看著選秀結束時出現一次（之後從「選秀紀錄」回來看選秀板）
 // ------------------------------------------------------------------
 
-const REPORT_CATS = [...HIT, ...PIT]
-const HL: Record<string, [string, string]> = { BEST_VALUE: ['撿到寶 · BEST VALUE', 'gold'], BOLDEST_REACH: ['最大膽 · BOLDEST REACH', 'silver'] }
-const gradeTone = (g: string) => (g.startsWith('A') ? 'gold' : g.startsWith('B') ? 'silver' : 'bronze')
-
-function DraftReportView({ draft, onClose }: { draft: DraftView; onClose: () => void }) {
-  const { leagueId, league, system } = useApp()
-  const wide = useWide()
-  const r = useLoad(() => api.get<DraftReport>(`/api/leagues/${leagueId}/drafts/${draft.id}/report`), [leagueId, draft.id])
-  const teams = league?.teams ?? []
-  const n = draft.order.length || 1
-  const me = r.data?.teams.find((t) => t.teamId === league?.myTeamId)
-  const myTeam = teams.find((t) => t.id === league?.myTeamId)
-  useEffect(() => { if (me?.grade.startsWith('A')) setTimeout(boom, 300) }, [me?.grade])
-  if (r.error) return <ErrorBox error={r.error} />
-  if (!r.data) return <div className="dr-empty">載入成績單…</div>
-  const rep = r.data
-  // 同數值名次並列：全聯盟都並列第 1 的類別不算強項（例：開季前沒有數據）
-  const strong = me?.best ?? []
-  const weak = me ? REPORT_CATS.filter((c) => (me.ranks[c] ?? 0) >= 4) : []
-  const pts = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1))
-  const summary = `${strong.length ? `${strong.join('、')} 預估全聯盟第 1` : '沒有類別預估第 1'}${weak.length ? `；${weak.join('、')} 偏弱，開季可以從自由球員補。` : '；10 類別都在前 3。'}`
-  const rankTone = (x: number) => (x === 1 ? 'r1' : x === 2 ? 'r2' : x === 3 ? 'r3' : '')
-
-  const gradeCard = me && (
-    <div className={`rp-grade ${gradeTone(me.grade)}`}>
-      <div className="in">
-        <div className="top">
-          <div className="g">{me.grade}</div>
-          <div className="t">
-            <div className="nm"><i style={{ background: fantasyTeamColor(me.teamId, teams) }} /><b>{myTeam?.name}</b></div>
-            <div className="pl">預估全聯盟 <b>第 {me.place} 名</b></div>
-            <div className="pt">10 類別積分 <b>{pts(me.points)}</b> / {rep.maxPoints}</div>
-          </div>
-        </div>
-        <div className="tear" />
-        <p>{summary}</p>
-      </div>
-    </div>
-  )
-  const sec = (no: string, zh: string, en: string) => <div className="rp-h"><span>{no}</span><b>{zh}</b><small>{en}</small></div>
-  const cats = me && (
-    <>
-      {sec('01', '類別預估', 'PROJECTION')}
-      <div className="rp-cats">
-        {REPORT_CATS.map((c) => (
-          <div key={c} className={me.ranks[c] === 1 ? 'top' : ''}>
-            <small>{c}</small><b>{fmtStat(c, me.projection[c])}</b><em className={rankTone(me.ranks[c])}>第 {me.ranks[c]}</em>
-          </div>
-        ))}
-      </div>
-    </>
-  )
-  const highlights = rep.highlights.length > 0 && (
-    <>
-      {sec('02', '關鍵順位', 'HIGHLIGHTS')}
-      <div className="rp-hl">
-        {rep.highlights.map((h) => {
-          const t = cpblTeam(h.cpblTeam)
-          const [k, tone] = HL[h.kind] ?? [h.kind, 'silver']
-          return (
-            <div key={h.kind} className={tone}>
-              <small>{k}</small>
-              <div className="nm"><b>{h.name}</b><i style={{ background: t.bg, color: t.fg }}>{t.short}</i></div>
-              <div className="sub">{pickLabel(h.pickNo, n)} 選中 · 排名 {h.rank ?? '–'}</div>
-              <div className="d">{h.delta > 0 ? `+${h.delta}` : h.delta}</div>
-            </div>
-          )
-        })}
-      </div>
-    </>
-  )
-  const leagueRows = (
-    <>
-      {sec('03', '全聯盟成績', 'LEAGUE')}
-      <div className="rp-league">
-        {[...rep.teams].sort((a, b) => a.place - b.place).map((t, i) => {
-          const tv = teams.find((x) => x.id === t.teamId)
-          return (
-            <div key={t.teamId} className={t.teamId === league?.myTeamId ? 'me' : ''}>
-              <i style={{ background: fantasyTeamColor(t.teamId, teams) }} />
-              <span className={`i${i === 0 ? ' first' : ''}`}>{t.place}</span>
-              <div className="m"><b>{tv?.name}</b><small>{tv?.owner}・最佳類別 {t.best.length ? t.best.slice(0, 2).join('、') : '—'}</small></div>
-              <span className="p">{pts(t.points)} 分</span>
-              <span className={`g ${gradeTone(t.grade)}`}>{t.grade}</span>
-            </div>
-          )
-        })}
-      </div>
-    </>
-  )
-  const roster = (
-    <>
-      {sec('04', '我的陣容', `ROSTER · ${rep.roster.reduce((a, g) => a + g.names.length, 0)}`)}
-      <div className="rp-roster">
-        {rep.roster.filter((g) => g.names.length > 0).map((g) => (
-          <div key={g.key}><span>{g.key}</span><div>{g.names.map((x) => <em key={x}>{x}</em>)}</div></div>
-        ))}
-      </div>
-    </>
-  )
-  return (
-    <div className="rp">
-      <div className="rp-top">
-        <button type="button" onClick={onClose}>‹ 回選秀板</button>
-        <span>{draftSlots(draft).length} PICKS · FINAL</span>
-      </div>
-      <div className="rp-title"><span className="eb">DRAFT REPORT · {system?.seasonYear}</span><b>選秀成績單</b><small>預估依 {rep.basis} 數據，比率類別先加總再相除</small></div>
-      {wide ? (
-        <div className="rp-cols">
-          <div>{gradeCard}{highlights}</div>
-          <div>{cats}{leagueRows}</div>
-          <div>{roster}</div>
-        </div>
-      ) : (
-        <div className="rp-one">{gradeCard}{cats}{highlights}{leagueRows}{roster}</div>
-      )}
-    </div>
-  )
-}
-
-// ------------------------------------------------------------------
-// 選秀結束畫面：人在選秀室、看著選秀結束時出現一次（之後從「選秀紀錄」回來看選秀板與成績單）
-// ------------------------------------------------------------------
-
-function DraftFinish({ draft, mine, onReport, onClose }: { draft: DraftView; mine: DraftPick[]; onReport: () => void; onClose: () => void }) {
+function DraftFinish({ draft, mine, onClose }: { draft: DraftView; mine: DraftPick[]; onClose: () => void }) {
   const posOf = useContext(PosContext)
-  const { leagueId, league, system } = useApp()
-  const r = useLoad(() => api.get<DraftReport>(`/api/leagues/${leagueId}/drafts/${draft.id}/report`), [leagueId, draft.id])
-  const me = r.data?.teams.find((t) => t.teamId === league?.myTeamId)
+  const { system } = useApp()
   const n = draft.order.length || 1
   useEffect(() => {
     beep([523, 659, 784, 1047, 1319], 0.22, 0.09, 'triangle', 0.16)
     buzz([60, 40, 90, 40, 140])
   }, [])
-  // 成績單 A 級才放彩帶
-  useEffect(() => { if (me?.grade.startsWith('A')) setTimeout(boom, 300) }, [me?.grade])
   return (
     <div className="dr-fin" role="dialog" aria-modal="true" aria-label="選秀結束">
       <div className="box">
@@ -1116,7 +988,6 @@ function DraftFinish({ draft, mine, onReport, onClose }: { draft: DraftView; min
         <h2>選秀結束</h2>
         <p className="sub">
           {draft.halfNo === 2 ? '下半季補強選秀' : '上半季選秀'}・共 {draftSlots(draft).length} 手
-          {me && <>・你的成績單 <b className={`g ${gradeTone(me.grade)}`}>{me.grade}</b></>}
         </p>
         <div className="mine">
           <div className="mh">你的陣容 · {mine.length} 人</div>
@@ -1131,8 +1002,7 @@ function DraftFinish({ draft, mine, onReport, onClose }: { draft: DraftView; min
           </ol>
         </div>
         <div className="btns">
-          <button type="button" className="ghost" onClick={onClose}>看選秀板</button>
-          <button type="button" className="gold" onClick={onReport}>看成績單</button>
+          <button type="button" className="gold" onClick={onClose}>看選秀板</button>
         </div>
       </div>
     </div>
@@ -1212,9 +1082,8 @@ function DraftRoomInner({ draft, onChange, posMap }: { draft: DraftView; onChang
   const needs = board.data && <Needs needs={board.data.needs} count={myPicks.length} rounds={draft.rounds} />
   const keeperNote = draft.status === 'KEEPERS' && !draft.revealedAt && <p className="muted">Keeper 選擇期：<Link to="/draft/keepers">前往選擇 Keeper</Link></p>
 
-  // 成績單由「看成績單」打開；人在選秀室、看著選秀結束時，先出現一次結束畫面
+  // 人在選秀室、看著選秀結束時，先出現一次結束畫面
   // （剛好是自己的最後一個選擇時，等選中動畫關掉再出現）
-  const [report, setReport] = useState(false)
   const mountedLive = useRef(!done)
   const finishShown = useRef(false)
   const [finish, setFinish] = useState(false)
@@ -1222,13 +1091,9 @@ function DraftRoomInner({ draft, onChange, posMap }: { draft: DraftView; onChang
     if (done && mountedLive.current && !finishShown.current) { finishShown.current = true; setFinish(true) }
   }, [done])
   const finishEl = finish && !rv && (
-    <DraftFinish draft={draft} mine={[...myPicks].reverse()} onClose={() => setFinish(false)} onReport={() => { setFinish(false); setReport(true) }} />
+    <DraftFinish draft={draft} mine={[...myPicks].reverse()} onClose={() => setFinish(false)} />
   )
-  const reportBtn = done && <button type="button" className="dr-report-btn" onClick={() => setReport(true)}>看選秀成績單</button>
-  if (done && report && !rv) {
-    return <div className="dr"><DraftReportView draft={draft} onClose={() => setReport(false)} /></div>
-  }
-  const header = <RoomHeader draft={draft} queueLen={queue.ids.length} onReport={() => setReport(true)} onChange={onChange} />
+  const header = <RoomHeader draft={draft} queueLen={queue.ids.length} onChange={onChange} />
 
   if (x) {
     return (
@@ -1264,7 +1129,6 @@ function DraftRoomInner({ draft, onChange, posMap }: { draft: DraftView; onChang
           <div className="dr-left">
             <div className="dr-left-top">
               <Seg value={done ? 'board' : dtab} onChange={setDtab} items={done ? [['board', '選秀板']] : [['avail', '可選球員'], ['board', '選秀板']]} />
-              {reportBtn}
             </div>
             {dtab === 'avail' && !done ? list : <DraftGrid draft={draft} />}
           </div>
@@ -1296,7 +1160,7 @@ function DraftRoomInner({ draft, onChange, posMap }: { draft: DraftView; onChang
       <div className="dr-tabs"><Seg value={tabNow} onChange={setTab} items={tabs} /></div>
       {tabNow === 'avail' && list}
       {tabNow === 'queue' && <QueueList players={qPlayers} myTurn={myTurn} onPick={pick} onRemove={queue.remove} />}
-      {tabNow === 'board' && <>{reportBtn}<DraftGrid draft={draft} /></>}
+      {tabNow === 'board' && <DraftGrid draft={draft} />}
       {tabNow === 'mine' && <MyRoster draft={draft} picks={myPicks} />}
       {sel != null && selP && (
         <BottomSheet label={selP.name} onClose={() => setSel(null)}>{panel(selP)}</BottomSheet>

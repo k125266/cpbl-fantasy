@@ -382,25 +382,6 @@ export interface DraftBoard {
   defaultPeriod: DraftPeriod
 }
 
-/** 選秀成績單（GET …/drafts/{id}/report，選秀完成後） */
-export interface DraftReport {
-  basis: string
-  maxPoints: number
-  teams: {
-    teamId: number
-    points: number
-    grade: string
-    place: number
-    best: string[]
-    projection: Record<string, number | null>
-    ranks: Record<string, number>
-  }[]
-  /** BEST_VALUE（撿到寶）、BOLDEST_REACH（最大膽）；delta = 順位 − 排名 */
-  highlights: { kind: string; playerId: number; name: string; cpblTeam: string; pickNo: number; round: number; rank: number | null; delta: number }[]
-  /** 我的陣容依位置分組 */
-  roster: { key: string; names: string[] }[]
-}
-
 export interface DraftView {
   id: number
   halfNo: number

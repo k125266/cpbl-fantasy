@@ -34,7 +34,7 @@ export default function DraftPage() {
   const [err, setErr] = useState<unknown>(null)
   const nav = useNavigate()
   // 在選秀室看著進行中的選秀：記住是哪一場。上半季一結束系統就會建立下半季選秀，如果直接跳過去，
-  // 上半季的「選秀結束」畫面和成績單就看不到；所以看著的那一場完成後仍留在這一場，離開選秀室才換
+  // 上半季的「選秀結束」畫面就看不到；所以看著的那一場完成後仍留在這一場，離開選秀室才換
   const [watching, setWatching] = useState<number | null>(null)
   const all = drafts.data || []
   const watched = watching != null ? all.find((d) => d.id === watching) : undefined
@@ -151,7 +151,7 @@ function DraftHub({ draft }: { draft: DraftView | null }) {
 }
 
 // ------------------------------------------------------------------
-// 選秀紀錄：已完成的選秀留作紀錄，隨時可以回去看選秀板與成績單
+// 選秀紀錄：已完成的選秀留作紀錄，隨時可以回去看選秀板
 // ------------------------------------------------------------------
 
 function DraftRecords({ drafts, currentId, compact }: { drafts: DraftView[]; currentId?: number; compact?: boolean }) {
@@ -168,7 +168,7 @@ function DraftRecords({ drafts, currentId, compact }: { drafts: DraftView[]; cur
           </Link>
         ))}
       </div>
-      {!compact && <p className="muted" style={{ margin: '8px 0 0' }}>已完成的選秀：看選秀板、每一手的結果與成績單。</p>}
+      {!compact && <p className="muted" style={{ margin: '8px 0 0' }}>已完成的選秀：看選秀板與每一手的結果。</p>}
     </div>
   )
 }
