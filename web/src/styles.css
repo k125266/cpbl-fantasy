@@ -2307,15 +2307,6 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .app.app-draft { padding-inline: 32px; }
 }
 
-/* 選秀室 ≥1680：右欄拆成兩欄（球員卡＋缺位｜候選與我的陣容），球員表維持和 1440 相近的寬度 */
-@media (min-width: 1680px) {
-  .dr-main { grid-template-columns: minmax(0, 1fr) 744px; }
-  .dr-row, .dr-row.rec { grid-template-columns: 40px 40px minmax(150px, 1fr) repeat(var(--n), minmax(34px, 64px)) 56px; }
-  .dr-right { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
-  .dr-right > :not(.dr-box) { grid-column: 1; }
-  .dr-right > .dr-box { grid-column: 2; grid-row: 1 / span 2; align-self: stretch; }
-}
-
 /* 選秀室球員表放大字（使用者 2026-10-09：字有點太小）：手機與網頁各放大一級 */
 .dr-row .rk { font-size: 17px; }
 .dr-row .l1 b { font-size: 16px; }
@@ -2339,9 +2330,6 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .dr-list .per { height: 38px; font-size: 14.5px; }
   .dr-list .chips button { height: 32px; font-size: 14px; }
   .dr-list .chk, .dr-list .tools .count, .dr-list .legend { font-size: 13.5px; }
-}
-@media (min-width: 1680px) {
-  .dr-row, .dr-row.rec { grid-template-columns: 40px 40px minmax(150px, 1fr) repeat(var(--n), minmax(40px, 66px)) 60px; }
 }
 
 /* 選秀室球員表表頭：兩排表頭別擠在一起（使用者 2026-10-09 回報） */
@@ -2370,6 +2358,90 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 .dr-list .chips { padding-bottom: 14px; }
 @media (min-width: 1024px) {
   .dr-list .chips { margin-top: 14px; padding-bottom: 14px; border-bottom: 0; }
+}
+
+/* 選秀室 ≥1680（設計稿 WebDraftRoom）：球員表｜選秀板（常駐 440）｜右側欄 360，一屏不整頁捲動；金色用香檳金 */
+.app-draft { --gold: #c8ad7f; --gold-hi: #ecdfc4; --gold-lo: #7a6440; --metal-gold: linear-gradient(135deg, #ecdfc4 0%, #c8ad7f 45%, #7a6440 100%); }
+.dr-list .rows { display: contents; }
+@keyframes dr-cell { 0%, 100% { box-shadow: inset 0 0 0 1px rgb(200 173 127 / .55); } 50% { box-shadow: inset 0 0 0 1px rgb(236 223 196 / .95), 0 0 12px rgb(200 173 127 / .3); } }
+@media (min-width: 1680px) {
+  /* 固定一屏：高度 = 視窗 − 導覽列；管理員工具卡在下面，要捲動欄內才看得到 */
+  .app.app-draft:has(.dr-x) { box-sizing: border-box; height: calc(100dvh - 56px); overflow: hidden; padding-top: 18px; padding-bottom: 24px; }
+  .app.app-draft:has(.dr-x) > .stack { height: 100%; overflow-y: auto; scrollbar-width: thin; }
+  .app.app-draft:has(.dr-x) > footer, .app.app-draft:has(.dr-x) .footer { display: none; }
+  .dr-x { position: relative; isolation: isolate; height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 16px; }
+  .dr-x::before { content: ""; position: absolute; z-index: -1; top: -300px; left: 6%; width: 1100px; height: 560px; border-radius: 50%; background: rgb(123 140 255 / .08); filter: blur(150px); pointer-events: none; }
+  .dr-x.mine::before { background: rgb(200 173 127 / .16); }
+  .dr-x > * { flex: none; }
+  .dr-x > .dr-main-x { flex: 1; min-height: 0; }
+  .dr-main-x { display: grid; grid-template-columns: minmax(0, 1fr) 440px 360px; grid-template-rows: minmax(0, 1fr); gap: 16px; align-items: stretch; }
+  .dr-main-x > .dr-left, .dr-main-x > .dr-right { min-height: 0; }
+  .dr-main-x > .dr-right { position: static; overflow-y: auto; scrollbar-width: thin; }
+
+  /* 球員表：欄內捲動，頁碼與說明在底下 */
+  .dr-list.x { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+  .dr-list.x .tools { flex: none; gap: 10px; padding: 12px 16px; }
+  .dr-list.x .search { width: 210px; }
+  .dr-list.x .search input, .dr-list.x .per { height: 34px; font-size: 14px; }
+  .dr-list.x .search svg { top: 9px; }
+  .dr-list.x .sp { flex: 1; }
+  .dr-list .xchips { display: flex; gap: 5px; }
+  .dr-list .xchips button { flex: none; height: 30px; padding: 0 11px; border-radius: 999px; font: 600 13.5px var(--font-mix); letter-spacing: .04em; color: var(--silver); border: 1px solid var(--line); background: rgb(24 27 33 / .6); cursor: pointer; }
+  .dr-list .xchips button[aria-pressed='true'] { color: var(--gold-hi); border-color: rgb(200 173 127 / .6); background: rgb(200 173 127 / .08); }
+  .dr-list.x .dr-row.hd, .dr-list.x .dr-row.hd.two { flex: none; height: 48px; padding-top: 0; padding-bottom: 0; align-items: stretch; }
+  .dr-list.x .dr-row.hd > span, .dr-list.x .dr-row.hd > button { display: flex; align-items: center; }
+  .dr-list.x .dr-row.hd .v { flex-direction: column; align-items: flex-end; justify-content: center; gap: 2px; }
+  .dr-list.x .dr-row.hd.two .v.sc { padding-bottom: 0; }
+  .dr-list.x .rows { display: block; flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+  .dr-list.x .rows .dr-row { height: 42px; }
+  .dr-list.x .dr-row .l1 b { font-size: 16px; }
+  .dr-list.x .rows .dr-row > .v { font-size: 17px; }
+  .dr-list.x .dr-row.hd .v { font-size: 11px; }
+  .dr-list.x .dr-row.hd .v b { font-size: 11px; font-weight: 600; }
+  .dr-list.x .dr-row { grid-template-columns: 40px 40px minmax(150px, 1fr) repeat(var(--n), minmax(40px, 60px)) 60px; }
+  .dr-list.x .foot { flex: none; display: flex; align-items: center; gap: 16px; padding: 8px 16px; border-top: 1px solid #1d2027; font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .dr-list.x .foot .legend { margin-left: 0; display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+  .dr-list.x .foot .legend i { width: 14px; height: 2px; border-radius: 1px; background: var(--gold); }
+  .dr-list.x .foot .hint { font-size: 12.5px; color: var(--silver-lo); }
+  .dr-list.x .dr-pager.w { flex-direction: row; margin: 0; gap: 0; padding: 0; border-top: 0; }
+  .dr-list.x .dr-pager button, .dr-list.x .dr-pager .gap { min-width: 34px; height: 34px; font-size: 15px; border-radius: 8px; }
+  .dr-list.x .dr-hint { flex: none; margin: 0; padding: 6px 16px 10px; }
+
+  /* 選秀板 */
+  .dr-bd { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-radius: 12px; background: rgb(21 23 28 / .88); border: 1px solid var(--line-2); border-top-color: rgb(196 202 212 / .14); overflow: hidden; }
+  .dr-bd .bh { flex: none; display: flex; align-items: baseline; justify-content: space-between; padding: 14px 14px 10px; font: 600 11px var(--font-mix); letter-spacing: .18em; color: var(--muted); }
+  .dr-bd .bh em { font-style: normal; font-size: 12px; letter-spacing: 0; color: var(--silver-lo); }
+  .dr-bd .bt { flex: none; display: grid; gap: 4px; padding: 0 12px 8px; }
+  .dr-bd .bt > div { min-width: 0; padding: 6px 6px 7px; border-radius: 7px; }
+  .dr-bd .bt > div.me { background: rgb(123 140 255 / .1); }
+  .dr-bd .bt i { display: block; height: 3px; border-radius: 1px; }
+  .dr-bd .bt b { display: flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dr-bd .bt small { font-size: 10.5px; font-weight: 400; color: #b9c3ff; }
+  .dr-bd .bt span { display: block; margin-top: 1px; font: 500 11.5px var(--font-mix); color: var(--silver-lo); white-space: nowrap; }
+  .dr-bd .br { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 12px; display: flex; flex-direction: column; gap: 4px; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+  .dr-bd .r { flex: none; display: grid; gap: 4px; }
+  .dr-bd .rn { display: flex; flex-direction: column; align-items: center; justify-content: center; font: 600 13px/1.1 var(--font-num); color: var(--muted); }
+  .dr-bd .rn span { font-size: 12px; color: #4a505c; }
+  .dr-bd .c { height: 44px; box-sizing: border-box; min-width: 0; border-radius: 6px; padding: 5px 7px 4px; background: rgb(24 27 33 / .5); box-shadow: inset 0 0 0 1px #23272f; display: flex; flex-direction: column; justify-content: space-between; }
+  .dr-bd .c.me { background: rgb(123 140 255 / .07); }
+  .dr-bd .c.done { background: rgb(24 27 33 / .9); box-shadow: inset 0 0 0 1px var(--line-2); cursor: pointer; }
+  .dr-bd .c.done.me { background: rgb(123 140 255 / .12); }
+  .dr-bd .c.done:hover { box-shadow: inset 0 0 0 1px #4a505c; }
+  .dr-bd .c.sel { box-shadow: inset 0 0 0 1px var(--gold); }
+  .dr-bd .c.cur { animation: dr-cell 1.6s ease-in-out infinite; }
+  .dr-bd .nm { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dr-bd .c.cur .nm { color: var(--gold-hi); }
+  .dr-bd .ft { display: flex; align-items: center; gap: 4px; font: 500 11.5px var(--font-mix); color: var(--silver-lo); white-space: nowrap; }
+  .dr-bd .ft s { flex: none; width: 6px; height: 6px; border-radius: 2px; }
+  .dr-bd .ft .ps { color: var(--silver); }
+  .dr-bd .ft .tn { display: none; }
+  .dr-bd .ft .no { margin-left: auto; }
+  .dr-bd .ft .no.w { margin-left: 0; color: #4a505c; }
+}
+/* 2560：球員表最寬 1280、右欄 360，剩下的寬度都給選秀板；格子多放中職隊簡稱 */
+@media (min-width: 2200px) {
+  .dr-main-x { grid-template-columns: minmax(0, 1280px) minmax(440px, 1fr) 360px; }
+  .dr-bd .ft .tn { display: inline; }
 }
 
 @media (prefers-reduced-motion: reduce) {

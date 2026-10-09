@@ -5,7 +5,7 @@ import { useApp } from '../App'
 import { api, type BoardPlayer as ApiBoardPlayer, type DraftBoard as ApiDraftBoard, type DraftPick, type DraftReport,
   type DraftPeriod, type DraftStats, type DraftView } from '../api'
 import { BottomSheet, ErrorBox, TIER_LABEL, tierOf, useLoad } from '../components'
-import { useServerNow, useWide } from '../hooks'
+import { useServerNow, useWide, useXWide } from '../hooks'
 import { cpblTeam, fantasyTeamColor } from '../teams'
 import { Medal } from './KeeperPage'
 
@@ -383,15 +383,15 @@ function pageSeq(total: number, cur: number, slots: 5 | 7): (number | '…')[] {
   return cur <= 4 ? [1, 2, 3, 4, 5, '…', total] : cur >= total - 3 ? [1, '…', ...rg(total - 4, total)] : [1, '…', cur - 1, cur, cur + 1, '…', total]
 }
 
-function Pager({ total, page, onPage, wide }: { total: number; page: number; onPage: (n: number) => void; wide: boolean }) {
+function Pager({ total, page, onPage, wide, bare = false }: { total: number; page: number; onPage: (n: number) => void; wide: boolean; bare?: boolean }) {
   const PAGE = pageSize(wide)
   const pages = Math.max(1, Math.ceil(total / PAGE))
   if (pages <= 1) return null
   const from = (page - 1) * PAGE + 1, to = Math.min(total, page * PAGE)
   const info = <span className="info">第 {from}–{to} 位・共 {total} 位</span>
   return (
-    <div className={`dr-pager${wide ? ' w' : ''}`}>
-      {wide && info}
+    <div className={`dr-pager${wide ? ' w' : ''}${bare ? ' bare' : ''}`}>
+      {wide && !bare && info}
       <div className="btns">
         <button type="button" aria-label="上一頁" disabled={page <= 1} onClick={() => onPage(page - 1)}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="m15 5-7 7 7 7" /></svg>
@@ -408,7 +408,9 @@ function Pager({ total, page, onPage, wide }: { total: number; page: number; onP
   )
 }
 
-export function PlayerList({ draft, board, period, onPeriod, queue, myTurn, onPick, selId, onSelect }: {
+export function PlayerList({ draft, board, period, onPeriod, queue, myTurn, onPick, selId, onSelect, x = false }: {
+  /** ≥1680 三欄版：篩選收成一列、頁碼與說明在表格底下、表格本體在欄內捲動 */
+  x?: boolean
   draft: DraftView
   board: DraftBoard | null
   period: DraftPeriod
@@ -476,12 +478,14 @@ export function PlayerList({ draft, board, period, onPeriod, queue, myTurn, onPi
     </label>
   )
   const nCols = cols ? cols.length : ALL_COLS.length
+  const chipBtns = CHIPS.map(([v, t]) => <button key={v} type="button" aria-pressed={chip === v} onClick={() => setChip(chip === v && v !== 'ALL' ? 'ALL' : v)}>{t}</button>)
+  const from = (page - 1) * PAGE + 1, to = Math.min(rows.length, page * PAGE)
   const star = (p: BoardPlayer, inQ: boolean) => (
     <button type="button" className={`star${inQ ? ' on' : ''}`} aria-label={inQ ? '移出候選' : '加入候選'}
       onClick={(e) => { e.stopPropagation(); queue.toggle(p.playerId) }}>{inQ ? '★' : '☆'}</button>
   )
   return (
-    <div className="dr-list" ref={top} style={{ '--n': nCols } as CSSProperties}>
+    <div className={`dr-list${x ? ' x' : ''}`} ref={top} style={{ '--n': nCols } as CSSProperties}>
       <div className="tools">
         <label className="search">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
@@ -491,12 +495,16 @@ export function PlayerList({ draft, board, period, onPeriod, queue, myTurn, onPi
           {periods.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
         </select>
         {wide && takenBox}
-        {wide && <span className="count">{count}</span>}
+        {x && <span className="sp" />}
+        {x && <div className="xchips">{chipBtns}</div>}
+        {wide && !x && <span className="count">{count}</span>}
       </div>
-      <div className="chips">
-        {CHIPS.map(([v, t]) => <button key={v} type="button" aria-pressed={chip === v} onClick={() => setChip(chip === v && v !== 'ALL' ? 'ALL' : v)}>{t}</button>)}
-        {wide && <span className="legend"><i />計分類別<em>篩打者或投手後可依任一欄排序</em></span>}
-      </div>
+      {!x && (
+        <div className="chips">
+          {chipBtns}
+          {wide && <span className="legend"><i />計分類別<em>篩打者或投手後可依任一欄排序</em></span>}
+        </div>
+      )}
       {!wide && <div className="tkrow">{takenBox}<span className="count">{count}</span></div>}
       {!wide && (
         <div className="sorts">
@@ -523,6 +531,7 @@ export function PlayerList({ draft, board, period, onPeriod, queue, myTurn, onPi
           <span />
         </div>
       )}
+      <div className="rows">
       {rows.slice((page - 1) * PAGE, page * PAGE).map((p) => {
         const t = cpblTeam(p.cpblTeam)
         const inQ = queue.ids.includes(p.playerId)
@@ -541,7 +550,7 @@ export function PlayerList({ draft, board, period, onPeriod, queue, myTurn, onPi
             {wide && (tk ? <span /> : star(p, inQ))}
             <span className="rk">{p.rank ?? '–'}</span>
             <span className="who">
-              <Medal rank={p.rank} jersey={p.jerseyNumber} team={p.cpblTeam} size={wide ? 30 : 36} />
+              <Medal rank={p.rank} jersey={p.jerseyNumber} team={p.cpblTeam} size={x ? 32 : wide ? 30 : 36} />
               <span className="nm">
                 <span className="l1">
                   <b>{p.name}</b>{!wide && <i className="tc" style={{ background: t.bg, color: t.fg }}>{t.short}</i>}
@@ -563,10 +572,101 @@ export function PlayerList({ draft, board, period, onPeriod, queue, myTurn, onPi
           </div>
         )
       })}
-      <Pager total={rows.length} page={page} onPage={goPage} wide={wide} />
       {board && rows.length === 0 && <div className="dr-empty">沒有符合的球員</div>}
       {!board && <div className="dr-empty">載入中…</div>}
+      </div>
+      {x ? (
+        <div className="foot">
+          <span className="info">{rows.length ? `第 ${from}–${to} 人・共 ${rows.length} 人` : ''}</span>
+          <span className="legend"><i />計分類別</span>
+          <span className="hint">{grp ? '點表頭排序，再點回到排名' : '表頭上排打者、下排投手'}</span>
+          <span className="sp" />
+          <Pager total={rows.length} page={page} onPage={goPage} wide={wide} bare />
+        </div>
+      ) : <Pager total={rows.length} page={page} onPage={goPage} wide={wide} />}
       {draft.status !== 'IN_PROGRESS' && board && <p className="dr-hint">選秀開始後才能選人；現在可以先按 ☆ 排候選清單。</p>}
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------
+// ≥1680 常駐的選秀板（設計稿 WebDraftRoom）：每隊表頭加打投人數；格子有姓名、守位、中職色點、第幾順位；
+// 目前這一手脈動、輪到自己寫「輪到你」；點已選的格子，右邊球員卡換成那位
+// ------------------------------------------------------------------
+
+function BoardPanel({ draft, byId, selId, onSelect }: { draft: DraftView; byId: Map<number, BoardPlayer>; selId: number | null; onSelect: (playerId: number) => void }) {
+  const { league } = useApp()
+  const posOf = useContext(PosContext)
+  const teams = league?.teams ?? []
+  const n = draft.order.length || 1
+  const slots = draftSlots(draft)
+  const at = new Map(slots.map((p) => [`${p.round}-${p.teamId}`, p]))
+  const live = draft.status === 'IN_PROGRESS'
+  const mineId = league?.myTeamId
+  const cur = useRef<HTMLDivElement | null>(null)
+  // 目前這一手捲到可見（欄內捲動）
+  useEffect(() => { cur.current?.scrollIntoView({ block: 'nearest' }) }, [draft.currentPickNo])
+  const mix = (teamId: number) => {
+    const ps = slots.filter((p) => p.teamId === teamId && p.playerId)
+    const pit = ps.filter((p) => byId.get(p.playerId!)?.pitcher).length
+    return `打 ${ps.length - pit}・投 ${pit}`
+  }
+  const cols = { gridTemplateColumns: `34px repeat(${n}, minmax(0, 1fr))` }
+  return (
+    <div className="dr-bd">
+      <div className="bh"><span>DRAFT BOARD · 選秀板</span><em>{draft.snake ? '蛇形' : '每輪同順序'}・點格子看球員</em></div>
+      <div className="bt" style={cols}>
+        <span />
+        {draft.order.map((id) => {
+          const t = teams.find((x) => x.id === id)
+          return (
+            <div key={id} className={id === mineId ? 'me' : ''}>
+              <i style={{ background: fantasyTeamColor(id, teams) }} />
+              <b>{t?.name}{id === mineId && <small>你</small>}</b>
+              <span>{mix(id)}</span>
+            </div>
+          )
+        })}
+      </div>
+      <div className="br">
+        {Array.from({ length: draft.rounds }, (_, i) => i + 1).map((r) => {
+          const back = draft.snake && r % 2 === 0
+          return (
+            <div key={r} className="r" style={cols}>
+              <div className="rn">R{r}<span>{back ? '←' : '→'}</span></div>
+              {draft.order.map((id) => {
+                const p = at.get(`${r}-${id}`)
+                const isCur = live && p?.pickNo === draft.currentPickNo
+                const me = id === mineId
+                const player = p?.playerId ? byId.get(p.playerId) : undefined
+                const t = player ? cpblTeam(player.cpblTeam) : p?.playerTeam ? cpblTeam(p.playerTeam) : null
+                return (
+                  <div key={id} ref={isCur ? cur : undefined}
+                    className={`c${p?.playerId ? ' done' : ''}${isCur ? ' cur' : ''}${me ? ' me' : ''}${player && selId === player.playerId ? ' sel' : ''}`}
+                    onClick={() => player && onSelect(player.playerId)}>
+                    {p?.playerId ? (
+                      <>
+                        <span className="nm">{p.playerName}</span>
+                        <span className="ft">
+                          {t && <s style={{ background: t.bg }} />}
+                          <span className="ps">{posOf(p.playerId, p.playerPosition)}</span>
+                          {t && <span className="tn">{t.short}</span>}
+                          <span className="no">#{p.pickNo}</span>
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="nm">{isCur ? (me ? '輪到你' : '選擇中') : me ? '你' : ''}</span>
+                        <span className="ft"><span className="no w">{p ? pickLabel(p.pickNo, n) : ''}</span></span>
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -1011,6 +1111,8 @@ function DraftRoomInner({ draft, onChange, posMap }: { draft: DraftView; onChang
   const { leagueId, league } = useApp()
   const wide = useWide()
   const done = draft.status === 'COMPLETED'
+  // ≥1680：選秀板常駐，三欄一屏（設計稿 WebDraftRoom）；選完的選秀沿用 1440 的版面
+  const x = useXWide() && !done
   const myTurn = draft.status === 'IN_PROGRESS' && draft.currentTeamId === league?.myTeamId
   const queue = useDraftQueue(draft)
   const raw = useDraftBoard(draft)
@@ -1054,6 +1156,7 @@ function DraftRoomInner({ draft, onChange, posMap }: { draft: DraftView; onChang
     try {
       await api.post(`/api/leagues/${leagueId}/drafts/${draft.id}/pick`, { playerId: p.playerId })
       setSel(null)
+      setSide('mine') // 選完後右側切到「我的陣容」，看那一手填進去
       onChange()
     } catch (e) {
       setErr(e)
@@ -1068,7 +1171,7 @@ function DraftRoomInner({ draft, onChange, posMap }: { draft: DraftView; onChang
   )
   const list = (
     <PlayerList draft={draft} board={board.data} period={period} onPeriod={setPeriodWant} queue={queue} myTurn={myTurn} onPick={pick}
-      selId={selP?.playerId ?? null} onSelect={(p) => setSel(p.playerId)} />
+      selId={selP?.playerId ?? null} onSelect={(p) => setSel(p.playerId)} x={x} />
   )
   const needs = board.data && <Needs needs={board.data.needs} count={myPicks.length} rounds={draft.rounds} />
   const keeperNote = draft.status === 'KEEPERS' && !draft.revealedAt && <p className="muted">Keeper 選擇期：<Link to="/draft/keepers">前往選擇 Keeper</Link></p>
@@ -1090,6 +1193,30 @@ function DraftRoomInner({ draft, onChange, posMap }: { draft: DraftView; onChang
     return <div className="dr"><DraftReportView draft={draft} onClose={() => setReport(false)} /></div>
   }
   const header = <RoomHeader draft={draft} queueLen={queue.ids.length} onReport={() => setReport(true)} onChange={onChange} />
+
+  if (x) {
+    return (
+      <div className={`dr dr-x${myTurn ? ' mine' : ''}`}>
+        {header}
+        {keeperNote}
+        <ErrorBox error={err || board.error} />
+        <div className="dr-main dr-main-x">
+          <div className="dr-left">{list}</div>
+          <BoardPanel draft={draft} byId={byId} selId={selP?.playerId ?? null} onSelect={(id) => setSel(id)} />
+          <div className="dr-right">
+            {selP && panel(selP)}
+            {needs}
+            <div className="dr-box">
+              <Seg value={side} onChange={setSide} items={[['queue', `候選 ${qPlayers.length}`], ['mine', `我的陣容 ${myPicks.length}`]]} />
+              {side === 'queue' ? <QueueList players={qPlayers} myTurn={myTurn} onPick={pick} onRemove={queue.remove} /> : <MyRoster draft={draft} picks={myPicks} />}
+            </div>
+          </div>
+        </div>
+        {reveal}
+        {finishEl}
+      </div>
+    )
+  }
 
   if (wide) {
     return (
