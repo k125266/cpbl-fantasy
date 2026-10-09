@@ -330,6 +330,7 @@ export default function KeeperPage({ draft, onChange }: { draft: DraftView; onCh
           <div className="kp-thead"><span className="lv-label-t">你的名單 · {list.length} 人</span><span className="muted">點一列加入或移出保留席</span><span className="sp" />{sortSeg}</div>
           <div className="kp-grid head"><span /><span>球員</span><span>位置</span><span className="r">上半季排名</span><span>取得方式</span>
             {STAT_HEAD.map(([h, p]) => <span key={h} className="st"><b>{h}</b><b>{p}</b></span>)}</div>
+          <div className="kp-rows">
           {list.map((c) => {
             const on = keep.includes(c.playerId), t = cpblTeam(c.cpblTeam)
             return (
@@ -343,6 +344,7 @@ export default function KeeperPage({ draft, onChange }: { draft: DraftView; onCh
               </button>
             )
           })}
+          </div>
           <div className="kp-tfoot">數據為上半季成績；表頭上排是打者、下排是投手，金色為聯盟計分類別。沒保留的球員回到球員池，補強選秀和之後的自由球員都可能被別隊拿走。已註銷的球員不能保留。</div>
         </div>
         <div className="kp-side">
