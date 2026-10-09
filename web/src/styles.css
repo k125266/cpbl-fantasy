@@ -2141,6 +2141,17 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 .dr-card .pos .tk s { width: 8px; height: 3px; border-radius: 1px; }
 .dr-card .btns button:disabled { opacity: .5; }
 
+/* Keeper 名單的數據欄 */
+.kp-row .l3 { display: flex; gap: 9px; margin-top: 3px; white-space: nowrap; font: 600 9px var(--font-num); color: var(--silver-lo); }
+.kp-row .l3 b { margin-right: 2px; font: 700 12.5px var(--font-num); color: var(--text); }
+@media (min-width: 1024px) {
+  .kp-grid { grid-template-columns: 24px minmax(180px, 1fr) 56px 76px 112px repeat(5, 50px); gap: 8px; }
+  .kp-grid .st { text-align: right; font: 600 15px var(--font-num); }
+  .kp-grid.head .st { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding-bottom: 5px; line-height: 1; color: var(--gold); box-shadow: inset 0 -2px 0 var(--gold); }
+  .kp-grid.head { min-height: 46px; align-items: end; padding-bottom: 6px; }
+  .kp-grid.head .st b { font-weight: 600; font-size: 11px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

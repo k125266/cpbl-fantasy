@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useApp } from '../App'
-import { api, type DraftView } from '../api'
+import { api, type DraftStats, type DraftView } from '../api'
 import { ErrorBox, Loading, tierOf, useLoad } from '../components'
 import { useServerNow, useWide } from '../hooks'
 import { cpblTeam } from '../teams'
@@ -21,6 +21,23 @@ export interface KeeperCandidate {
   rank: number | null
   via: string
   delisted: boolean
+  /** 上半季數據（沒有數據為 null） */
+  stats: DraftStats | null
+}
+
+/**
+ * 名單的數據欄（設計稿「Keeper 與選秀抽籤」）：表頭上排打者、下排投手，金色為聯盟計分類別。
+ * 打者 AVG、HR、R、H、BB；投手 IP、ERA、WHIP、K、W+SV。
+ */
+const STAT_HEAD: [string, string][] = [['AVG', 'IP'], ['HR', 'ERA'], ['R', 'WHIP'], ['H', 'K'], ['BB', 'W+SV']]
+const rate = (v: number | null) => (v == null ? '–' : v.toFixed(2))
+function statCells(c: KeeperCandidate): { v: string; l: string }[] {
+  const s = c.stats
+  if (!s) return STAT_HEAD.map(([h, p]) => ({ v: '–', l: c.pitcher ? p : h }))
+  const vals = c.pitcher
+    ? [`${Math.floor(s.outs / 3)}.${s.outs % 3}`, rate(s.era), rate(s.whip), String(s.k), String(s.wsv)]
+    : [s.avg == null ? '–' : s.avg.toFixed(3).replace(/^0/, ''), String(s.hr), String(s.r), String(s.h), String(s.bb)]
+  return vals.map((v, i) => ({ v, l: c.pitcher ? STAT_HEAD[i][1] : STAT_HEAD[i][0] }))
 }
 
 const METAL: Record<string, string> = { legend: 'var(--metal-gold)', gold: 'var(--metal-gold)', rare: 'var(--metal-silver)', common: 'var(--metal-bronze)' }
@@ -187,7 +204,8 @@ export default function KeeperPage({ draft, onChange }: { draft: DraftView; onCh
                 <span className="ck">{on && '✓'}</span>
                 <Medal rank={c.rank} jersey={c.jerseyNumber} team={c.cpblTeam} size={38} />
                 <span className="who"><span className="l1"><b>{c.name}</b><span className="pos">{c.position}</span><span className={`rk${(c.rank ?? 99) <= 10 ? ' top' : ''}`}>#{c.rank ?? '–'}</span>{delisted(c)}</span>
-                  <span className="l2">{c.via}・{cpblTeam(c.cpblTeam).short}</span></span>
+                  <span className="l2">{c.via}・{cpblTeam(c.cpblTeam).short}</span>
+                  <span className="l3">{statCells(c).map((x) => <span key={x.l}><b>{x.v}</b>{x.l}</span>)}</span></span>
               </button>
             )
           })}
@@ -205,7 +223,8 @@ export default function KeeperPage({ draft, onChange }: { draft: DraftView; onCh
       <div className="kp-cols">
         <div className="kp-table">
           <div className="kp-thead"><span className="lv-label-t">你的名單 · {list.length} 人</span><span className="muted">點一列加入或移出保留席</span><span className="sp" />{sortSeg}</div>
-          <div className="kp-grid head"><span /><span>球員</span><span>位置</span><span className="r">上半季排名</span><span>取得方式</span></div>
+          <div className="kp-grid head"><span /><span>球員</span><span>位置</span><span className="r">上半季排名</span><span>取得方式</span>
+            {STAT_HEAD.map(([h, p]) => <span key={h} className="st"><b>{h}</b><b>{p}</b></span>)}</div>
           {list.map((c) => {
             const on = keep.includes(c.playerId), t = cpblTeam(c.cpblTeam)
             return (
@@ -215,10 +234,11 @@ export default function KeeperPage({ draft, onChange }: { draft: DraftView; onCh
                 <span className="pos">{c.position}</span>
                 <span className={`r rk${(c.rank ?? 99) <= 10 ? ' top' : ''}`}>{c.rank ?? '–'}</span>
                 <span className="via">{c.via}</span>
+                {statCells(c).map((x) => <span key={x.l} className="st">{x.v}</span>)}
               </button>
             )
           })}
-          <div className="kp-tfoot">沒保留的球員回到球員池，補強選秀和之後的自由球員都可能被別隊拿走。已註銷的球員不能保留。</div>
+          <div className="kp-tfoot">數據為上半季成績；表頭上排是打者、下排是投手，金色為聯盟計分類別。沒保留的球員回到球員池，補強選秀和之後的自由球員都可能被別隊拿走。已註銷的球員不能保留。</div>
         </div>
         <div className="kp-side">
           <div className="kp-box"><div className="kp-lab"><span>保留席 · {n} / {limit}</span><span className="muted">點 × 移出</span></div>{slotGrid}</div>
