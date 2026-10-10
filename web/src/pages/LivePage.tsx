@@ -1,9 +1,9 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useApp } from '../App'
 import { api, type LiveGame, type LiveLine, type LiveStarter, type LiveView, type PostseasonView, type TeamView } from '../api'
 import { ErrorBox, fmtTime, Loading } from '../components'
-import { useCountdown, useWide } from '../hooks'
+import { useCountdown, useResumeRefresh, useRetryOnFail, useWide } from '../hooks'
 import { ip, OUTS_HINT, outsOf } from '../live'
 import { TeamIcon } from '../teamIdentity'
 import { cpblTeam, fantasyTeamColor } from '../teams'
@@ -106,6 +106,7 @@ export default function LivePage() {
   const [error, setError] = useState<unknown>(null)
   const [upd, setUpd] = useState('')
   const [failed, setFailed] = useState(false)
+  const [failCount, setFailCount] = useState(0)
   const { sec, restart } = useCountdown(REFRESH)
   const [mode, setMode] = useState<Mode>('full')
   const [selId, setSelId] = useState<number | null>(null)
@@ -115,14 +116,18 @@ export default function LivePage() {
     api.get<PostseasonView>(`/api/postseason?leagueId=${leagueId}`).then((v) => setHasPost(v.series.length > 0)).catch(() => setHasPost(false))
   }, [leagueId])
 
+  const lastLoad = useRef(0)
   const load = useCallback(() => {
+    lastLoad.current = Date.now()
     api.get<LiveView>(`/api/live?leagueId=${leagueId}`)
-      .then((v) => { setData(v); setError(null); setFailed(false); setUpd(clock(new Date())) })
-      .catch((e) => { setError(e); setFailed(true) })
+      .then((v) => { setData(v); setError(null); setFailed(false); setFailCount(0); setUpd(clock(new Date())) })
+      .catch((e) => { setError(e); setFailed(true); setFailCount((n) => n + 1) })
     restart()
   }, [leagueId, restart])
 
   useEffect(() => { load() }, [load])
+  useResumeRefresh(load, lastLoad)
+  useRetryOnFail(failCount, load)
   useEffect(() => { if (sec === 0) load() }, [sec, load])
 
   const postNote = hasPost && <Link className="lv-kind-link" to="/postseason">季後賽請看季後賽專區 →</Link>

@@ -1566,6 +1566,9 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 .pv-title h1 { margin: 0; font-size: 27px; font-weight: 900; line-height: 1.15; white-space: nowrap; }
 .pv-title .sub { font-size: 12px; color: var(--muted); }
 .pv-refresh .txt { display: none; }
+/* 手機看不到右上角的更新資訊，另外放一行，才知道資料是不是舊的 */
+.pv-upd { margin-top: 6px; font-size: 11px; color: var(--silver-lo); }
+.pv-upd .bad { font-style: normal; color: #f0b84a; }
 .pv-refresh .ico { display: none; }
 .pv-switch { margin-top: 14px; }
 
@@ -1582,6 +1585,9 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 .pv-score .big { display: flex; align-items: center; gap: 10px; font: 700 40px/1 var(--font-num); color: var(--text); }
 .pv-score .big i { font-style: normal; font-size: 26px; color: var(--dim); }
 .pv-score .big .trail { color: var(--muted); }
+/* 系列戰比數的說明：大數字是系列戰勝場，不是今天這一戰的比分 */
+.pv-skick { padding: 12px 14px 0; text-align: center; font: 600 10.5px var(--font-mix); letter-spacing: .2em; color: var(--silver-lo); }
+.pv-skick + .pv-score { padding-top: 8px; }
 .pv-lead { padding: 0 14px 12px; text-align: center; font-size: 11.5px; color: var(--muted); }
 .pv-mini { display: grid; gap: 4px; padding: 10px 12px 12px; border-top: 1px solid #1d2027; background: rgb(14 16 20 / .45); }
 .pv-mini .c { min-width: 0; padding: 6px 0 5px; border-radius: 7px; border: 1px solid var(--line); background: rgb(21 23 28 / .7); text-align: center; }
@@ -1599,6 +1605,7 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .pv-head { margin-top: 0; gap: 20px; }
   .pv-title { flex-wrap: nowrap; }
   .pv-title .sub { font-size: 12.5px; white-space: nowrap; }
+  .pv-upd { display: none; }
   .pv-refresh { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 6px 0 14px; border-radius: 999px; border: 1px solid var(--line); background: rgb(24 27 33 / .7); }
   .pv-refresh .txt { display: block; text-align: right; font-size: 12px; line-height: 1.4; color: var(--muted); white-space: nowrap; }
   .pv-refresh .txt b { font: 600 14px var(--font-num); color: var(--text); }
@@ -1611,6 +1618,8 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .pv-series { display: grid; grid-template-columns: 300px minmax(0, 1fr); margin-top: 16px; }
   .pv-sleft { display: flex; flex-direction: column; justify-content: center; padding: 16px 22px; border-right: 1px solid #1d2027; }
   .pv-score { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0; }
+  .pv-skick, .pv-skick + .pv-score { padding: 0; }
+  .pv-skick { margin-bottom: 8px; text-align: left; }
   .pv-chip.lg { width: 40px; height: 24px; font-size: 12px; border-radius: 5px; }
   .pv-score .big { font-size: 46px; }
   .pv-score .big i { font-size: 28px; }
@@ -1700,9 +1709,14 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 .pv-box .bh, .pv-box .br { display: grid; grid-template-columns: 24px minmax(0, 1fr) repeat(6, 27px); gap: 6px; align-items: center; padding: 0 14px; border-top: 1px solid #1d2027; }
 .pv-box .bh { height: 26px; background: rgb(14 16 20 / .45); font: 600 10px var(--font-mix); letter-spacing: .06em; color: var(--silver-lo); }
 .pv-box .br { min-height: 38px; }
+.pv-box .bh > span { white-space: nowrap; }
+/* 投手表最後一欄是「勝救」（W／SV），比打者表的數字欄寬 */
+.pv-box .bh.pit, .pv-box .br.pit { grid-template-columns: 24px minmax(0, 1fr) repeat(5, 27px) 38px; }
 .pv-box .br.me { box-shadow: inset 2px 0 0 var(--me, #7b8cff); background: rgb(123 140 255 / .04); }
 .pv-box .r { text-align: right; font: 600 14px var(--font-num); color: var(--text); }
 .pv-box .r.z { color: var(--dim); }
+/* 表頭的欄名用小字；原本套到數字欄的 14px 粗體，「勝救」兩個字塞不進欄寬會換行溢出 */
+.pv-box .bh .r { font: 600 10px var(--font-mix); letter-spacing: .06em; color: var(--silver-lo); }
 .pv-box .r.hi { color: #ecdfc4; }
 .pv-box .who { min-width: 0; display: flex; align-items: center; gap: 5px; }
 .pv-box .who a { font-size: 13px; color: var(--text); white-space: nowrap; }
@@ -1760,8 +1774,10 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .pv-box .bt b { font-size: 13px; font-weight: 600; }
   .pv-box .bh, .pv-box .br { grid-template-columns: 24px minmax(0, 1fr) 34px repeat(6, 32px); padding: 0 20px; }
   .pv-box .bh { height: 28px; font-size: 10.5px; }
+  .pv-box .bh.pit, .pv-box .br.pit { grid-template-columns: 24px minmax(0, 1fr) 34px repeat(5, 32px) 42px; }
   .pv-box .br { min-height: 36px; }
   .pv-box .r { font-size: 15px; }
+  .pv-box .bh .r { font-size: 10.5px; }
   .pv-box .pos.d-only { font-size: 12px; color: var(--muted); }
 
   .pv-rest { display: flex; align-items: baseline; gap: 20px; padding: 18px 22px 22px; border-top: 1px solid #1d2027; }
