@@ -1588,7 +1588,7 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
 /* 系列戰比數的說明：大數字是系列戰勝場，不是今天這一戰的比分 */
 .pv-skick { width: max-content; max-width: calc(100% - 28px); margin: 12px auto 0; padding: 3px 12px; border: 1px solid var(--line-2); border-radius: 999px; text-align: center; font: 600 11.5px var(--font-mix); letter-spacing: .12em; color: var(--silver); }
 .pv-score .big u { margin-left: 3px; text-decoration: none; font: 600 14px var(--font-text); color: var(--muted); }
-.pv-gk { margin: 10px 14px 0; font: 600 11px var(--font-mix); letter-spacing: .06em; color: var(--silver-lo); }
+.pv-gk { margin: 10px 14px 6px; font: 600 11px var(--font-mix); letter-spacing: .06em; color: var(--silver-lo); }
 .pv-skick + .pv-score { padding-top: 8px; }
 .pv-lead { padding: 0 14px 12px; text-align: center; font-size: 11.5px; color: var(--muted); }
 .pv-mini { display: grid; gap: 4px; padding: 10px 12px 12px; border-top: 1px solid #1d2027; background: rgb(14 16 20 / .45); }
@@ -1620,9 +1620,9 @@ button.tk, a.tk { font: inherit; font-weight: 400; color: var(--text); text-alig
   .pv-series { display: grid; grid-template-columns: 300px minmax(0, 1fr); margin-top: 16px; }
   .pv-sleft { display: flex; flex-direction: column; justify-content: center; padding: 16px 22px; border-right: 1px solid #1d2027; }
   .pv-score { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0; }
-  .pv-skick, .pv-skick + .pv-score { padding: 0; }
-  .pv-skick { margin: 0 0 8px; }
-  .pv-gk { margin: 12px 20px 0; }
+  .pv-skick + .pv-score { padding: 0; }
+  .pv-skick { margin: 0 0 10px; }
+  .pv-gk { margin: 14px 20px 10px; }
   .pv-chip.lg { width: 40px; height: 24px; font-size: 12px; border-radius: 5px; }
   .pv-score .big { font-size: 46px; }
   .pv-score .big i { font-size: 28px; }
