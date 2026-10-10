@@ -22,7 +22,7 @@
 ## 從頭準備（只有需要重做複本時）
 
 1. **複製真實資料庫**：`pg_dump cpblf_stats | psql cpblf_drafttest`（要在資料庫容器裡 pipe，避免中文被轉碼）。複本裡已有真實球員、你們的帳號與聯盟，但還沒有賽程與選秀。
-2. **啟動測試站**，環境：`CPBLF_SOURCE=stats`、`CPBLF_DB_URL=…/cpblf_drafttest`、`CPBLF_POSTSEASON_KINDS=A`（不重複追蹤季後賽）、`CPBLF_SEASON_YEAR=2027`、**排程要開**。
+2. **啟動測試站**，環境：`CPBLF_SOURCE=stats`、`CPBLF_DB_URL=…/cpblf_drafttest`、`CPBLF_POSTSEASON_KINDS=A`（不重複追蹤季後賽）、`CPBLF_SEASON_YEAR=2027`、**排程要開**、`CPBLF_REGISTRATION_SYNC_ENABLED=false`（每天 05:30 的名單同步會把步驟 7 改成一軍的球員又改回二軍，選秀池就缺人、排名出現缺號；`scripts/draft-test.ps1` 已設定）。
 3. **為什麼年份設 2027**：中職進階數據網站只保留當季，抓不到 2025（甚至 2024）。選秀的排名、數據、推薦都靠「上一季」的參考數據，所以把測試站設成 2027 季，上一季就是 2026，可以抓。
 4. **封存 2026 參考季**：用系統管理員在管理頁按「封存參考季」（約 10 分鐘，一場 1.5 秒），完成後 `reference_stat` 有資料（2026：360 場、355 位球員）。
 5. **系統管理員**：測試複本用 `bot1`（`UPDATE app_user SET is_admin = true`，只改複本）；密碼是 `bot-pass-1-2027`。

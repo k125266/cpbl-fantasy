@@ -46,6 +46,8 @@ function Start-Test {
   # 年份設 2027：進階數據網站只保留當季，上一季（2026）的參考季資料才抓得到（見 docs/draft-test.md）
   $env:PORT = "$Port"; $env:CPBLF_SOURCE = 'stats'; $env:CPBLF_DB_URL = "jdbc:postgresql://localhost:5432/$Db"
   $env:CPBLF_POSTSEASON_KINDS = 'A'; $env:CPBLF_SEASON_YEAR = '2027'
+  # 每日名單同步會把複本裡改成一軍的球員改回二軍，演練的球員池就缺人，所以關掉
+  $env:CPBLF_REGISTRATION_SYNC_ENABLED = 'false'
   Remove-Item Env:CPBLF_SCHEDULER_ENABLED -ErrorAction SilentlyContinue   # 排程要開：選秀自動開始、逾時、託管都靠它
   Start-Process -FilePath (Join-Path $Server 'mvnw.cmd') -ArgumentList 'spring-boot:run' -WorkingDirectory $Server -WindowStyle Hidden `
     -RedirectStandardOutput $Log -RedirectStandardError "$Log.err"

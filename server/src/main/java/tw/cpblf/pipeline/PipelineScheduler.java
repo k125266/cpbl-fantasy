@@ -2,6 +2,7 @@ package tw.cpblf.pipeline;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -24,8 +25,15 @@ public class PipelineScheduler {
     private final Pipeline pipeline;
     private final DraftService drafts;
     private final boolean demo;
+    /** 選秀演練的測試站關掉：每日名單同步會把「有成績但在二軍」的球員改回二軍，演練球員池就缺人（docs/draft-test.md） */
+    private final boolean registrationSyncEnabled;
 
-    public PipelineScheduler(Pipeline pipeline, DraftService drafts, AppProperties props) {
+    public PipelineScheduler(Pipeline pipeline, DraftService drafts, AppProperties props,
+                             @Value("${cpblf.registration-sync-enabled:true}") boolean registrationSyncEnabled) {
+        this.registrationSyncEnabled = registrationSyncEnabled;
+        if (!registrationSyncEnabled) {
+            log.warn("每日名單同步已停用（cpblf.registration-sync-enabled=false），只應該用在選秀演練的測試站");
+        }
         this.pipeline = pipeline;
         this.drafts = drafts;
         // demo 與重播模式：每日型工作由「快轉」驅動
@@ -41,7 +49,7 @@ public class PipelineScheduler {
 
     @Scheduled(cron = "0 30 5 * * *", zone = ZONE)
     void registration() {
-        if (!demo) pipeline.syncRegistration();
+        if (!demo && registrationSyncEnabled) pipeline.syncRegistration();
     }
 
     @Scheduled(cron = "0 0 6 * * *", zone = ZONE)
