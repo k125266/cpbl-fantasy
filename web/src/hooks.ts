@@ -72,6 +72,18 @@ export function useResumeRefresh(reload: () => void, lastLoad: { current: number
 }
 
 /**
+ * 更新失敗（例如手機剛從別的 app 回來、舊連線已斷）時，幾秒後自動重試，最多 5 次；不用等下一個 60 秒。
+ * failCount 由頁面在每次失敗時加 1、成功時歸零。
+ */
+export function useRetryOnFail(failCount: number, reload: () => void, delayMs = 5000) {
+  useEffect(() => {
+    if (failCount <= 0 || failCount > 5) return
+    const t = setTimeout(reload, delayMs)
+    return () => clearTimeout(t)
+  }, [failCount, reload, delayMs])
+}
+
+/**
  * 伺服器「現在」（毫秒），每 tickMs 更新。demo／重播的時鐘可能和真實時間不同，
  * 以載入 /api/system 時的差值換算（系統時間為台北時間、不含時區）。
  */
