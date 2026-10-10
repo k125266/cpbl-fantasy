@@ -216,9 +216,51 @@ public class DraftService {
      * @param via      取得方式，例：選秀第 3 輪、Keeper、交易、Waiver、自由球員
      * @param delisted 已註銷，不能保留
      * @param stats    本季數據（下半季選 keeper 時即上半季），與排名同一個來源
+     * @param eligible 可擔任的先發位置（IF、OF、UTIL、SP、RP），前端用來算保留後的先發缺位
      */
     public record KeeperCandidate(long playerId, String name, String jerseyNumber, String cpblTeam, String position,
-                                  boolean pitcher, Integer rank, String via, boolean delisted, DraftBoardService.Stats stats) {
+                                  boolean pitcher, Integer rank, String via, boolean delisted, DraftBoardService.Stats stats,
+                                  List<String> eligible) {
+    }
+
+    /** 目前的自由球員（Keeper 頁第三欄）：一軍登錄、不在本聯盟任何隊的名單上。 */
+    public record PoolPlayer(long playerId, String name, String jerseyNumber, String cpblTeam, String position,
+                             boolean pitcher, Integer rank, List<String> eligible, DraftBoardService.Stats stats) {
+    }
+
+    /** 自由球員依排名（沒有數據排最後）取前 limit 位。別隊 keeper 揭曉前保密，所以這裡看不到。 */
+    public List<PoolPlayer> keeperPool(long draftId, int limit) {
+        DraftRow d = draft(draftId);
+        League league = leagues.get(d.leagueId());
+        Map<Long, PlayerRankingService.Ranked> ranks = ranking.rankings();
+        Map<Long, PlayerRankingService.Line> lines = ranking.lines(PlayerRankingService.Period.SEASON);
+        LocalDate today = clock.today();
+        List<Long> ids = new ArrayList<>(jdbc.sql("""
+                select p.id from player p
+                where p.registration_status = 'REGISTERED' and p.first_team_status = 'ACTIVE'
+                  and not exists (select 1 from roster_entry re join fantasy_team t on t.id = re.team_id
+                                  where t.league_id = ? and re.player_id = p.id and re.valid_from <= ?
+                                    and (re.valid_to is null or re.valid_to > ?))
+                """).params(d.leagueId(), today, today).query(Long.class).list());
+        ids.sort(Comparator.comparingInt(id -> ranks.containsKey(id) ? ranks.get(id).rank() : Integer.MAX_VALUE));
+        List<Long> top = ids.subList(0, Math.min(ids.size(), limit));
+        Map<Long, Set<Slot>> el = eligibility.eligibility(league, top, eligibilityDate(d));
+        List<PoolPlayer> out = new ArrayList<>();
+        for (Long id : top) {
+            out.add(jdbc.sql("select name, jersey_number, cpbl_team_code, listed_position from player where id = ?").param(id)
+                    .query((rs, n) -> new PoolPlayer(id, rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4),
+                            "P".equals(rs.getString(4)), ranks.containsKey(id) ? ranks.get(id).rank() : null,
+                            slotNames(el.get(id)), DraftBoardService.Stats.of(lines.get(id)))).single());
+        }
+        return out;
+    }
+
+    /** 先發位置依 IF、OF、UTIL、SP、RP 的順序轉成名稱。 */
+    static List<String> slotNames(Set<Slot> slots) {
+        if (slots == null) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(Slot.STARTING).filter(slots::contains).map(Slot::name).toList();
     }
 
     public List<KeeperCandidate> keeperCandidates(long draftId, long teamId) {
@@ -227,7 +269,10 @@ public class DraftService {
         Map<Long, PlayerRankingService.Line> lines = ranking.lines(PlayerRankingService.Period.SEASON);
         LocalDate today = clock.today();
         List<KeeperCandidate> out = new ArrayList<>();
-        for (RosterService.Entry e : roster.openEntries(teamId, today)) {
+        List<RosterService.Entry> entries = roster.openEntries(teamId, today);
+        Map<Long, Set<Slot>> el = eligibility.eligibility(leagues.get(d.leagueId()),
+                entries.stream().map(RosterService.Entry::playerId).toList(), eligibilityDate(d));
+        for (RosterService.Entry e : entries) {
             out.add(jdbc.sql("""
                     select p.name, p.jersey_number, p.cpbl_team_code, p.listed_position, p.registration_status,
                            (select re.acquired_via from roster_entry re where re.team_id = ? and re.player_id = p.id
@@ -251,7 +296,8 @@ public class DraftService {
                 String pos = rs.getString("listed_position");
                 return new KeeperCandidate(e.playerId(), rs.getString("name"), rs.getString("jersey_number"),
                         rs.getString("cpbl_team_code"), pos, "P".equals(pos), r == null ? null : r.rank(), text,
-                        "DELISTED".equals(rs.getString("registration_status")), DraftBoardService.Stats.of(lines.get(e.playerId())));
+                        "DELISTED".equals(rs.getString("registration_status")), DraftBoardService.Stats.of(lines.get(e.playerId())),
+                        slotNames(el.get(e.playerId())));
             }).single());
         }
         out.sort(Comparator.comparing((KeeperCandidate c) -> c.rank() == null ? Integer.MAX_VALUE : c.rank()));

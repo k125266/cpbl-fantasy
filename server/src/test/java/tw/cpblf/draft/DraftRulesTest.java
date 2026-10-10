@@ -162,6 +162,23 @@ class DraftRulesTest extends IntegrationTest {
         assertThat(cands).extracting(DraftService.KeeperCandidate::rank).doesNotContainNull().isSorted();
         // 每位候選附本季（上半季）數據，給 Keeper 頁的數據欄
         assertThat(cands).allSatisfy(c -> assertThat(c.stats()).isNotNull());
+        // 可擔任的先發位置：投手是 SP／RP，打者是 IF／OF 加 UTIL
+        assertThat(cands).allSatisfy(c -> assertThat(c.eligible()).isNotEmpty()
+                .allMatch(s -> List.of("IF", "OF", "UTIL", "SP", "RP").contains(s)));
+        assertThat(cands.stream().filter(DraftService.KeeperCandidate::pitcher)).allSatisfy(c -> assertThat(c.eligible()).doesNotContain("IF", "OF", "UTIL"));
+    }
+
+    @Test
+    void keeperPoolListsFreeAgentsByRankAndSkipsEveryRosteredPlayer() {
+        firstHalfDrafted();
+        long d2 = drafts.create(leagueId, 2, null);
+        var pool = drafts.keeperPool(d2, 30);
+        assertThat(pool).isNotEmpty().hasSizeLessThanOrEqualTo(30);
+        assertThat(pool).extracting(DraftService.PoolPlayer::rank).filteredOn(r -> r != null).isSorted();
+        // 任何隊目前名單上的人都不在自由球員裡
+        var rostered = teams.stream().flatMap(t -> rosterOf(t).stream()).toList();
+        assertThat(pool).extracting(DraftService.PoolPlayer::playerId).doesNotContainAnyElementsOf(rostered);
+        assertThat(pool).allSatisfy(p -> assertThat(p.eligible()).isNotEmpty());
     }
 
     @Test
