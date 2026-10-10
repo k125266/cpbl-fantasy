@@ -97,6 +97,7 @@ export default function TodayCard({ ctx }: { ctx: PsCtx }) {
 
   return (
     <Section title={title}>
+      <div className="pv-gk">本場比分（這一戰的得分，不是系列戰勝場）</div>
       {/* 手機：兩隊疊在一起，右邊局數 */}
       <div className="pv-top">
         <div className="teams">

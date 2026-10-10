@@ -83,11 +83,11 @@ export default function SeriesCard({ ctx }: { ctx: PsCtx }) {
   return (
     <div className="pv-card pv-series">
       <div className="pv-sleft">
-        <div className="pv-skick">系列戰勝場</div>
+        <div className="pv-skick">系列戰・各隊已贏幾場</div>
         <div className="pv-score">
           <Chip code={tA} className="lg" />
           <div className="big">
-            <span className={wa >= wb ? '' : 'trail'}>{wa}</span><i>:</i><span className={wb >= wa ? '' : 'trail'}>{wb}</span>
+            <span className={wa >= wb ? '' : 'trail'}>{wa}<u>勝</u></span><i>:</i><span className={wb >= wa ? '' : 'trail'}>{wb}<u>勝</u></span>
           </div>
           <Chip code={tB} className="lg" />
         </div>
