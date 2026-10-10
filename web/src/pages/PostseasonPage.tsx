@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../App'
 import { api, type PostseasonView, type SeriesView } from '../api'
 import { ErrorBox, Loading } from '../components'
@@ -8,7 +8,7 @@ import Leaders from '../postseason/Leaders'
 import MinePanel from '../postseason/MinePanel'
 import Recaps from '../postseason/Recaps'
 import SeriesCard from '../postseason/SeriesCard'
-import { useCountdown } from '../hooks'
+import { useCountdown, useResumeRefresh } from '../hooks'
 import { buildCtx, mdw, SERVED } from '../postseason/shared'
 import TodayCard from '../postseason/TodayCard'
 import { useSeenCards } from '../postseason/useSeenCards'
@@ -37,7 +37,9 @@ export default function PostseasonPage() {
   const { sec, restart } = useCountdown(REFRESH)
   const [kind, setKind] = useState<string | null>(null)
 
+  const lastLoad = useRef(0)
   const load = useCallback(() => {
+    lastLoad.current = Date.now()
     api.get<PostseasonView>(`/api/postseason?leagueId=${leagueId}`)
       .then((v) => { setData(v); setError(null); setFailed(false); setUpd(clock(new Date())) })
       .catch((e) => { setError(e); setFailed(true) })
@@ -45,6 +47,7 @@ export default function PostseasonPage() {
   }, [leagueId, restart])
 
   useEffect(() => { load() }, [load])
+  useResumeRefresh(load, lastLoad)
 
   const teams = useMemo(() => league?.teams ?? [], [league])
   const { seen, mark } = useSeenCards(leagueId, user.id)
@@ -60,8 +63,9 @@ export default function PostseasonPage() {
     return data.series.find((s) => s.kind === kind) ?? started[started.length - 1] ?? data.series[0]
   }, [data, kind])
 
-  // 今天還有比賽沒打完才每 60 秒自動更新
-  const active = !!series && !!data && series.games.some((g) => g.playDate === data.today && SERVED(g) && g.status !== 'FINAL')
+  // 今天還有比賽沒打完才每 60 秒自動更新。還沒開打的比賽沒有 playDate，要看原定日期，
+  // 否則賽前開著頁面、開打後回來，畫面就不會自己更新
+  const active = !!series && !!data && series.games.some((g) => (g.playDate === data.today || g.scheduledDate === data.today) && SERVED(g) && g.status !== 'FINAL')
   useEffect(() => { if (active && sec === 0) load() }, [active, sec, load])
 
   if (error && !data) return <ErrorBox error={error} />

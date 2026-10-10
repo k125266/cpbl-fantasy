@@ -49,6 +49,29 @@ export function useCountdown(total: number) {
 }
 
 /**
+ * 回到畫面（切回分頁、從別的 app 回來、iOS 從 bfcache 還原、網路恢復）時，資料超過 maxAgeMs 沒更新就立刻重載。
+ * 手機切到別的 app 時計時器會被凍結，回來不一定有 visibilitychange，所以也聽 pageshow、focus、online。
+ * lastLoad 由頁面在每次載入時寫入 Date.now()。
+ */
+export function useResumeRefresh(reload: () => void, lastLoad: { current: number }, maxAgeMs = 20_000) {
+  useEffect(() => {
+    const back = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastLoad.current > maxAgeMs) reload()
+    }
+    document.addEventListener('visibilitychange', back)
+    window.addEventListener('pageshow', back)
+    window.addEventListener('focus', back)
+    window.addEventListener('online', back)
+    return () => {
+      document.removeEventListener('visibilitychange', back)
+      window.removeEventListener('pageshow', back)
+      window.removeEventListener('focus', back)
+      window.removeEventListener('online', back)
+    }
+  }, [reload, lastLoad, maxAgeMs])
+}
+
+/**
  * 伺服器「現在」（毫秒），每 tickMs 更新。demo／重播的時鐘可能和真實時間不同，
  * 以載入 /api/system 時的差值換算（系統時間為台北時間、不含時區）。
  */

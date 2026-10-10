@@ -41,9 +41,9 @@ function Box({ ctx, g, home, className }: { ctx: PsCtx; g: LiveGame; home: boole
         </div>
       ))}
       {bats.length === 0 && <div className="pv-empty">還沒有打者數據</div>}
-      <div className="bh"><span /><span>投手</span><span className="d-only" />{PIT_HEADS.map((h) => <span key={h} className="r">{h}</span>)}</div>
+      <div className="bh pit"><span /><span>投手</span><span className="d-only" />{PIT_HEADS.map((h) => <span key={h} className="r">{h}</span>)}</div>
       {pits.map((l) => (
-        <div key={l.playerId} className={`br${mine(l)}`}>
+        <div key={l.playerId} className={`br pit${mine(l)}`}>
           <Num code={l.cpblTeam} jersey={l.jerseyNumber} />{who(l)}<span className="pos d-only">{l.listedPosition}</span>
           <span className="r">{ip(l.outs)}</span>{cell(l.pH)}{cell(l.pBb)}{cell(l.pEr)}{cell(l.pK)}
           <span className={`r${l.w || l.sv ? ' hi' : ' z'}`}>{l.w ? 'W' : l.sv ? 'SV' : '–'}</span>
